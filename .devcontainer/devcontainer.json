@@ -11,14 +11,16 @@
   },
   "remoteUser": "ubuntu",
   "remoteEnv": {
-    "COSMOS_ENDPOINT": "${localEnv:COSMOS_ENDPOINT}",
-    "COSMOS_KEY": "${localEnv:COSMOS_KEY}"
+    "COSMOS_CONNECTION_STRING": "${localEnv:COSMOS_CONNECTION_STRING}"
   },
-  "forwardPorts": [5173, 7071, 4280],
+  "forwardPorts": [5173, 7071, 4280, 10000, 10001, 10002],
   "portsAttributes": {
     "5173": { "label": "Vite dev server" },
     "7071": { "label": "Azure Functions" },
-    "4280": { "label": "SWA CLI proxy (browse here)" }
+    "4280": { "label": "SWA CLI proxy (browse here)" },
+    "10000": { "label": "Azurite Blob" },
+    "10001": { "label": "Azurite Queue" },
+    "10002": { "label": "Azurite Table" }
   },
   "postCreateCommand": "bash .devcontainer/postCreate.sh",
   "customizations": {

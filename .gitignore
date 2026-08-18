@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 
+# Azurite (Storage emulator) local data/debug log
+.azurite/
+
 # Build output
 dist/
 build/

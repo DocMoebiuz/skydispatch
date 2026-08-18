@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "swa start",
+    "azurite": "azurite --silent --location .azurite --debug .azurite/debug.log",
     "build": "pnpm -r --filter=./apps/** build",
     "test": "pnpm -r test",
     "test:e2e": "playwright test",
@@ -14,7 +15,14 @@
   },
   "devDependencies": {
     "@playwright/test": "1.55.0",
+    "@azure/cosmos": "^4.2.0",
     "@azure/static-web-apps-cli": "^2.0.0",
-    "typescript": "^5.7.0"
+    "@eslint/js": "^9.39.5",
+    "azurite": "^3.36.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.4",
+    "globals": "^17.11.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.67.0"
   }
 }

@@ -1,7 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "module": "ESNext",
+    // CommonJS, not ESNext — apps/api compiles to CommonJS and `require()`s this
+    // package at runtime via the Functions host; a "type":"module"-less ESM output
+    // would throw on load there. Vite/esbuild (apps/web) interop with CJS deps fine.
+    "module": "CommonJS",
+    "moduleResolution": "Node",
     "types": ["node"],
     "outDir": "dist",
     "declaration": true,

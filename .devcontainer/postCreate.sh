@@ -25,4 +25,4 @@ if [ ! -f apps/api/local.settings.json ]; then
   cp apps/api/local.settings.json.example apps/api/local.settings.json
 fi
 
-echo "SkyDispatch devcontainer ready. Run 'pnpm dev' to start web + api via the SWA CLI proxy on :4280."
+echo "SkyDispatch devcontainer ready. In one terminal: 'pnpm azurite' (Storage emulator, needed by func start). In another: 'pnpm dev' to start web + api via the SWA CLI proxy on :4280."
