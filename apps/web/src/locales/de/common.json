@@ -16,8 +16,11 @@
         "code": "ID",
         "name": "Name",
         "weight": "Gewicht (kg)",
-        "status": "Status"
+        "status": "Status",
+        "action": "Aktion"
       },
+      "markPaid": "Als bezahlt markieren",
+      "markPaidError": "Fehler beim Markieren als bezahlt.",
       "status": {
         "registered": "registriert",
         "paid": "bezahlt",

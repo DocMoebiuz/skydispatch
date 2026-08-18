@@ -31,6 +31,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
 
     // Member 1 — registered solo, no group question shown yet.
     const code1 = await fillAndSubmit("E2E Group Member One", email1, "70");
+    expect(code1).toMatch(/^G-\d{3,}$/);
     await expect(page.getByText("Gruppe", { exact: false })).not.toBeVisible();
 
     // First "add another" — this is the moment the group name gets asked for.
@@ -44,6 +45,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
     // Back on step 1, ready for member 2.
     await expect(page.getByLabel("Vor- und Nachname")).toBeVisible();
     const code2 = await fillAndSubmit("E2E Group Member Two", email2, "65");
+    expect(code2).toMatch(/^G-\d{3,}$/);
     await expect(page.getByText(`Gruppe: ${groupName}`)).toBeVisible();
     const summary = page.getByTestId("session-guest");
     await expect(summary).toHaveCount(2);
@@ -56,7 +58,11 @@ test("group registration: first 'add another' asks for a group name, applies to 
     await expect(page.getByText(`Gruppe: ${groupName}`)).toBeVisible();
     await expect(page.getByTestId("session-guest")).toHaveCount(3);
 
-    // All three share one group on the dispatcher side.
+    // All three share one group on the dispatcher side. Matched by group name and
+    // by name text, not by `code` — guest codes are a shared, non-atomic per-day
+    // counter (see docs/tech-stack.md § Known cross-cutting risks), so two tests'
+    // guests can legitimately land on the same code when the suite runs in
+    // parallel against the same dev Cosmos account; that's not a product bug.
     await page.goto("/dispatch");
     const rows = page.getByTestId("guest-row").filter({ hasText: groupName });
     await expect(rows).toHaveCount(3);
@@ -65,10 +71,10 @@ test("group registration: first 'add another' asks for a group name, applies to 
     );
     expect(new Set(groupIds).size).toBe(1);
     expect(groupIds[0]).not.toBe("");
-    for (const code of [code1, code2]) {
-      await expect(page.getByTestId("guest-row").filter({ hasText: code })).toContainText(
-        groupName,
-      );
+    for (const name of ["E2E Group Member One", "E2E Group Member Two"]) {
+      await expect(
+        page.getByTestId("guest-row").filter({ hasText: name }),
+      ).toContainText(groupName);
     }
   } finally {
     await Promise.all([email1, email2, email3].map((e) => deleteGuestByEmail(e)));

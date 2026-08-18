@@ -59,7 +59,8 @@ These are hard product requirements carried over from the manual, not aspiration
   review.
 - **MVP decision: no payment step — real or simulated — at registration at all.**
   Guests pay at the front desk; `paid` on a guest record is a staff-recorded action
-  (`POST /api/guests/{id}/mark-paid`) taken later, not something registration sets.
+  (`POST /api/guests/{id}/actions/mark-paid`) taken later, not something
+  registration sets.
   This supersedes the prototype's fake-checkout step (see
   [architecture.md § Prototype reference](./architecture.md#prototype-reference-docsstatic-html-app)).
   The "real payment processing is out of scope" decision above is unaffected — this

@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { deriveGuestStatus, type Guest } from "shared";
+import { Button } from "@/components/ui/button";
 
 // Increment 1 — minimal read-back proving registration persists through the real
-// API into Cosmos. Mark-paid (1b), grouping (2), and assignment (3) land later; see
-// docs/architecture.md and the plan this was built from.
+// API into Cosmos. Increment 1b adds the mark-paid action here (completing
+// priority 1: no payment at registration, paid is a staff action). Assignment (3)
+// lands later; see docs/architecture.md and the plan this was built from.
 export function DispatchPage() {
   const { t } = useTranslation();
   const [guests, setGuests] = useState<Guest[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState<Set<string>>(new Set());
+  const [markPaidError, setMarkPaidError] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +31,31 @@ export function DispatchPage() {
       cancelled = true;
     };
   }, []);
+
+  async function markPaid(guestId: string) {
+    setMarkingPaid((prev) => new Set(prev).add(guestId));
+    setMarkPaidError((prev) => {
+      const next = new Set(prev);
+      next.delete(guestId);
+      return next;
+    });
+    try {
+      const response = await fetch(`/api/guests/${guestId}/actions/mark-paid`, {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`mark-paid failed: ${response.status}`);
+      const updated = (await response.json()) as Guest;
+      setGuests((prev) => prev?.map((g) => (g.id === guestId ? updated : g)) ?? prev);
+    } catch {
+      setMarkPaidError((prev) => new Set(prev).add(guestId));
+    } finally {
+      setMarkingPaid((prev) => {
+        const next = new Set(prev);
+        next.delete(guestId);
+        return next;
+      });
+    }
+  }
 
   return (
     <main className="flex flex-col gap-6 p-8">
@@ -57,6 +86,7 @@ export function DispatchPage() {
                 <th className="py-2 pr-4">{t("dispatch.guests.table.weight")}</th>
                 <th className="py-2 pr-4">{t("dispatch.guests.table.status")}</th>
                 <th className="py-2 pr-4">{t("dispatch.guests.group")}</th>
+                <th className="py-2 pr-4">{t("dispatch.guests.table.action")}</th>
               </tr>
             </thead>
             <tbody>
@@ -71,11 +101,29 @@ export function DispatchPage() {
                   <td className="py-2 pr-4">{guest.code}</td>
                   <td className="py-2 pr-4">{guest.name}</td>
                   <td className="py-2 pr-4">{guest.declaredWeightKg}</td>
-                  <td className="py-2 pr-4">
+                  <td className="py-2 pr-4" data-testid="guest-status">
                     {t(`dispatch.guests.status.${deriveGuestStatus(guest)}`)}
                   </td>
                   <td className="py-2 pr-4" data-testid="guest-group-name">
                     {guest.groupName ?? "—"}
+                  </td>
+                  <td className="flex flex-col gap-1 py-2 pr-4">
+                    {!guest.paid && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid="mark-paid-button"
+                        disabled={markingPaid.has(guest.id)}
+                        onClick={() => void markPaid(guest.id)}
+                      >
+                        {t("dispatch.guests.markPaid")}
+                      </Button>
+                    )}
+                    {markPaidError.has(guest.id) && (
+                      <p className="text-destructive text-xs">
+                        {t("dispatch.guests.markPaidError")}
+                      </p>
+                    )}
                   </td>
                 </tr>
               ))}

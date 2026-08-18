@@ -156,6 +156,31 @@ export async function startGroup(
   return { status: 200, jsonBody: updated };
 }
 
+// Front-desk marks a guest paid — a narrow action endpoint, not a generic PATCH, to
+// keep the write surface intentional. Completes priority 1: no payment step at
+// registration, `paid` is a staff-recorded action taken later. See
+// docs/nfr.md § Security & Privacy.
+export async function markGuestPaid(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const guestId = request.params.id;
+  if (!guestId) {
+    return { status: 400, jsonBody: { error: "missing-id" } };
+  }
+
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+  if (!guest) {
+    return { status: 404, jsonBody: { error: "not-found" } };
+  }
+
+  const updated: Guest = { ...guest, paid: true, updatedAt: new Date().toISOString() };
+  await container.item(guestId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 export async function listGuests(
   _request: HttpRequest,
   _context: InvocationContext,
@@ -186,7 +211,16 @@ app.http("listGuests", {
 
 app.http("startGroup", {
   methods: ["POST"],
-  route: "guests/{id}/start-group",
+  // /actions/ marks this as a command, not a sub-resource — see
+  // docs/architecture.md § API surface for the convention.
+  route: "guests/{id}/actions/start-group",
   authLevel: "anonymous",
   handler: startGroup,
+});
+
+app.http("markGuestPaid", {
+  methods: ["POST"],
+  route: "guests/{id}/actions/mark-paid",
+  authLevel: "anonymous",
+  handler: markGuestPaid,
 });

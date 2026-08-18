@@ -25,8 +25,8 @@ import { cn } from "@/lib/utils";
 // the prototype's step shape/card outline) plus the group registration loop: the
 // FIRST time a registrant adds another person, that's when we ask for a group name
 // — not upfront. It then applies retroactively to the person already registered
-// (via POST /api/guests/{id}/start-group) and automatically to everyone after. See
-// docs/architecture.md § Group registration and § Prototype reference.
+// (via POST /api/guests/{id}/actions/start-group) and automatically to everyone
+// after. See docs/architecture.md § Group registration and § Prototype reference.
 //
 // No payment step (that's a front-desk action, see Increment 1b / nfr.md §
 // Security & Privacy). Field-level error text is looked up by field name via
@@ -124,7 +124,7 @@ export function RegisterPage() {
     if (!guest) return; // can't happen — group-prompt only shows after a guest exists
     setStartingGroup(true);
     try {
-      const response = await fetch(`/api/guests/${guest.id}/start-group`, {
+      const response = await fetch(`/api/guests/${guest.id}/actions/start-group`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ groupName: name }),

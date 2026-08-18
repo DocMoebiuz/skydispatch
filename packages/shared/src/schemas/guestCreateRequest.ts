@@ -29,7 +29,7 @@ export const guestCreateRequestSchema = z.object({
   // Increment 2 — group registration loop. Only present from the second member of a
   // group onward: the first member is registered solo (no group field at all, same
   // as Increment 1), and only becomes grouped retroactively via
-  // POST /api/guests/{id}/start-group once the registrant chooses to add another
+  // POST /api/guests/{id}/actions/start-group once the registrant chooses to add another
   // person. From then on the web form already knows groupId/groupName and sends
   // both on every subsequent create — see docs/architecture.md § Group registration.
   group: z

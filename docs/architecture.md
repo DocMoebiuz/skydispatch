@@ -174,13 +174,24 @@ registered so far" summary during the loop.
 
 ### API surface (current scope only — not full CRUD)
 
+**Convention: action/command endpoints, not generic `PATCH`.** A state transition
+that involves real server logic — computing a value the client can't just supply
+(`start-group` generates a new `groupId`), or enforcing rules beyond "set this field"
+(`assign` checks seat/weight limits and returns a per-guest accept/reject) — gets its
+own verb-named endpoint under an explicit `/actions/` path segment, rather than a
+generic `PATCH /api/guests/{id}` that would push all that branching logic inside one
+handler. `/actions/` makes "this is a command, not a sub-resource" visible from the
+URL alone. Applied consistently, including to simple field flips like `mark-paid` —
+one convention, not a case-by-case judgment call about which transitions "count."
+
 | Method & route | Purpose |
 |---|---|
 | `POST /api/guests` | Register a guest, solo or as a group member |
 | `GET /api/guests` | List today's guests; `?groupId=` filters |
-| `POST /api/guests/{id}/mark-paid` | Front-desk marks a guest paid (narrow action, not a generic PATCH) |
+| `POST /api/guests/{id}/actions/start-group` | Retroactively turn an already-registered guest into the first member of a new group (server generates the `groupId`) |
+| `POST /api/guests/{id}/actions/mark-paid` | Front-desk marks a guest paid |
 | `GET /api/flights` | List today's flights with resolved aircraft + assignment summary |
-| `POST /api/flights/{id}/assign` | Assign a guest or a whole group, enforcing hard seat/weight limits, greedy partial-fit for groups; returns `{assigned, rejected: [{guestId, reason}]}` |
+| `POST /api/flights/{id}/actions/assign` | Assign a guest or a whole group, enforcing hard seat/weight limits, greedy partial-fit for groups; returns `{assigned, rejected: [{guestId, reason}]}` |
 
 Flight/Aircraft/Pilot CRUD beyond what assignment needs is intentionally not built —
 see [tech-stack.md § Known cross-cutting risks](./tech-stack.md#known-cross-cutting-risks)

@@ -153,7 +153,7 @@ enough surface area to make manual bumps tedious.
   under concurrent writes — acceptable for a single-airfield, low-concurrency event;
   revisit with a counter document or a Cosmos transactional batch if collisions ever
   actually occur.
-- `POST /api/flights/{id}/assign`'s multi-document writes (flight + each accepted
+- `POST /api/flights/{id}/actions/assign`'s multi-document writes (flight + each accepted
   guest) are sequential, not one Cosmos transactional batch — available later without
   a redesign since every document in an assignment shares `flightDayId`, but not done
   now. Revisit if partial-write failures become a real problem.
