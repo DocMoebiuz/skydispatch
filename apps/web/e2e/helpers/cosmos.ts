@@ -64,3 +64,11 @@ export async function deleteGuestByEmail(email: string): Promise<void> {
     resources.map((doc) => container.item(doc.id, doc.flightDayId).delete()),
   );
 }
+
+// Generic cleanup for entities created via the Setup/Planning pages that have no
+// DELETE endpoint yet (create+list only — see docs/architecture.md § API surface,
+// KISS: not needed for priorities 1-3). Tests still must not leave data behind.
+export async function deleteById(id: string, flightDayId: string): Promise<void> {
+  const container = await getTestContainer();
+  await container.item(id, flightDayId).delete().catch(() => undefined);
+}

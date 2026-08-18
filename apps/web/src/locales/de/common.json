@@ -26,10 +26,49 @@
       "placeholder": "Platzhalter – Live-Kennzahlen folgen, sobald Flüge und Zuweisungen existieren."
     },
     "setup": {
-      "placeholder": "Platzhalter – Flugtag, Flugplatz, Piloten und Flugzeuge folgen hier."
+      "flightDay": {
+        "title": "Flugtag & Flugplatz",
+        "date": "Datum",
+        "airfieldName": "Flugplatz – Name",
+        "airfieldIcao": "ICAO-Kennung",
+        "save": "Speichern"
+      },
+      "pilots": {
+        "title": "Piloten",
+        "name": "Name",
+        "license": "Lizenzen",
+        "add": "Pilot hinzufügen",
+        "empty": "Noch keine Piloten."
+      },
+      "aircraft": {
+        "title": "Flugzeuge",
+        "reg": "Kennzeichen",
+        "model": "Typ",
+        "seats": "Sitze",
+        "maxPayloadKg": "Max. Zuladung (kg)",
+        "add": "Flugzeug hinzufügen",
+        "empty": "Noch keine Flugzeuge."
+      }
     },
     "planning": {
-      "placeholder": "Platzhalter – Flugzuteilung (Gäste/Gruppen den Flügen zuweisen) folgt hier."
+      "newFlight": {
+        "title": "Neuer Flug",
+        "aircraft": "Flugzeug",
+        "pilot": "Pilot",
+        "create": "Flug anlegen"
+      },
+      "pool": {
+        "title": "Verfügbare Gäste (bezahlt + gewogen)",
+        "assign": "Zuweisen",
+        "empty": "Kein flugbereiter Gast verfügbar."
+      },
+      "builder": {
+        "none": "Keinen Flug ausgewählt.",
+        "seats": "Sitze",
+        "weight": "Gewicht",
+        "empty": "Noch keine Gäste zugewiesen.",
+        "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen."
+      }
     },
     "checkin": {
       "placeholder": "Platzhalter – Check-in & Boarding folgen hier."
@@ -54,6 +93,8 @@
       },
       "markPaid": "Als bezahlt markieren",
       "markPaidError": "Fehler beim Markieren als bezahlt.",
+      "confirmWeight": "Gewicht bestätigen",
+      "weighError": "Fehler beim Erfassen des Gewichts.",
       "status": {
         "registered": "registriert",
         "paid": "bezahlt",

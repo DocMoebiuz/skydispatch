@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { deriveGuestStatus, type Guest, type GuestStatus } from "shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableHeader,
@@ -12,10 +13,11 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-// Increment 1/1b/2 — real persistence: registration → API → Cosmos → this list,
-// plus mark-paid and group display. Moved under /dispatch/guests as part of
-// building out the full dispatcher shell (see DispatchLayout). Increment 3
-// (assignment) lands on /dispatch/planning next.
+// Increment 1/1b/2/3 — real persistence: registration → API → Cosmos → this list,
+// plus mark-paid, group display, and staff-verified weighing (a guest must be paid
+// AND weighed before /dispatch/planning will let it be assigned — nfr.md §
+// Reliability & safety). Moved under /dispatch/guests as part of the full dispatcher
+// shell (see DispatchLayout).
 
 const STATUS_VARIANT: Record<GuestStatus, "default" | "secondary" | "destructive" | "outline"> = {
   registered: "outline",
@@ -33,6 +35,9 @@ export function GuestsPage() {
   const [loadError, setLoadError] = useState(false);
   const [markingPaid, setMarkingPaid] = useState<Set<string>>(new Set());
   const [markPaidError, setMarkPaidError] = useState<Set<string>>(new Set());
+  const [weighInputs, setWeighInputs] = useState<Record<string, string>>({});
+  const [weighing, setWeighing] = useState<Set<string>>(new Set());
+  const [weighError, setWeighError] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +82,39 @@ export function GuestsPage() {
     }
   }
 
+  async function confirmWeight(guestId: string, defaultKg: number) {
+    const raw = weighInputs[guestId] ?? String(defaultKg);
+    const weightKg = Number(raw);
+    if (!Number.isFinite(weightKg) || weightKg < 30 || weightKg > 200) {
+      setWeighError((prev) => new Set(prev).add(guestId));
+      return;
+    }
+    setWeighing((prev) => new Set(prev).add(guestId));
+    setWeighError((prev) => {
+      const next = new Set(prev);
+      next.delete(guestId);
+      return next;
+    });
+    try {
+      const response = await fetch(`/api/guests/${guestId}/actions/weigh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weightKg }),
+      });
+      if (!response.ok) throw new Error(`weigh failed: ${response.status}`);
+      const updated = (await response.json()) as Guest;
+      setGuests((prev) => prev?.map((g) => (g.id === guestId ? updated : g)) ?? prev);
+    } catch {
+      setWeighError((prev) => new Set(prev).add(guestId));
+    } finally {
+      setWeighing((prev) => {
+        const next = new Set(prev);
+        next.delete(guestId);
+        return next;
+      });
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">{t("dispatch.guests.heading")}</h1>
@@ -114,7 +152,9 @@ export function GuestsPage() {
                 >
                   <TableCell className="font-medium">{guest.code}</TableCell>
                   <TableCell>{guest.name}</TableCell>
-                  <TableCell>{guest.declaredWeightKg}</TableCell>
+                  <TableCell data-testid="guest-weight">
+                    {guest.weightKg ?? `(${guest.declaredWeightKg})`}
+                  </TableCell>
                   <TableCell data-testid="guest-status">
                     <Badge variant={STATUS_VARIANT[status]}>
                       {t(`dispatch.guests.status.${status}`)}
@@ -139,6 +179,37 @@ export function GuestsPage() {
                       {markPaidError.has(guest.id) && (
                         <p className="text-destructive text-xs">
                           {t("dispatch.guests.markPaidError")}
+                        </p>
+                      )}
+                      {guest.paid && guest.weightKg == null && (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            className="h-8 w-20"
+                            data-testid="weigh-input"
+                            placeholder={String(guest.declaredWeightKg)}
+                            value={weighInputs[guest.id] ?? ""}
+                            onChange={(e) =>
+                              setWeighInputs((prev) => ({
+                                ...prev,
+                                [guest.id]: e.target.value,
+                              }))
+                            }
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid="weigh-button"
+                            disabled={weighing.has(guest.id)}
+                            onClick={() => void confirmWeight(guest.id, guest.declaredWeightKg)}
+                          >
+                            {t("dispatch.guests.confirmWeight")}
+                          </Button>
+                        </div>
+                      )}
+                      {weighError.has(guest.id) && (
+                        <p className="text-destructive text-xs">
+                          {t("dispatch.guests.weighError")}
                         </p>
                       )}
                     </div>

@@ -9,6 +9,7 @@ import {
   DEFAULT_FLIGHT_DAY_ID,
   guestCreateRequestSchema,
   startGroupRequestSchema,
+  weighRequestSchema,
   type Guest,
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
@@ -181,6 +182,45 @@ export async function markGuestPaid(
   return { status: 200, jsonBody: updated };
 }
 
+// Staff-verified weight, distinct from the self-reported declaredWeightKg captured
+// at registration — only a weighed (and paid) guest is assignable to a flight, see
+// nfr.md § Reliability & safety.
+export async function weighGuest(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const guestId = request.params.id;
+  if (!guestId) {
+    return { status: 400, jsonBody: { error: "missing-id" } };
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { status: 400, jsonBody: { error: "invalid-json" } };
+  }
+  const parsed = weighRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
+  }
+
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+  if (!guest) {
+    return { status: 404, jsonBody: { error: "not-found" } };
+  }
+
+  const updated: Guest = {
+    ...guest,
+    weightKg: parsed.data.weightKg,
+    updatedAt: new Date().toISOString(),
+  };
+  await container.item(guestId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 export async function listGuests(
   _request: HttpRequest,
   _context: InvocationContext,
@@ -207,6 +247,13 @@ app.http("listGuests", {
   route: "guests",
   authLevel: "anonymous",
   handler: listGuests,
+});
+
+app.http("weighGuest", {
+  methods: ["POST"],
+  route: "guests/{id}/actions/weigh",
+  authLevel: "anonymous",
+  handler: weighGuest,
 });
 
 app.http("startGroup", {
