@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Rundflug-Registrierung · Flugplatz Backnang-Heiningen (EDSH)</title>
+<style>
+  :root{
+    --blue:#2563EB; --blue2:#1D4ED8; --navy:#0F172A; --ink:#0F172A; --muted:#64748B;
+    --bg1:#1E3A8A; --bg2:#2563EB; --card:#FFFFFF; --line:#E2E8F0; --soft:#EFF4FF;
+    --green:#16A34A; --green-bg:#DCFCE7; --red:#DC2626; --red-bg:#FEE2E2; --amber:#CA8A04;
+    --radius:16px; --shadow:0 10px 40px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{font-family:'Segoe UI',Inter,system-ui,-apple-system,sans-serif;color:var(--ink);
+    background:linear-gradient(135deg,#0B1B3B,#1E3A8A 45%,#2563EB);min-height:100vh;
+    display:flex;align-items:flex-start;justify-content:center;padding:30px 16px}
+  .wrap{width:100%;max-width:560px}
+  .top{color:#fff;text-align:center;margin-bottom:18px}
+  .top .logo{width:54px;height:54px;border-radius:14px;background:rgba(255,255,255,.14);display:inline-grid;place-items:center;font-size:26px;margin-bottom:8px}
+  .top h1{margin:4px 0 2px;font-size:22px;font-weight:700}
+  .top p{margin:0;opacity:.85;font-size:14px}
+  .top .place{display:inline-flex;gap:8px;align-items:center;margin-top:10px;background:rgba(255,255,255,.12);
+    padding:6px 13px;border-radius:999px;font-size:13px}
+  .top .place b{font-weight:700}
+
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .steps{display:flex;background:#F8FAFC;border-bottom:1px solid var(--line)}
+  .steps .s{flex:1;padding:13px 6px;text-align:center;font-size:12px;font-weight:700;color:#94A3B8;position:relative}
+  .steps .s .n{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#CBD5E1;color:#fff;margin-bottom:5px;font-size:12px}
+  .steps .s.on{color:var(--blue)} .steps .s.on .n{background:var(--blue)}
+  .steps .s.done .n{background:var(--green)}
+  .body{padding:24px}
+  .body h2{margin:0 0 4px;font-size:19px}
+  .body .lead{color:var(--muted);font-size:14px;margin:0 0 18px}
+
+  .field{margin-bottom:15px}
+  .field label{display:block;font-size:13px;font-weight:700;color:#334155;margin-bottom:6px}
+  .input{width:100%;padding:13px 14px;border:1.6px solid var(--line);border-radius:11px;font-size:16px;background:#fff;color:var(--ink)}
+  .input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .input.err{border-color:var(--red);background:#FEF2F2}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:5px}
+  .errmsg{color:var(--red);font-size:12.5px;margin-top:5px;display:none}
+  .errmsg.show{display:block}
+
+  .consent{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1.6px solid var(--line);border-radius:12px;background:#F8FAFC;cursor:pointer}
+  .consent.checked{border-color:var(--green);background:var(--green-bg)}
+  .cbox{flex:0 0 auto;width:26px;height:26px;border-radius:7px;border:2px solid #CBD5E1;background:#fff;display:grid;place-items:center;font-size:15px;color:transparent;margin-top:1px}
+  .consent.checked .cbox{background:var(--green);border-color:var(--green);color:#fff}
+  .consent .t{font-size:13px;line-height:1.5;color:#334155}
+  .waiver{max-height:120px;overflow:auto;font-size:12px;color:var(--muted);background:#F8FAFC;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:14px;line-height:1.55}
+
+  .pay{display:flex;flex-direction:column;gap:10px}
+  .paybtn{display:flex;align-items:center;gap:12px;padding:15px 16px;border:1.6px solid var(--line);border-radius:12px;background:#fff;cursor:pointer;font-size:15px;font-weight:600;text-align:left}
+  .paybtn:hover{border-color:var(--blue);box-shadow:0 2px 10px rgba(37,99,235,.12)}
+  .paybtn .ic{width:46px;height:30px;border-radius:6px;display:grid;place-items:center;font-weight:800;font-size:12px;color:#fff;flex:0 0 auto}
+  .ic.pp{background:#003087}.ic.pp i{color:#009cde;font-style:normal}
+  .ic.cc{background:linear-gradient(90deg,#EB001B,#F79E1B)}
+  .ic.kl{background:#FFB3C7;color:#0A0B09}
+  .amount{display:flex;justify-content:space-between;align-items:center;background:var(--soft);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .amount .v{font-size:24px;font-weight:800;color:var(--blue2)}
+
+  .btnrow{display:flex;gap:10px;margin-top:20px}
+  .btn{flex:1;border:0;border-radius:12px;padding:14px;font-weight:700;font-size:15px;cursor:pointer;background:var(--blue);color:#fff;min-height:52px}
+  .btn:hover{background:var(--blue2)} .btn.ghost{background:#fff;color:var(--ink);border:1.6px solid var(--line)}
+  .btn:disabled{background:#CBD5E1;cursor:not-allowed}
+
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:40}
+  .overlay.show{display:flex}
+  .spin{width:54px;height:54px;border-radius:50%;border:5px solid rgba(255,255,255,.3);border-top-color:#fff;animation:rot 1s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .ovbox{text-align:center;color:#fff}.ovbox p{margin-top:14px;font-weight:600}
+
+  /* confirmation */
+  .ok-hero{text-align:center;padding:6px 0 4px}
+  .ok-hero .ring{width:74px;height:74px;border-radius:50%;background:var(--green-bg);display:inline-grid;place-items:center;font-size:38px;margin-bottom:8px}
+  .pass{border:2px dashed var(--blue);border-radius:14px;padding:0;margin:16px 0;overflow:hidden}
+  .pass .ph{background:var(--blue);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
+  .pass .pb{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .pass .big{grid-column:1/3;text-align:center;background:#F8FAFC;border-radius:10px;padding:12px}
+  .pass .big .id{font-size:30px;font-weight:800;letter-spacing:2px;color:var(--blue2);font-variant-numeric:tabular-nums}
+  .qrbox{background:#fff;padding:7px;border:1px solid var(--line);border-radius:10px;flex:0 0 auto}
+  .qrbox svg{display:block}
+  .pass .kv .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .pass .kv .v{font-weight:700;font-size:15px}
+  .email{border:1px solid var(--line);border-radius:12px;margin-top:14px;overflow:hidden}
+  .email .eh{background:#F1F5F9;padding:11px 14px;font-size:12.5px;color:#475569;border-bottom:1px solid var(--line)}
+  .email .eb{padding:14px;font-size:13.5px;line-height:1.6}
+  .note{background:#FEF9C3;border:1px solid #FDE68A;color:#854D0E;border-radius:10px;padding:11px 13px;font-size:13px;margin-top:14px}
+  .foot{color:#fff;opacity:.8;text-align:center;font-size:12px;margin-top:16px}
+
+  @media (prefers-color-scheme: dark){
+    :root{--card:#0f172a;--ink:#E5E7EB;--muted:#94A3B8;--line:#1f2937;--soft:#0b1d3a;--green-bg:#0c2a1a;--red-bg:#2a1414}
+    .steps,.waiver,.consent,.amount,.pass .big{background:#0b1220}
+    .input,.paybtn,.btn.ghost{background:#0b1220;color:#E5E7EB}
+    .email .eh{background:#0b1220}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo">✈</div>
+    <h1>Rundflug-Anmeldung</h1>
+    <p>Sichern Sie sich Ihren Platz für einen Rundflug</p>
+    <div class="place" id="placechip">📍 <b>Flugplatz Backnang-Heiningen</b> · EDSH</div>
+  </div>
+  <div class="card">
+    <div class="steps" id="steps">
+      <div class="s on"><div class="n">1</div>Daten</div>
+      <div class="s"><div class="n">2</div>Gewicht</div>
+      <div class="s"><div class="n">3</div>Zahlung</div>
+      <div class="s"><div class="n">4</div>Fertig</div>
+    </div>
+    <div class="body" id="body"></div>
+  </div>
+  <div class="foot" id="foot">Ihre Daten werden ausschließlich zur Flugorganisation verwendet.</div>
+</div>
+
+<div class="overlay" id="overlay"><div class="ovbox"><div class="spin"></div><p id="ovtext">Zahlung wird verarbeitet…</p></div></div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- shared data layer (identisch zur Dispatcher-App) ---------- */
+var KEY='skydispatch_v5', _gs=0;
+function seed(){
+  _gs=0;
+  var firsts=['Anna','Tom','Lina','Eva','Otto','Mia','Max','Jan','Nina','Paul','Lea','Finn','Emma','Ben','Lara','Noah','Sara','Leon','Marie','Luca','Hannah','Felix','Clara','Jonas','Lena','Tim','Julia','Niklas','Laura','David','Sophie','Erik','Maja','Phil','Ida','Jakob','Nora','Moritz','Lilly','Elias','Pia','Henry','Frieda','Theo','Greta','Oskar','Mara','Linus','Romy','Karl'];
+  var lasts=['Weber','Lang','Klein','Groß','Stern','Roth','Falk','Berg','Wolf','Hahn','Kern','Vogel','Busch','Frank','Arnold','Böhm','Kraus','Sommer','Winter','Förster','Bauer','Huber','Maier','Hoffmann','Fuchs','Krüger','Richter','Neumann','Schwarz','Zimmer','Brand','Engel','Horn','Jung','Keller','Lorenz','Peters','Reuter','Sauer','Thiel','Voigt','Walter','Adler','Bach','Dorn','Ernst','Götz','Hartmann','Kühn','Mayer'];
+  var rs=20260625; function rnd(){ rs=(rs*1103515245+12345)&0x7fffffff; return rs/0x7fffffff; }
+  function pick(a){ return a[Math.floor(rnd()*a.length)]; }
+  var groups={}, palette=['#2563EB','#7C3AED','#0891B2','#DB2777','#CA8A04','#15803D','#B91C1C','#0D9488','#9333EA','#C2410C','#4F46E5','#0369A1'];
+  function gcolor(n){ if(!groups[n]) groups[n]=palette[Object.keys(groups).length%palette.length]; }
+  var guests=[];
+  function add(name,grp){ _gs++; var paid=rnd()>0.14; var weight=rnd()>0.12?Math.round(48+rnd()*58):null;
+    guests.push({id:'g'+_gs,code:'G-'+String(_gs).padStart(3,'0'),name:name,weight:weight,paid:paid,group:grp,checkedIn:false,noShow:false,flown:false}); return guests[guests.length-1]; }
+  while(guests.length<150){ var rem=150-guests.length;
+    if(rnd()<0.5 && rem>=2){ var ln=pick(lasts),gname=ln,k=2; while(groups[gname]){ gname=ln+' '+k; k++; } gcolor(gname);
+      var size=Math.min(rem,2+Math.floor(rnd()*4)); for(var i=0;i<size;i++) add(pick(firsts)+' '+ln,gname);
+    } else { add(pick(firsts)+' '+pick(lasts),null); } }
+  var pilots=[{id:'p1',name:'Meier',lic:'PPL, Nacht',avail:true},{id:'p2',name:'Schmidt',lic:'PPL',avail:true},{id:'p3',name:'Becker',lic:'CPL',avail:true},{id:'p4',name:'Wagner',lic:'PPL',avail:false}];
+  var acs=[{id:'a1',reg:'D-EABC',type:'Cessna 172',seats:4,payload:340,cost:180,img:null},{id:'a2',reg:'D-EXYZ',type:'Piper PA-28',seats:4,payload:340,cost:160,img:null},{id:'a3',reg:'D-EKLM',type:'Cirrus SR22',seats:4,payload:360,cost:240,img:null}];
+  var used={};
+  function build(payload){ var picked=[],sum=0;
+    for(var i=0;i<guests.length && picked.length<4;i++){ var go=guests[i]; if(used[go.id]) continue;
+      var w=go.weight==null?Math.round(60+rnd()*28):go.weight; if(sum+w>payload) continue;
+      go.paid=true; go.weight=w; used[go.id]=true; picked.push(go); sum+=w; } return picked; }
+  var flights=[],fno=0;
+  function tISO(h,m){ var d=new Date(); d.setHours(h,m,0,0); return d.toISOString(); }
+  function mk(ai,pi,gs,status,off,on){ fno++;
+    flights.push({id:'fl'+fno,code:'FL-'+String(fno).padStart(3,'0'),aircraftId:acs[ai].id,pilotId:pilots[pi]?pilots[pi].id:null,guests:gs.map(function(g){return g.id;}),status:status,offBlock:off||null,onBlock:on||null});
+    if(status==='completed'){ gs.forEach(function(g){g.checkedIn=true;g.flown=true;}); }
+    else if(status==='airborne'||status==='ready'){ gs.forEach(function(g){g.checkedIn=true;}); } }
+  mk(0,0,build(340),'completed',tISO(9,2),tISO(9,21)); mk(1,1,build(340),'completed',tISO(9,28),tISO(9,47));
+  mk(2,2,build(360),'completed',tISO(9,55),tISO(10,16)); mk(0,0,build(340),'completed',tISO(10,24),tISO(10,43));
+  mk(1,1,build(340),'completed',tISO(10,52),tISO(11,11)); mk(2,2,build(360),'completed',tISO(11,20),tISO(11,40));
+  mk(0,0,build(340),'completed',tISO(11,48),tISO(12,7)); mk(1,1,build(340),'airborne',new Date(Date.now()-13*60000).toISOString(),null);
+  mk(2,2,build(360),'ready',null,null); mk(0,0,build(340),'geplant',null,null); mk(1,2,build(340),'geplant',null,null);
+  return { airfield:{name:'Flugplatz Backnang-Heiningen',icao:'EDSH',rwy:'10/28',freq:'123.71',elev:'294 m',operator:'LSV Backnang-Heiningen e. V.'},
+    day:{date:'25.06.2026',status:'Aktiv',price:80}, pilots:pilots, aircraft:acs, groups:groups, guests:guests, flights:flights, seq:{g:guests.length,f:fno} };
+}
+function loadStore(){ try{ var r=localStorage.getItem(KEY); if(r) return JSON.parse(r); }catch(e){} var s=seed(); try{ localStorage.setItem(KEY,JSON.stringify(s)); }catch(e){} return s; }
+function saveStore(S){ try{ localStorage.setItem(KEY,JSON.stringify(S)); return true; }catch(e){ return false; } }
+
+/* ---------- helpers ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+function byId(id){ return document.getElementById(id); }
+function emailOk(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+function eur(n){ return Number(n).toFixed(2).replace('.',',')+' €'; }
+
+/* ---------- QR-Encoder (QR Version 1, Byte-Modus, EC-Level M) – gegen ISO/IEC 18004 geprüft ---------- */
+var QEXP=new Array(256),QLOG=new Array(256);
+(function(){var x=1;for(var i=0;i<255;i++){QEXP[i]=x;QLOG[x]=i;x<<=1;if(x&0x100)x^=0x11d;}QEXP[255]=QEXP[0];})();
+function qgmul(a,b){return (a===0||b===0)?0:QEXP[(QLOG[a]+QLOG[b])%255];}
+function qgen(n){var g=[1];for(var i=0;i<n;i++){var a=QEXP[i];var ng=new Array(g.length+1).fill(0);for(var k=0;k<ng.length;k++){var t=0;if(k-1>=0&&k-1<g.length)t^=g[k-1];if(k<g.length)t^=qgmul(a,g[k]);ng[k]=t;}g=ng;}return g;}
+function qrsEC(data,n){var g=qgen(n).slice().reverse();var res=data.concat(new Array(n).fill(0));for(var i=0;i<data.length;i++){var c=res[i];if(c!==0){var lc=QLOG[c];for(var j=0;j<g.length;j++)res[i+j]^=QEXP[(QLOG[g[j]]+lc)%255];}}return res.slice(data.length);}
+function qbytes(s){var b=[];for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);if(c<128)b.push(c);else if(c<2048)b.push(192|c>>6,128|c&63);else b.push(224|c>>12,128|c>>6&63,128|c&63);}return b;}
+function qfmt(mask){var data=(0<<3)|mask;var rem=data;for(var i=0;i<10;i++)rem=(rem<<1)^(((rem>>9)&1)*0x537);return ((data<<10)|rem)^0x5412;}
+function makeQR(text){var size=21,N=10,DATACW=16;var by=qbytes(text);if(by.length>14)throw new Error('len');
+  var mod=[],isFn=[];for(var r=0;r<size;r++){mod.push(new Array(size).fill(false));isFn.push(new Array(size).fill(false));}
+  function setF(r,c,v){mod[r][c]=v;isFn[r][c]=true;}
+  function finder(tr,tc){for(var r=-1;r<=7;r++)for(var c=-1;c<=7;c++){var rr=tr+r,cc=tc+c;if(rr<0||rr>=size||cc<0||cc>=size)continue;var dark=(r>=0&&r<=6&&(c===0||c===6))||(c>=0&&c<=6&&(r===0||r===6))||(r>=2&&r<=4&&c>=2&&c<=4);setF(rr,cc,dark);}}
+  finder(0,0);finder(0,size-7);finder(size-7,0);
+  for(var i=8;i<size-8;i++){setF(6,i,i%2===0);setF(i,6,i%2===0);}
+  setF(size-8,8,true);
+  for(var i=0;i<9;i++){if(!isFn[8][i])setF(8,i,false);if(!isFn[i][8])setF(i,8,false);}
+  for(var i=0;i<8;i++){if(!isFn[size-1-i][8])setF(size-1-i,8,false);if(!isFn[8][size-1-i])setF(8,size-1-i,false);}
+  var bits=[];function pb(v,n){for(var i=n-1;i>=0;i--)bits.push((v>>i)&1);}
+  pb(4,4);pb(by.length,8);by.forEach(function(b){pb(b,8);});var cap=DATACW*8;pb(0,Math.min(4,cap-bits.length));while(bits.length%8)bits.push(0);
+  var cw=[];for(var i=0;i<bits.length;i+=8){var v=0;for(var j=0;j<8;j++)v=(v<<1)|bits[i+j];cw.push(v);}var pad=[0xEC,0x11],p=0;while(cw.length<DATACW)cw.push(pad[p++%2]);
+  var ec=qrsEC(cw,N);var all=cw.concat(ec),total=all.length*8,bi=0;function gb(i){return (all[i>>3]>>(7-(i&7)))&1;}
+  for(var right=size-1;right>=1;right-=2){if(right===6)right=5;for(var v=0;v<size;v++){for(var j=0;j<2;j++){var col=right-j;var up=((right+1)&2)===0;var row=up?size-1-v:v;if(!isFn[row][col]&&bi<total){mod[row][col]=gb(bi)===1;bi++;}}}}
+  function mk(m,r,c){switch(m){case 0:return (r+c)%2===0;case 1:return r%2===0;case 2:return c%3===0;case 3:return (r+c)%3===0;case 4:return (((r/2|0)+(c/3|0))%2)===0;case 5:return (r*c)%2+(r*c)%3===0;case 6:return ((r*c)%2+(r*c)%3)%2===0;case 7:return ((r+c)%2+(r*c)%3)%2===0;}}
+  function df(mask){var b=qfmt(mask);function gf(i){return ((b>>i)&1)===1;}for(var i=0;i<=5;i++)mod[8][i]=gf(i);mod[8][7]=gf(6);mod[8][8]=gf(7);mod[7][8]=gf(8);for(var i=9;i<15;i++)mod[14-i][8]=gf(i);for(var i=0;i<8;i++)mod[size-1-i][8]=gf(i);for(var i=8;i<15;i++)mod[8][size-15+i]=gf(i);mod[size-8][8]=true;}
+  function am(m){for(var r=0;r<size;r++)for(var c=0;c<size;c++)if(!isFn[r][c]&&mk(m,r,c))mod[r][c]=!mod[r][c];}
+  function pen(){var p=0,r,c;for(r=0;r<size;r++){var run=1;for(c=1;c<size;c++){if(mod[r][c]===mod[r][c-1]){run++;if(run===5)p+=3;else if(run>5)p++;}else run=1;}}for(c=0;c<size;c++){var run=1;for(r=1;r<size;r++){if(mod[r][c]===mod[r-1][c]){run++;if(run===5)p+=3;else if(run>5)p++;}else run=1;}}for(r=0;r<size-1;r++)for(c=0;c<size-1;c++){var v=mod[r][c];if(v===mod[r][c+1]&&v===mod[r+1][c]&&v===mod[r+1][c+1])p+=3;}var d=0;for(r=0;r<size;r++)for(c=0;c<size;c++)if(mod[r][c])d++;p+=Math.floor(Math.abs(d*100/(size*size)-50)/5)*10;return p;}
+  var best=-1,bm=0;for(var m=0;m<8;m++){df(m);am(m);var pp=pen();am(m);if(best<0||pp<best){best=pp;bm=m;}}df(bm);am(bm);
+  return {size:size,mod:mod};}
+function qrSVG(text){try{var q=makeQR(text);var n=q.size,m=4,dim=n+2*m,rects='';for(var r=0;r<n;r++)for(var c=0;c<n;c++)if(q.mod[r][c])rects+='<rect x="'+(c+m)+'" y="'+(r+m)+'" width="1" height="1"/>';
+  return '<svg viewBox="0 0 '+dim+' '+dim+'" width="148" height="148" shape-rendering="crispEdges" role="img" aria-label="QR-Code Fluggast-ID '+esc(text)+'"><rect width="'+dim+'" height="'+dim+'" fill="#ffffff"/><g fill="#0F172A">'+rects+'</g></svg>';
+}catch(e){return '';}}
+
+var meta=loadStore();
+byId('placechip').innerHTML='📍 <b>'+esc(meta.airfield.name)+'</b> · '+esc(meta.airfield.icao);
+
+var form={name:'',email:'',phone:'',group:'',weight:null,consent:false,pay:''};
+var step=1, result=null, payTimer=null;
+
+function setSteps(){
+  var ss=byId('steps').children;
+  for(var i=0;i<ss.length;i++){ ss[i].className='s'+((i+1)===step?' on':((i+1)<step?' done':'')); }
+}
+
+function render(){
+  setSteps();
+  var b=byId('body');
+  if(step===1) b.innerHTML=view1();
+  else if(step===2) b.innerHTML=view2();
+  else if(step===3) b.innerHTML=view3();
+  else b.innerHTML=view4();
+}
+
+function view1(){
+  return '<h2>Ihre Kontaktdaten</h2><p class="lead">Wir senden Ihre Buchungsbestätigung per E-Mail.</p>'
+    +'<div class="field"><label>Vor- und Nachname</label><input class="input" id="r_name" value="'+esc(form.name)+'" placeholder="z. B. Anna Weber"><div class="errmsg" id="e_name">Bitte Namen eingeben.</div></div>'
+    +'<div class="field"><label>E-Mail-Adresse</label><input class="input" id="r_email" type="email" value="'+esc(form.email)+'" placeholder="anna@example.com"><div class="errmsg" id="e_email">Bitte gültige E-Mail eingeben.</div></div>'
+    +'<div class="field"><label>Telefon (optional)</label><input class="input" id="r_phone" value="'+esc(form.phone)+'" placeholder="+49 …"></div>'
+    +'<div class="field"><label>Gruppe / gemeinsam fliegen mit (optional)</label><input class="input" id="r_group" value="'+esc(form.group)+'" placeholder="z. B. Familie Weber"><div class="hint">Gäste mit gleicher Gruppe werden nach Möglichkeit demselben Flug zugeteilt.</div></div>'
+    +'<div class="btnrow"><button class="btn" data-act="next">Weiter →</button></div>';
+}
+function view2(){
+  return '<h2>Gewicht &amp; Einverständnis</h2><p class="lead">Aus Sicherheitsgründen (max. Abfluggewicht) benötigen wir Ihr Gewicht.</p>'
+    +'<div class="field"><label>Ihr Gewicht (kg)</label><input class="input" id="r_weight" type="number" inputmode="numeric" value="'+(form.weight==null?'':form.weight)+'" placeholder="z. B. 82"><div class="errmsg" id="e_weight">Bitte ein gültiges Gewicht (30–200 kg) angeben.</div>'
+    +'<div class="note" style="margin-top:10px">⚖ Hinweis: Ihre Angabe ist eine <b>Selbstauskunft</b>. Am Flugplatz wird Ihr Gewicht beim Check-in nochmals <b>durch Wiegen geprüft</b>.</div></div>'
+    +'<div class="waiver"><b>Einverständnis- und Haftungserklärung</b><br>'
+      +'Ich melde mich freiwillig zur Teilnahme an einem Rundflug an und nehme auf eigenes Risiko teil. Mir ist bekannt, dass die Durchführung von Wetter, Auslastung und Sicherheitsentscheidungen der Flugleitung abhängt. '
+      +'Ich versichere, dass meine Angaben – insbesondere mein Gewicht – zutreffend sind, und bin damit einverstanden, dass mein Gewicht am Flugplatz überprüft wird. '
+      +'Ich stimme der Verarbeitung meiner personenbezogenen Daten ausschließlich zum Zweck der Flugorganisation gemäß DSGVO zu.</div>'
+    +'<div class="consent" id="consent" data-act="toggleConsent"><div class="cbox">✓</div><div class="t">Ich habe die Einverständnis- und Haftungserklärung gelesen und stimme zu. *</div></div>'
+    +'<div class="errmsg" id="e_consent" style="margin-top:8px">Bitte stimmen Sie der Erklärung zu.</div>'
+    +'<div class="btnrow"><button class="btn ghost" data-act="back">← Zurück</button><button class="btn" data-act="next">Weiter →</button></div>';
+}
+function view3(){
+  var p=meta.day.price||80;
+  return '<h2>Bezahlung</h2><p class="lead">Bitte wählen Sie Ihre Zahlungsart. Ihr Platz ist nach Zahlung reserviert.</p>'
+    +'<div class="amount"><span>Rundflug-Ticket <span style="color:var(--muted);font-size:13px">(1 Person)</span></span><span class="v">'+eur(p)+'</span></div>'
+    +'<div class="pay">'
+      +'<button class="paybtn" data-act="pay" data-m="PayPal"><span class="ic pp">Pay<i>Pal</i></span> Mit PayPal bezahlen</button>'
+      +'<button class="paybtn" data-act="pay" data-m="Kreditkarte"><span class="ic cc">⬤⬤</span> Kredit-/Debitkarte</button>'
+      +'<button class="paybtn" data-act="pay" data-m="Klarna"><span class="ic kl">K.</span> Klarna / Sofort</button>'
+    +'</div>'
+    +'<div class="btnrow"><button class="btn ghost" data-act="back">← Zurück</button></div>';
+}
+function view4(){
+  var g=result, p=meta.day.price||80;
+  return '<div class="ok-hero"><div class="ring">✅</div><h2 style="margin:2px 0">Registrierung abgeschlossen!</h2>'
+    +'<p class="lead">Vielen Dank, '+esc(g.name.split(' ')[0])+'. Ihr Platz ist reserviert.</p></div>'
+    +'<div class="pass"><div class="ph"><span>RUNDFLUG-TICKET</span><span>'+esc(meta.airfield.icao)+'</span></div>'
+      +'<div class="pb"><div class="big" style="display:flex;align-items:center;gap:16px;justify-content:center;flex-wrap:wrap">'
+      +'<div class="qrbox">'+qrSVG(g.code)+'</div>'
+      +'<div style="text-align:left"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px">IHRE FLUGGAST-ID</div><div class="id">'+esc(g.code)+'</div><div style="font-size:12px;color:var(--muted)">QR-Code beim Check-in scannen</div></div></div>'
+      +'<div class="kv"><div class="k">Name</div><div class="v">'+esc(g.name)+'</div></div>'
+      +'<div class="kv"><div class="k">Gruppe</div><div class="v">'+esc(g.group||'—')+'</div></div>'
+      +'<div class="kv"><div class="k">Gewicht (Selbstausk.)</div><div class="v">'+g.declaredWeight+' kg</div></div>'
+      +'<div class="kv"><div class="k">Flugtag</div><div class="v">'+esc(meta.day.date)+'</div></div>'
+      +'<div class="kv"><div class="k">Bezahlt</div><div class="v" style="color:var(--green)">'+eur(p)+' ✓</div></div>'
+      +'<div class="kv"><div class="k">Zahlart</div><div class="v">'+esc(form.pay)+'</div></div></div></div>'
+    +'<div class="email"><div class="eh">📧 An: '+esc(g.email)+' &nbsp;·&nbsp; Betreff: Ihre Rundflug-Bestätigung ('+esc(g.code)+')</div>'
+      +'<div class="eb">Hallo '+esc(g.name.split(' ')[0])+',<br><br>vielen Dank für Ihre Anmeldung zum Rundflug am <b>'+esc(meta.day.date)+'</b> ab <b>'+esc(meta.airfield.name)+' ('+esc(meta.airfield.icao)+')</b>.<br><br>'
+      +'<b>Ihre Fluggast-ID:</b> '+esc(g.code)+'<br><b>Name:</b> '+esc(g.name)+'<br><b>Gruppe:</b> '+esc(g.group||'—')+'<br><b>Gewicht (Selbstauskunft):</b> '+g.declaredWeight+' kg<br><b>Betrag:</b> '+eur(p)+' (bezahlt via '+esc(form.pay)+')<br><br>'
+      +'Bitte finden Sie sich rechtzeitig am Flugplatz ein. Beim Check-in werden Sie gewogen und erhalten Ihre Flugzuteilung. Den aktuellen Status sehen Sie auf der Abflugtafel.<br><br>Gute Flüge!<br>Ihr Team vom '+esc(meta.airfield.operator)+'</div></div>'
+    +'<div class="note">📋 Nächste Schritte: Am Flugplatz beim Check-in melden → QR-Code scannen lassen → Wiegen → Flugzuteilung. Behalten Sie die Abflugtafel mit Ihrer ID '+esc(g.code)+' im Blick.</div>'
+    +'<div class="btnrow"><button class="btn" data-act="restart">Weitere Person anmelden</button></div>';
+}
+
+/* ---------- validation & flow ---------- */
+function clearErr(){ Array.prototype.forEach.call(document.querySelectorAll('.errmsg'),function(e){e.classList.remove('show');});
+  Array.prototype.forEach.call(document.querySelectorAll('.input'),function(e){e.classList.remove('err');}); }
+function readStep(){
+  if(step===1){ form.name=byId('r_name').value.trim(); form.email=byId('r_email').value.trim(); form.phone=byId('r_phone').value.trim(); form.group=byId('r_group').value.trim(); }
+  else if(step===2){ var w=parseFloat(byId('r_weight').value); form.weight=isNaN(w)?null:w; }
+}
+function validate(){
+  clearErr(); var ok=true;
+  if(step===1){
+    if(!form.name){ byId('e_name').classList.add('show'); byId('r_name').classList.add('err'); ok=false; }
+    if(!emailOk(form.email)){ byId('e_email').classList.add('show'); byId('r_email').classList.add('err'); ok=false; }
+  } else if(step===2){
+    if(form.weight==null || form.weight<30 || form.weight>200){ byId('e_weight').classList.add('show'); byId('r_weight').classList.add('err'); ok=false; }
+    if(!form.consent){ byId('e_consent').classList.add('show'); ok=false; }
+  }
+  return ok;
+}
+function finalize(){
+  var S=loadStore();
+  S.seq=S.seq||{g:0,f:0}; S.seq.g=(S.seq.g||0)+1; var n=S.seq.g;
+  var code='G-'+String(n).padStart(3,'0');
+  var grp=form.group||null;
+  if(grp){ S.groups=S.groups||{}; if(!S.groups[grp]){ var pal=['#2563EB','#7C3AED','#0891B2','#DB2777','#CA8A04','#15803D','#B91C1C','#0D9488']; S.groups[grp]=pal[Object.keys(S.groups).length%pal.length]; } }
+  var guest={id:'g'+Date.now(),code:code,name:form.name,email:form.email,phone:form.phone,group:grp,
+    weight:null,declaredWeight:form.weight,paid:true,consent:true,payMethod:form.pay,
+    checkedIn:false,noShow:false,flown:false};
+  S.guests=S.guests||[]; S.guests.push(guest); saveStore(S);
+  result=guest; step=4; render();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-act]'); if(!el) return;
+  var act=el.getAttribute('data-act');
+  if(act==='next'){ readStep(); if(validate()){ step++; render(); window.scrollTo(0,0); } }
+  else if(act==='back'){ readStep(); step--; render(); }
+  else if(act==='toggleConsent'){ form.consent=!form.consent; byId('consent').classList.toggle('checked',form.consent); byId('e_consent').classList.remove('show'); }
+  else if(act==='pay'){
+    form.pay=el.getAttribute('data-m');
+    byId('ovtext').textContent='Zahlung via '+form.pay+' wird verarbeitet…';
+    byId('overlay').classList.add('show');
+    payTimer=setTimeout(function(){ byId('overlay').classList.remove('show'); finalize(); }, 1400);
+  }
+  else if(act==='restart'){ form={name:'',email:'',phone:'',group:'',weight:null,consent:false,pay:''}; result=null; step=1; meta=loadStore(); render(); window.scrollTo(0,0); }
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter' && (step===1||step===2)){ var a=document.querySelector('[data-act="next"]'); if(a){ readStep(); if(validate()){ step++; render(); } } }
+});
+
+render();
+})();
+</script>
+</body>
+</html>

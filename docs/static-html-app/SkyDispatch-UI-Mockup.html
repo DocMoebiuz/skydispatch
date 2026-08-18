@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>SkyDispatch – Rundflug-Management</title>
+<style>
+  :root{
+    --navy:#0F172A; --navy2:#1E293B; --blue:#2563EB; --blue-soft:#EFF4FF;
+    --bg:#F1F5F9; --card:#FFFFFF; --ink:#0F172A; --muted:#64748B; --line:#E2E8F0;
+    --green:#16A34A; --green-bg:#DCFCE7; --yellow:#CA8A04; --yellow-bg:#FEF9C3;
+    --red:#DC2626; --red-bg:#FEE2E2; --grey:#94A3B8; --grey-bg:#F1F5F9;
+    --shadow:0 1px 2px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.06);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:'Segoe UI',Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);
+    font-size:15px;line-height:1.5;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+  .topbar{display:flex;align-items:center;gap:14px;background:var(--navy);color:#E2E8F0;
+    padding:0 18px;height:56px;flex:0 0 auto;font-size:13.5px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;color:#fff;font-size:16px}
+  .brand .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#3B82F6,#1D4ED8);
+    display:grid;place-items:center;color:#fff;font-size:16px}
+  .sep{width:1px;height:24px;background:#334155}
+  .chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;
+    background:#1E293B;border:1px solid #334155;white-space:nowrap}
+  .chip b{color:#fff;font-weight:600}
+  .chip.live{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.4);color:#86EFAC}
+  .chip.draft{background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.4);color:#CBD5E1}
+  .chip.air{background:rgba(37,99,235,.14);border-color:rgba(37,99,235,.45);color:#93C5FD}
+  .chip.warn{background:rgba(220,38,38,.14);border-color:rgba(220,38,38,.45);color:#FCA5A5}
+  .dot{width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 0 3px rgba(34,197,94,.18)}
+  .spacer{flex:1}
+  .ghostmini{background:#1E293B;border:1px solid #334155;color:#CBD5E1;border-radius:8px;padding:6px 11px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .ghostmini:hover{background:#273449}
+  .user{display:flex;align-items:center;gap:9px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:#475569;display:grid;place-items:center;color:#fff;font-size:13px;font-weight:600}
+
+  .shell{flex:1;display:flex;min-height:0}
+  .nav{flex:0 0 76px;background:var(--navy2);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:6px}
+  .nav button{width:60px;height:60px;border:0;background:transparent;color:#94A3B8;border-radius:14px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;
+    font-size:10.5px;font-weight:600;transition:.15s;position:relative}
+  .nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9}
+  .nav button:hover{background:#273449;color:#CBD5E1}
+  .nav button.active{background:var(--blue);color:#fff;box-shadow:var(--shadow)}
+  .nav .badge{position:absolute;top:8px;right:10px;background:var(--red);color:#fff;border-radius:999px;
+    font-size:9px;min-width:15px;height:15px;display:grid;place-items:center;padding:0 3px}
+  .main{flex:1;overflow:auto;padding:22px 26px}
+
+  .screen{display:none;animation:fade .25s ease}
+  .screen.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;margin:0 0 18px;gap:16px;flex-wrap:wrap}
+  .head h1{font-size:23px;margin:0;letter-spacing:-.3px}
+  .head .sub{color:var(--muted);font-size:13.5px;margin-top:3px}
+  .btn{border:0;border-radius:10px;padding:11px 16px;font-weight:600;font-size:14px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;min-height:44px}
+  .btn:hover{filter:brightness(1.06)}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn.danger{background:var(--red)}
+  .btn.ok{background:var(--green)}
+  .btn.lg{width:100%;justify-content:center;font-size:16px;min-height:54px;border-radius:12px}
+  .btn:disabled{background:#CBD5E1!important;color:#fff;cursor:not-allowed;filter:none}
+  .btn.sm{padding:8px 12px;min-height:38px;font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .grid{display:grid;gap:16px}
+  .empty{padding:34px;text-align:center;color:var(--muted)}
+  .empty .big{font-size:34px;margin-bottom:8px;opacity:.4}
+
+  .kpis{grid-template-columns:repeat(5,1fr)}
+  .kpi{padding:16px 18px}
+  .kpi .l{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+  .kpi .v{font-size:30px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums}
+  .kpi .d{font-size:12.5px;margin-top:2px}
+  .up{color:var(--green)} .down{color:var(--red)}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .pd{width:8px;height:8px;border-radius:50%}
+  .s-green{background:var(--green-bg);color:#15803D}.s-green .pd{background:var(--green)}
+  .s-yellow{background:var(--yellow-bg);color:#A16207}.s-yellow .pd{background:#EAB308}
+  .s-red{background:var(--red-bg);color:#B91C1C}.s-red .pd{background:var(--red)}
+  .s-grey{background:var(--grey-bg);color:#64748B}.s-grey .pd{background:var(--grey)}
+  .s-blue{background:#DBEAFE;color:#1D4ED8}.s-blue .pd{background:var(--blue)}
+
+  .flights{grid-template-columns:repeat(3,1fr)}
+  .fc{padding:16px;border-top:4px solid var(--grey);cursor:pointer}
+  .fc.air{border-top-color:var(--blue)} .fc.ready{border-top-color:var(--green)}
+  .fc.geplant{border-top-color:#EAB308} .fc.completed{border-top-color:var(--grey)}
+  .fc .r{display:flex;align-items:center;justify-content:space-between}
+  .fc .id{font-size:17px;font-weight:700}
+  .fc .meta{color:var(--muted);font-size:13px;margin-top:6px}
+  .fc .stats{display:flex;gap:16px;margin:12px 0 8px;font-variant-numeric:tabular-nums}
+  .fc .stats .s{font-size:13px;color:#334155}
+  .fc .stats b{font-size:15px}
+  .bar{height:8px;border-radius:999px;background:#E2E8F0;overflow:hidden}
+  .bar > i{display:block;height:100%;border-radius:999px;background:var(--green);transition:width .25s}
+  .bar.warn > i{background:var(--red)} .bar.mid > i{background:#EAB308}
+  .fc .foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12.5px;color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.4px;
+    padding:10px 14px;border-bottom:1px solid var(--line)}
+  td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  .grp{display:inline-flex;align-items:center;gap:7px}
+  .grp .brace{width:4px;height:22px;border-radius:3px}
+  .gtag{font-size:11px;font-weight:700;color:#fff;border-radius:6px;padding:2px 7px}
+  .rowact{background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-weight:600;
+    cursor:pointer;font-size:13px;min-height:36px;margin-left:6px}
+  .rowact:hover{border-color:var(--blue)}
+  .rowact.warn{border-color:#FCA5A5;color:#B91C1C;background:#FEF2F2}
+  .rowact.ok{border-color:#86EFAC;color:#15803D;background:#F0FDF4}
+
+  .filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .fchip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;font-size:13px;
+    font-weight:600;cursor:pointer;color:#475569;min-height:40px}
+  .fchip.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+  .stepper{display:flex;gap:8px;margin-bottom:18px}
+  .step{flex:1;padding:11px 14px;border-radius:10px;background:#fff;border:1px solid var(--line);font-weight:600;color:#64748B;display:flex;gap:10px;align-items:center;font-size:13.5px}
+  .step.on{border-color:var(--blue);background:var(--blue-soft);color:#1D4ED8}
+  .step .n{width:22px;height:22px;border-radius:50%;background:#CBD5E1;color:#fff;display:grid;place-items:center;font-size:12px}
+  .step.on .n{background:var(--blue)}
+  .form{padding:20px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12.5px;font-weight:700;color:#334155;margin-bottom:6px}
+  .input{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;background:#fff;min-height:44px;color:var(--ink)}
+  .input:focus{outline:none;border-color:var(--blue)}
+  .input.err{border-color:var(--red);background:#FEF2F2}
+  .field.req label::after{content:" *";color:var(--blue)}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .panel-h{padding:13px 16px;border-bottom:1px solid var(--line);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .panel-b{padding:14px 16px}
+  .listrow{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);gap:10px}
+  .listrow:last-child{border-bottom:0}
+  .toggle{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;color:#64748B;min-height:34px}
+  .toggle.on{background:var(--green-bg);border-color:#86EFAC;color:#15803D}
+  .iconbtn{border:0;background:#FEE2E2;color:#B91C1C;border-radius:8px;width:32px;height:32px;cursor:pointer;font-weight:700;font-size:14px}
+  .iconbtn:hover{filter:brightness(.97)}
+
+  .split{display:grid;grid-template-columns:1fr 1.1fr;gap:18px;align-items:start}
+  .pax{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);
+    border-radius:10px;margin-bottom:8px;background:#fff;cursor:pointer}
+  .pax:hover{border-color:var(--blue);box-shadow:var(--shadow)}
+  .pax.locked{cursor:default;opacity:.85}
+  .pax.locked:hover{border-color:var(--line);box-shadow:none}
+  .pax .nm{font-weight:600}
+  .pax .wt{font-variant-numeric:tabular-nums;color:#475569;font-weight:600}
+  .pax .handle{color:#CBD5E1;margin-right:7px}
+  .pax[draggable="true"]{cursor:grab} .pax[draggable="true"]:active{cursor:grabbing}
+  .pax.locked[draggable="true"]{cursor:grab}
+  .groupbox[draggable="true"]{cursor:grab}
+  .pax.dragging,.groupbox.dragging{opacity:.45;outline:2px solid var(--blue);outline-offset:1px}
+  [data-drop].drophl{outline:2px dashed var(--blue);outline-offset:-3px;background:var(--blue-soft);border-radius:10px}
+  .draghint{font-size:12px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:6px}
+  .acthumb{width:52px;height:38px;border-radius:7px;object-fit:cover;background:var(--grey-bg);flex:0 0 auto}
+  .acthumb.ph{display:grid;place-items:center;color:#94A3B8;font-size:18px;border:1px dashed var(--line)}
+  .fcimg{width:100%;height:96px;object-fit:cover;border-radius:9px;margin:10px 0 2px;display:block;background:var(--grey-bg)}
+  .groupbox{border:1.5px dashed #C7D2FE;border-radius:12px;padding:9px;margin-bottom:11px;background:#F5F8FF}
+  .groupbox .gh{font-size:12px;font-weight:700;color:#4338CA;margin:2px 4px 8px;display:flex;justify-content:space-between}
+  .seatslot{border:1.5px dashed #CBD5E1;border-radius:10px;padding:12px;margin-bottom:8px;color:#94A3B8;text-align:center;font-weight:600;font-size:13px}
+  .gauge{margin-top:8px}
+  .gauge .nums{display:flex;justify-content:space-between;font-variant-numeric:tabular-nums;font-weight:700;margin-bottom:6px}
+  .free{color:var(--green);font-weight:700} .free.over{color:var(--red)}
+  .warnbanner{margin-top:12px;background:var(--yellow-bg);border:1px solid #FDE68A;color:#854D0E;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:600}
+  .flighttabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .ftab{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 13px;cursor:pointer;font-weight:600;font-size:13px;display:flex;gap:8px;align-items:center}
+  .ftab.on{border-color:var(--blue);background:var(--blue-soft);color:#1D4ED8}
+
+  .checkin{display:grid;grid-template-columns:1fr 1.05fr;gap:18px;align-items:start}
+  .scan{padding:22px;text-align:center}
+  .scanbox{border:2.5px dashed var(--blue);border-radius:16px;padding:26px;background:var(--blue-soft);color:#1D4ED8;font-weight:700;font-size:15px}
+  .scanbox svg{width:44px;height:44px;stroke:var(--blue);fill:none;stroke-width:1.6;margin-bottom:6px}
+  .or{margin:14px 0;color:var(--muted);font-size:13px}
+
+  .timeline{display:flex;align-items:center;margin:14px 0 18px}
+  .tl-node{display:flex;flex-direction:column;align-items:center;gap:7px;flex:0 0 auto}
+  .tl-node .d{width:16px;height:16px;border-radius:50%;background:#CBD5E1}
+  .tl-node.done .d{background:var(--green)} .tl-node.cur .d{background:var(--blue);box-shadow:0 0 0 5px rgba(37,99,235,.18)}
+  .tl-node .t{font-size:11.5px;font-weight:700;color:#64748B} .tl-node.cur .t{color:var(--blue)}
+  .tl-line{flex:1;height:3px;background:#CBD5E1;margin:0 4px 22px}
+  .tl-line.done{background:var(--green)}
+  .airborne-box{text-align:center;padding:18px;background:#DBEAFE;border-radius:14px;margin-bottom:14px}
+  .airborne-box .big{font-size:20px;font-weight:700;color:#1D4ED8}
+  .airborne-box .t{color:#3B82F6;font-weight:600;margin-top:4px}
+
+  .charts{grid-template-columns:2fr 1fr;gap:16px}
+  .chart{padding:18px}
+  .chart h3{margin:0 0 14px;font-size:14px}
+  .bars{display:flex;align-items:flex-end;gap:12px;height:150px}
+  .bars .b{flex:1;background:linear-gradient(180deg,#60A5FA,#2563EB);border-radius:7px 7px 0 0;position:relative;min-height:3px}
+  .bars .b span{position:absolute;top:-20px;left:0;right:0;text-align:center;font-size:11px;font-weight:700;color:#475569}
+  .bars .b small{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-size:11px;color:#94A3B8;white-space:nowrap}
+  .donut{width:130px;height:130px;border-radius:50%;margin:6px auto 14px;display:grid;place-items:center}
+  .donut .inner{width:90px;height:90px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-size:23px;font-weight:700}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#475569;margin-top:8px;justify-content:center}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  .modal-bd{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .modal-bd.show{display:flex}
+  .modal{background:var(--card);border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.3);width:100%;max-width:440px;padding:22px;animation:pop .2s ease}
+  @keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal h3{margin:0 0 16px;font-size:18px}
+  .modal-actions{display:flex;gap:10px;margin-top:8px}
+  .modal-actions .btn{flex:1;justify-content:center}
+
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);
+    color:#fff;padding:13px 20px;border-radius:12px;font-weight:600;box-shadow:var(--shadow);opacity:0;
+    transition:.25s;pointer-events:none;z-index:80;max-width:90vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:var(--red)} .toast.good{background:var(--green)}
+  .demoflag{font-size:11px;color:#94A3B8;font-style:italic}
+
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#0B1220;--card:#111827;--ink:#E5E7EB;--muted:#94A3B8;--line:#1F2937;--blue-soft:#0b1d3a;--grey-bg:#0f1729;--green-bg:#0c2a1a;--yellow-bg:#2a2410;--red-bg:#2a1414}
+    .topbar{background:#060B16}.nav{background:#0d1626}
+    .fchip,.rowact,.pax,.btn.ghost,.input,.toggle,.ftab,.step{background:#0f1729;color:#E5E7EB}
+    .scanbox{background:#0b1d3a}
+  }
+  @media(max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)}.flights,.charts,.split,.checkin{grid-template-columns:1fr}.row3{grid-template-columns:1fr}}
+  @media(max-width:760px){
+    .topbar{flex-wrap:wrap;height:auto;min-height:56px;padding:8px 12px;row-gap:6px;gap:8px}
+    #topchips{flex-wrap:wrap;row-gap:6px}
+    .ghostmini{padding:6px 9px;font-size:12px}
+    .shell{flex-direction:column}
+    .main{order:1;padding:16px 13px}
+    .nav{order:2;flex-direction:row;width:100%;gap:3px;padding:5px;flex:0 0 auto;overflow-x:auto;border-top:1px solid #0f1b30}
+    .nav button{flex:1 1 0;min-width:46px;width:auto;height:50px;font-size:9.5px;gap:3px;border-radius:10px}
+    .nav button svg{width:18px;height:18px}
+    .nav .badge{top:4px;right:10px}
+    .head{flex-wrap:wrap;gap:10px}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .flights,.split,.checkin,.charts{grid-template-columns:1fr}
+    .row2,.row3{grid-template-columns:1fr}
+    table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    .modal{max-width:100%}
+    .fcimg{height:150px}
+  }
+  @media(max-width:560px){
+    .chip.opt{display:none}
+    .user .uname{display:none}
+    .kpi .v{font-size:23px}
+    .head h1{font-size:20px}
+    .brand{font-size:15px}
+    .flighttabs{gap:6px}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="logo">✈</span> SkyDispatch</div>
+  <div class="sep"></div>
+  <div id="topchips" style="display:flex;gap:10px;align-items:center"></div>
+  <div class="spacer"></div>
+  <button class="ghostmini" data-act="openReg">🎫 Registrierung</button>
+  <button class="ghostmini" data-act="openTerminal">📺 Terminal</button>
+  <button class="ghostmini" data-act="reset">↺ Demo-Daten</button>
+  <div class="user"><span class="avatar">ML</span> <span class="uname">Dispatcher</span></div>
+</div>
+
+<div class="shell">
+  <nav class="nav" id="nav">
+    <button data-act="nav" data-s="dash" class="active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</button>
+    <button data-act="nav" data-s="setup"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>Setup</button>
+    <button data-act="nav" data-s="guests"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M16 14.5c2.6.3 4.5 2.3 4.5 5"/></svg>Gäste</button>
+    <button data-act="nav" data-s="plan"><svg viewBox="0 0 24 24"><path d="M2 16l9-3 4-9 2 1-2 8 6-1v3l-6 1-3 6-2-1 1-6z"/></svg>Planung</button>
+    <button data-act="nav" data-s="checkin"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 12l3 3 5-6"/></svg>Check-in</button>
+    <button data-act="nav" data-s="track"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Tracking</button>
+    <button data-act="nav" data-s="report"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reporting</button>
+  </nav>
+  <main class="main">
+    <section class="screen active" id="dash"></section>
+    <section class="screen" id="setup"></section>
+    <section class="screen" id="guests"></section>
+    <section class="screen" id="plan"></section>
+    <section class="screen" id="checkin"></section>
+    <section class="screen" id="track"></section>
+    <section class="screen" id="report"></section>
+  </main>
+</div>
+
+<div class="modal-bd" id="modalbd">
+  <div class="modal">
+    <h3 id="m-title"></h3>
+    <div id="m-fields"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-act="modalCancel">Abbrechen</button>
+      <button class="btn" data-act="modalConfirm">Speichern</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============ STATE ============ */
+var KEY='skydispatch_v5';
+var S=null, ui={screen:'dash', selFlight:null, selCheckin:null, gfilter:'alle', gsearch:''};
+
+function seed(){
+  _gs=0;
+  var firsts=['Anna','Tom','Lina','Eva','Otto','Mia','Max','Jan','Nina','Paul','Lea','Finn','Emma','Ben','Lara','Noah','Sara','Leon','Marie','Luca','Hannah','Felix','Clara','Jonas','Lena','Tim','Julia','Niklas','Laura','David','Sophie','Erik','Maja','Phil','Ida','Jakob','Nora','Moritz','Lilly','Elias','Pia','Henry','Frieda','Theo','Greta','Oskar','Mara','Linus','Romy','Karl'];
+  var lasts=['Weber','Lang','Klein','Groß','Stern','Roth','Falk','Berg','Wolf','Hahn','Kern','Vogel','Busch','Frank','Arnold','Böhm','Kraus','Sommer','Winter','Förster','Bauer','Huber','Maier','Hoffmann','Fuchs','Krüger','Richter','Neumann','Schwarz','Zimmer','Brand','Engel','Horn','Jung','Keller','Lorenz','Peters','Reuter','Sauer','Thiel','Voigt','Walter','Adler','Bach','Dorn','Ernst','Götz','Hartmann','Kühn','Mayer'];
+  var rs=20260625;
+  function rnd(){ rs=(rs*1103515245+12345)&0x7fffffff; return rs/0x7fffffff; }
+  function pick(a){ return a[Math.floor(rnd()*a.length)]; }
+  var groups={}, palette=['#2563EB','#7C3AED','#0891B2','#DB2777','#CA8A04','#15803D','#B91C1C','#0D9488','#9333EA','#C2410C','#4F46E5','#0369A1'];
+  function gcolor(n){ if(!groups[n]) groups[n]=palette[Object.keys(groups).length%palette.length]; }
+  var guests=[];
+  function add(name,grp){ _gs++; var paid=rnd()>0.14; var weight=rnd()>0.12?Math.round(48+rnd()*58):null;
+    guests.push({id:'g'+_gs,code:'G-'+String(_gs).padStart(3,'0'),name:name,weight:weight,paid:paid,group:grp,checkedIn:false,noShow:false,flown:false}); return guests[guests.length-1]; }
+  while(guests.length<150){
+    var rem=150-guests.length;
+    if(rnd()<0.5 && rem>=2){
+      var ln=pick(lasts), gname=ln, k=2; while(groups[gname]){ gname=ln+' '+k; k++; }
+      gcolor(gname);
+      var size=Math.min(rem,2+Math.floor(rnd()*4));
+      for(var i=0;i<size;i++) add(pick(firsts)+' '+ln,gname);
+    } else { add(pick(firsts)+' '+pick(lasts),null); }
+  }
+  var pilots=[{id:'p1',name:'Meier',lic:'PPL, Nacht',avail:true},{id:'p2',name:'Schmidt',lic:'PPL',avail:true},{id:'p3',name:'Becker',lic:'CPL',avail:true},{id:'p4',name:'Wagner',lic:'PPL',avail:false}];
+  var acs=[{id:'a1',reg:'D-EABC',type:'Cessna 172',seats:4,payload:340,cost:180,img:null},{id:'a2',reg:'D-EXYZ',type:'Piper PA-28',seats:4,payload:340,cost:160,img:null},{id:'a3',reg:'D-EKLM',type:'Cirrus SR22',seats:4,payload:360,cost:240,img:null}];
+  var used={};
+  function build(payload){ var picked=[],sum=0;
+    for(var i=0;i<guests.length && picked.length<4;i++){ var go=guests[i]; if(used[go.id]) continue;
+      var w=go.weight==null?Math.round(60+rnd()*28):go.weight; if(sum+w>payload) continue;
+      go.paid=true; go.weight=w; used[go.id]=true; picked.push(go); sum+=w; }
+    return picked; }
+  var flights=[],fno=0;
+  function tISO(h,m){ var d=new Date(); d.setHours(h,m,0,0); return d.toISOString(); }
+  function mk(ai,pi,gs,status,off,on){ fno++;
+    flights.push({id:'fl'+fno,code:'FL-'+String(fno).padStart(3,'0'),aircraftId:acs[ai].id,pilotId:pilots[pi]?pilots[pi].id:null,guests:gs.map(function(g){return g.id;}),status:status,offBlock:off||null,onBlock:on||null});
+    if(status==='completed'){ gs.forEach(function(g){g.checkedIn=true;g.flown=true;}); }
+    else if(status==='airborne'||status==='ready'){ gs.forEach(function(g){g.checkedIn=true;}); } }
+  mk(0,0,build(340),'completed',tISO(9,2),tISO(9,21));
+  mk(1,1,build(340),'completed',tISO(9,28),tISO(9,47));
+  mk(2,2,build(360),'completed',tISO(9,55),tISO(10,16));
+  mk(0,0,build(340),'completed',tISO(10,24),tISO(10,43));
+  mk(1,1,build(340),'completed',tISO(10,52),tISO(11,11));
+  mk(2,2,build(360),'completed',tISO(11,20),tISO(11,40));
+  mk(0,0,build(340),'completed',tISO(11,48),tISO(12,7));
+  mk(1,1,build(340),'airborne',new Date(Date.now()-13*60000).toISOString(),null);
+  mk(2,2,build(360),'ready',null,null);
+  mk(0,0,build(340),'geplant',null,null);
+  mk(1,2,build(340),'geplant',null,null);
+  return { airfield:{name:'Flugplatz Backnang-Heiningen',icao:'EDSH',rwy:'10/28',freq:'123.71',elev:'294 m',operator:'LSV Backnang-Heiningen e. V.'},
+    day:{date:'25.06.2026',status:'Aktiv',price:80}, pilots:pilots, aircraft:acs, groups:groups, guests:guests, flights:flights, seq:{g:guests.length,f:fno} };
+}
+var _gs=0;
+
+function load(){
+  try{ var raw=localStorage.getItem(KEY); if(raw){ S=JSON.parse(raw); return; } }catch(e){}
+  S=seed(); save();
+}
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); return true; }catch(e){ return false; } }
+function reset(){ S=seed(); ui.selFlight=null; ui.selCheckin=null; save(); render(); toast('Demo-Daten zurückgesetzt','good'); }
+
+/* ============ HELPERS ============ */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+function byId(id){ return document.getElementById(id); }
+function pilot(id){ return S.pilots.find(function(p){return p.id===id;}); }
+function aircraft(id){ return S.aircraft.find(function(a){return a.id===id;}); }
+function flight(id){ return S.flights.find(function(f){return f.id===id;}); }
+function guest(id){ return S.guests.find(function(x){return x.id===id;}); }
+function hhmm(d){ var x=new Date(d); return ('0'+x.getHours()).slice(-2)+':'+('0'+x.getMinutes()).slice(-2); }
+function nowISO(){ return new Date().toISOString(); }
+function csvCell(v){ v=String(v==null?'':v); return /[";\n\r]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function csvDownload(rows,fname){
+  var csv='﻿'+rows.map(function(r){return r.map(csvCell).join(';');}).join('\r\n');
+  try{ var blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); return true;
+  }catch(e){ toast('Export im Browser nicht möglich','err'); return false; }
+}
+
+function activeFlightOf(gid){ return S.flights.find(function(f){return f.status!=='completed' && f.guests.indexOf(gid)>=0;}); }
+function fWeight(f){ return f.guests.reduce(function(s,gid){var x=guest(gid);return s+(x&&x.weight?x.weight:0);},0); }
+function fAircraft(f){ return aircraft(f.aircraftId); }
+function isAssignable(x){ return x.paid && x.weight!=null && !x.noShow && !x.flown && !activeFlightOf(x.id); }
+function pool(){ return S.guests.filter(isAssignable); }
+
+function gStage(x){
+  if(x.noShow) return {k:'no-show',c:'s-red'};
+  if(x.flown) return {k:'geflogen',c:'s-grey'};
+  if(x.checkedIn) return {k:'eingecheckt',c:'s-green'};
+  if(activeFlightOf(x.id)) return {k:'zugewiesen',c:'s-blue'};
+  if(x.paid && x.weight!=null) return {k:'flugbereit',c:'s-green'};
+  if(x.paid) return {k:'bezahlt',c:'s-yellow'};
+  return {k:'registriert',c:'s-grey'};
+}
+function fStatusPill(f){
+  var m={geplant:['s-yellow','GEPLANT'],ready:['s-green','READY'],airborne:['s-blue','AIRBORNE'],completed:['s-grey','COMPLETED']};
+  var v=m[f.status]; return '<span class="pill '+v[0]+'"><span class="pd"></span>'+v[1]+'</span>';
+}
+function canSetReady(f){ var ac=fAircraft(f); return f.guests.length>0 && fWeight(f)<=ac.payload; }
+function notCheckedIn(f){ return f.guests.filter(function(gid){var x=guest(gid);return x && !x.checkedIn;}); }
+function canStart(f){ return f.status==='ready' && f.guests.length>0 && notCheckedIn(f).length===0; }
+
+/* ============ RENDER ============ */
+function render(){
+  renderTop();
+  renderScreen(ui.screen);
+  // nav badges
+  var warn=S.flights.filter(function(f){return f.status!=='completed' && fAircraft(f) && fWeight(f)>fAircraft(f).payload;}).length;
+  var ciOpen=S.flights.filter(function(f){return (f.status==='geplant'||f.status==='ready') && notCheckedIn(f).length>0;}).length;
+  setBadge('checkin', ciOpen);
+}
+function setBadge(s,n){
+  var btn=document.querySelector('.nav button[data-s="'+s+'"]'); if(!btn) return;
+  var b=btn.querySelector('.badge'); if(n>0){ if(!b){b=document.createElement('span');b.className='badge';btn.appendChild(b);} b.textContent=n; } else if(b){ b.remove(); }
+}
+function renderTop(){
+  var a=S.airfield, st=S.day.status;
+  var stChip = st==='Aktiv'
+    ? '<span class="chip live"><span class="dot"></span>Flugtag <b>'+esc(S.day.date)+'</b> · AKTIV</span>'
+    : '<span class="chip draft">Flugtag <b>'+esc(S.day.date)+'</b> · '+esc(st)+'</span>';
+  var warn=S.flights.filter(function(f){return f.status!=='completed' && fAircraft(f) && fWeight(f)>fAircraft(f).payload;}).length;
+  byId('topchips').innerHTML = stChip
+    + '<span class="chip air">✈ '+esc(a.name)+' · <b>'+esc(a.icao||'—')+'</b></span>'
+    + '<span class="chip opt">RWY <b>'+esc(a.rwy||'—')+'</b></span>'
+    + '<span class="chip opt">📻 <b>'+esc(a.freq||'—')+'</b></span>'
+    + (warn? '<span class="chip warn">⚠ <b>'+warn+'</b> Gewicht</span>':'');
+}
+
+function renderScreen(id){
+  var el=byId(id); if(!el) return;
+  if(id==='dash') el.innerHTML=viewDash();
+  else if(id==='setup') el.innerHTML=viewSetup();
+  else if(id==='guests') el.innerHTML=viewGuests();
+  else if(id==='plan') el.innerHTML=viewPlan();
+  else if(id==='checkin') el.innerHTML=viewCheckin();
+  else if(id==='track') el.innerHTML=viewTrack();
+  else if(id==='report') el.innerHTML=viewReport();
+}
+
+/* ---- DASHBOARD ---- */
+function viewDash(){
+  var active=S.flights.filter(function(f){return f.status!=='completed';});
+  var completed=S.flights.filter(function(f){return f.status==='completed';});
+  var flown=S.guests.filter(function(x){return x.flown;}).length;
+  var util=0; if(active.length){ util=Math.round(active.reduce(function(s,f){var ac=fAircraft(f);return s+(f.guests.length/ac.seats);},0)/active.length*100); }
+  var cards = active.length ? active.map(flightCard).join('') :
+    '<div class="card empty"><div class="big">🛫</div>Noch keine Flüge geplant.<br><button class="btn sm" data-act="nav" data-s="plan" style="margin-top:12px">Zur Flugplanung</button></div>';
+  return ''
+  + head('Dashboard','Live-Übersicht · '+esc(S.airfield.name)+' ('+esc(S.airfield.icao)+') · '+esc(S.day.date),
+      '<button class="btn" data-act="newFlight">+ Neuer Flug</button>')
+  + '<div class="grid kpis" style="margin-bottom:20px">'
+    + kpi('Flüge aktiv', active.length, completed.length+' abgeschlossen')
+    + kpi('Gäste', S.guests.length, pool().length+' flugbereit')
+    + kpi('Wartend', pool().length, 'offen zuzuweisen','down')
+    + kpi('Auslastung', util+'%', 'aktive Flüge')
+    + kpi('Einnahmen', (flown*S.day.price), 'EUR · '+flown+' geflogen')
+  + '</div>'
+  + '<h3 style="margin:0 0 12px">'+(active.length?'Live-Flüge':'Flüge')+'</h3>'
+  + '<div class="grid flights">'+cards+'</div>';
+}
+function flightCard(f){
+  var ac=fAircraft(f), pl=pilot(f.pilotId), w=fWeight(f), pct=Math.round(w/ac.payload*100);
+  var over=w>ac.payload;
+  var barc = over?'warn':(pct>=85?'mid':'');
+  var foot = f.status==='airborne'?('↑ Start '+hhmm(f.offBlock)) : f.status==='completed'?('✓ '+hhmm(f.offBlock)+'–'+hhmm(f.onBlock)) : (f.status==='ready'?'bereit':'in Planung');
+  return '<div class="card fc '+f.status+'" data-act="gotoTrack" data-id="'+f.id+'">'
+    + '<div class="r"><span class="id">'+esc(f.code)+'</span>'+fStatusPill(f)+'</div>'
+    + (ac.img?'<img src="'+ac.img+'" alt="'+esc(ac.reg)+'" class="fcimg">':'')
+    + '<div class="meta">'+esc(ac.reg)+' · '+esc(ac.type)+' · Pilot '+esc(pl?pl.name:'—')+(ac.cost!=null?' · '+ac.cost+' €/h':'')+'</div>'
+    + '<div class="stats"><span class="s">👤 <b>'+f.guests.length+'/'+ac.seats+'</b> Sitze</span>'
+      + '<span class="s"'+(over?' style="color:var(--red)"':'')+'>⚖ <b>'+w+'</b>/'+ac.payload+' kg</span></div>'
+    + '<div class="bar '+barc+'"><i style="width:'+Math.min(pct,100)+'%"></i></div>'
+    + '<div class="foot"><span>'+(over?'<span style="color:var(--red);font-weight:700">⚠ +'+(w-ac.payload)+' kg</span>':'Auslastung '+pct+'%')+'</span><span>'+foot+'</span></div>'
+  + '</div>';
+}
+
+/* ---- SETUP ---- */
+function viewSetup(){
+  var a=S.airfield;
+  var canStartDay = !!a.icao && S.pilots.filter(function(p){return p.avail;}).length>0 && S.aircraft.length>0;
+  var dayBtn = S.day.status==='Aktiv'
+    ? '<button class="btn danger" data-act="endDay">■ Tag beenden</button>'
+    : '<button class="btn" data-act="startDay"'+(canStartDay?'':' disabled')+'>'+(S.day.status==='Beendet'?'↻ Tag erneut starten':'Tag starten ▶')+'</button>';
+  var pilots=S.pilots.map(function(p){
+    return '<div class="listrow"><span><b>'+esc(p.name)+'</b> &nbsp;<small style="color:var(--muted)">'+esc(p.lic||'')+'</small></span>'
+      +'<span style="display:flex;gap:8px;align-items:center">'
+      +'<button class="toggle '+(p.avail?'on':'')+'" data-act="togglePilot" data-id="'+p.id+'">'+(p.avail?'● frei':'○ Pause')+'</button>'
+      +'<button class="iconbtn" data-act="delPilot" data-id="'+p.id+'">✕</button></span></div>';
+  }).join('') || '<div style="color:var(--muted);padding:6px 0">Noch keine Piloten.</div>';
+  var acs=S.aircraft.map(function(x){
+    var thumb = x.img ? '<img src="'+x.img+'" alt="'+esc(x.reg)+'" class="acthumb">' : '<div class="acthumb ph">✈</div>';
+    return '<div class="listrow">'
+      +'<span style="display:flex;align-items:center;gap:11px">'+thumb
+        +'<span><b>'+esc(x.reg)+'</b> · '+esc(x.type)
+        +'<div style="font-size:12px;color:var(--muted)">'+x.seats+' Sitze · '+x.payload+' kg · '+(x.cost!=null?'<b style="color:var(--ink)">'+x.cost+' €/h</b>':'— €/h')+'</div></span></span>'
+      +'<span style="display:flex;gap:6px;align-items:center">'
+        +'<button class="rowact" data-act="acImage" data-id="'+x.id+'">📷 '+(x.img?'Ändern':'Bild')+'</button>'
+        +(x.img?'<button class="iconbtn" data-act="acImageDel" data-id="'+x.id+'" title="Bild entfernen">⌫</button>':'')
+        +'<button class="iconbtn" data-act="delAircraft" data-id="'+x.id+'">✕</button></span></div>';
+  }).join('') || '<div style="color:var(--muted);padding:6px 0">Noch keine Flugzeuge.</div>';
+
+  return ''
+  + head('Flugtag Setup','Flugplatz, Piloten und Flugzeuge initialisieren · Status: '+esc(S.day.status), dayBtn)
+  + '<div class="stepper"><div class="step on"><span class="n">1</span> Flugtag &amp; Flugplatz</div>'
+    + '<div class="step"><span class="n">2</span> Piloten</div><div class="step"><span class="n">3</span> Flugzeuge</div></div>'
+  + '<div class="grid" style="grid-template-columns:1.2fr 1fr;gap:18px;align-items:start">'
+    + '<div class="card form"><h3 style="margin:0 0 14px">Flugtag &amp; Flugplatz</h3>'
+      + '<div class="row3">'
+        + fieldI('Datum','f_date',S.day.date)+fieldI('Status','f_status',S.day.status)+fieldI('Preis/Gast (EUR)','f_price',S.day.price,'number')
+      + '</div>'
+      + '<div class="field req"><label>Flugplatz – Name</label><input class="input" id="f_name" value="'+esc(a.name)+'"></div>'
+      + '<div class="row3">'
+        + '<div class="field req"><label>ICAO-Kennung</label><input class="input" id="f_icao" value="'+esc(a.icao)+'" maxlength="4" style="text-transform:uppercase"></div>'
+        + fieldI('Aktive Piste','f_rwy',a.rwy)+fieldI('Frequenz (MHz)','f_freq',a.freq)
+      + '</div>'
+      + '<div class="row3">'+fieldI('Elevation','f_elev',a.elev)+fieldI('Betreiber','f_op',a.operator)+'<div></div></div>'
+      + '<button class="btn ghost sm" data-act="saveAirfield">Flugplatz speichern</button>'
+      + ' <span class="demoflag">Beispieldaten – frei editierbar.</span>'
+    + '</div>'
+    + '<div class="grid" style="gap:18px">'
+      + '<div class="card"><div class="panel-h">Piloten <button class="btn sm" data-act="addPilot">+ Pilot</button></div><div class="panel-b">'+pilots+'</div></div>'
+      + '<div class="card"><div class="panel-h">Flugzeuge <button class="btn sm" data-act="addAircraft">+ Flugzeug</button></div><div class="panel-b">'+acs+'</div></div>'
+    + '</div>'
+  + '</div>';
+}
+
+/* ---- GUESTS ---- */
+function guestRowsHtml(){
+  var f=ui.gfilter, q=(ui.gsearch||'').trim().toLowerCase();
+  var list=S.guests.filter(function(x){
+    var st=gStage(x).k;
+    if(f==='offen'){ if(!(!x.paid||x.weight==null)) return false; }
+    else if(f==='flugbereit'){ if(st!=='flugbereit') return false; }
+    else if(f==='geflogen'){ if(!x.flown) return false; }
+    else if(f==='noshow'){ if(!x.noShow) return false; }
+    if(q){ if(x.name.toLowerCase().indexOf(q)<0 && x.code.toLowerCase().indexOf(q)<0) return false; }
+    return true;
+  });
+  if(!list.length) return '<tr><td colspan="6"><div class="empty">'+(q?'Keine Treffer für „'+esc(ui.gsearch.trim())+'".':'Keine Gäste in dieser Ansicht.')+'</div></td></tr>';
+  return list.map(function(x){
+    var st=gStage(x);
+    var grp = x.group ? '<span class="grp"><span class="brace" style="background:'+(S.groups[x.group]||'#2563EB')+'"></span><span class="gtag" style="background:'+(S.groups[x.group]||'#2563EB')+'">'+esc(x.group)+'</span></span>' : '—';
+    var act='';
+    if(!x.paid) act='<button class="rowact warn" data-act="togglePaid" data-id="'+x.id+'">€ Zahlung</button>';
+    else if(x.weight==null) act='<button class="rowact warn" data-act="weigh" data-id="'+x.id+'">⚖ Wiegen</button>';
+    else if(!x.flown && !x.noShow) act='<button class="rowact" data-act="weigh" data-id="'+x.id+'">⚖ Ändern</button>';
+    else act='<span style="color:var(--muted)">—</span>';
+    return '<tr><td><span class="pill '+st.c+'"><span class="pd"></span>'+st.k+'</span></td>'
+      +'<td><b>'+esc(x.name)+'</b><div style="font-size:11px;color:var(--muted)">'+esc(x.code)+'</div></td>'
+      +'<td>'+(x.paid?'✓ bezahlt':'<span style="color:var(--red)">✗ offen</span>')+'</td>'
+      +'<td>'+(x.weight!=null?x.weight+' kg':'<span style="color:var(--yellow)">— kg</span>'+(x.declaredWeight!=null?' <span style="font-size:11px;color:var(--muted)">(Sb. '+x.declaredWeight+')</span>':''))+'</td>'
+      +'<td>'+grp+'</td>'
+      +'<td style="text-align:right">'+act+'<button class="iconbtn" data-act="delGuest" data-id="'+x.id+'" style="margin-left:6px">✕</button></td></tr>';
+  }).join('');
+}
+function viewGuests(){
+  var f=ui.gfilter;
+  function fc(v,l){ return '<button class="fchip '+(f===v?'on':'')+'" data-act="gfilter" data-v="'+v+'">'+l+'</button>'; }
+  var q=ui.gsearch||'';
+  var search='<div style="display:flex;gap:8px;align-items:center">'
+    +'<div style="position:relative"><input class="input" id="gsearch" placeholder="Name oder ID suchen…" value="'+esc(q)+'" autocomplete="off" style="min-width:230px;min-height:44px;padding-left:34px">'
+    +'<span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)">🔍</span>'
+    +'<button class="iconbtn" data-act="gclear" title="Suche löschen" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);width:26px;height:26px;background:var(--grey-bg);color:var(--muted);'+(q?'':'display:none')+'">✕</button></div>'
+    +'<button class="btn" data-act="addGuest">+ Gast</button></div>';
+  return ''
+  + head('Fluggäste',S.guests.length+' Gäste · Suche nach Name oder ID',search)
+  + '<div class="filters">'+fc('alle','Alle')+fc('offen','Offen')+fc('flugbereit','Flugbereit')+fc('geflogen','Geflogen')+fc('noshow','No-Show')+'</div>'
+  + '<div class="card" style="padding:4px 6px"><table><thead><tr><th>Status</th><th>Name</th><th>Zahlung</th><th>Gewicht</th><th>Gruppe</th><th style="text-align:right">Aktion</th></tr></thead><tbody id="guestrows">'+guestRowsHtml()+'</tbody></table></div>';
+}
+
+/* ---- PLANNING ---- */
+function viewPlan(){
+  var planf=S.flights.filter(function(f){return f.status==='geplant'||f.status==='ready';});
+  if(ui.selFlight && !flight(ui.selFlight)) ui.selFlight=null;
+  if(!ui.selFlight && planf.length) ui.selFlight=planf[0].id;
+  var tabs=planf.map(function(f){
+    return '<button class="ftab '+(ui.selFlight===f.id?'on':'')+'" data-act="selFlight" data-id="'+f.id+'">'+esc(f.code)+' '+fStatusPill(f)+'</button>';
+  }).join('');
+  tabs+='<button class="ftab" data-act="newFlight">+ Neuer Flug</button>';
+
+  // pool grouped
+  var p=pool(), groups={}, singles=[];
+  p.forEach(function(x){ if(x.group){(groups[x.group]=groups[x.group]||[]).push(x);} else singles.push(x); });
+  var poolHtml='';
+  Object.keys(groups).forEach(function(gn){
+    var sum=groups[gn].reduce(function(s,x){return s+x.weight;},0);
+    poolHtml+='<div class="groupbox" draggable="true" data-drag="group" data-group="'+esc(gn)+'"><div class="gh"><span>⠿ Gruppe '+esc(gn)+' ('+groups[gn].length+')</span><span>'+sum+' kg</span></div>'
+      +groups[gn].map(paxRow).join('')+'</div>';
+  });
+  poolHtml+=singles.map(paxRow).join('');
+  if(!p.length) poolHtml='<div class="empty" style="padding:18px">Kein flugbereiter Gast (bezahlt + gewogen) verfügbar.</div>';
+
+  var builder;
+  if(!ui.selFlight){
+    builder='<div class="card"><div class="empty"><div class="big">🛩️</div>Keinen Flug ausgewählt.<br><button class="btn sm" data-act="newFlight" style="margin-top:12px">+ Neuen Flug anlegen</button></div></div>';
+  } else {
+    builder=builderCard(flight(ui.selFlight));
+  }
+  return head('Flugplanung','Gast oder Gruppe in den Flug ziehen (oder anklicken) · harte Gewichts-/Sitzlimits','')
+    + '<div class="flighttabs">'+tabs+'</div>'
+    + '<div class="draghint">↔ Ziehen &amp; Ablegen: Gast/Gruppe nach rechts in den Flug ziehen · zugewiesenen Gast zurück in die Liste ziehen zum Entfernen. <span class="demoflag">(Touch: antippen)</span></div>'
+    + '<div class="split"><div class="card"><div class="panel-h">Verfügbare Gäste <small style="color:var(--muted);font-weight:600">nur bezahlt + gewogen</small></div><div class="panel-b" data-drop="pool" style="max-height:62vh;overflow:auto">'+poolHtml+'</div></div>'
+    + builder+'</div>';
+}
+function paxRow(x){
+  return '<div class="pax" draggable="true" data-drag="guest" data-act="assign" data-id="'+x.id+'"><span><span class="handle">⠿</span><span class="nm">'+esc(x.name)+'</span>'
+    +(x.group?' <span class="gtag" style="background:'+(S.groups[x.group]||'#2563EB')+';font-size:9px">'+esc(x.group)+'</span>':'')
+    +'</span><span class="wt">'+x.weight+' kg</span></div>';
+}
+function builderCard(f){
+  var ac=fAircraft(f), pl=pilot(f.pilotId), w=fWeight(f), free=ac.payload-w, pct=Math.round(w/ac.payload*100);
+  var locked = f.status==='airborne'||f.status==='completed';
+  var assigned=f.guests.map(function(gid){var x=guest(gid);
+    return '<div class="pax locked"'+(locked?'':' draggable="true" data-drag="assigned" data-id="'+x.id+'"')+'><span><span class="handle">⠿</span><span class="nm">'+esc(x.name)+'</span>'
+      +(x.checkedIn?' <span class="pill s-green" style="font-size:10px"><span class="pd"></span>eingecheckt</span>':'')+'</span>'
+      +'<span style="display:flex;gap:10px;align-items:center"><span class="wt">'+x.weight+' kg</span>'
+      +(locked?'':'<button class="iconbtn" data-act="unassign" data-id="'+x.id+'">✕</button>')+'</span></div>';
+  }).join('');
+  var slots=''; for(var i=f.guests.length;i<ac.seats;i++){ slots+='<div class="seatslot">Sitz '+(i+1)+' – frei'+(locked?'':', Gast links anklicken')+'</div>'; }
+  // split warning
+  var splitW='';
+  var grpsIn={}; f.guests.forEach(function(gid){var x=guest(gid);if(x.group)grpsIn[x.group]=true;});
+  var separated=Object.keys(grpsIn).filter(function(gn){ return S.guests.some(function(x){return x.group===gn && !x.flown && !x.noShow && activeFlightOf(x.id)!==undefined ? false : (x.group===gn && isAssignable(x)); }); });
+  var stillPool=Object.keys(grpsIn).filter(function(gn){ return pool().some(function(x){return x.group===gn;}); });
+  if(stillPool.length) splitW='<div class="warnbanner">⚠ Gruppe '+stillPool.map(esc).join(', ')+' getrennt – Mitglieder noch im Pool.</div>';
+
+  var ready=canSetReady(f), nci=notCheckedIn(f).length;
+  var readyBtn;
+  if(f.status==='ready'){
+    readyBtn='<button class="btn lg ok" data-act="unready" data-id="'+f.id+'">✓ READY – zum Bearbeiten zurücksetzen</button>';
+  } else if(locked){
+    readyBtn='<button class="btn lg" disabled>Flug '+esc(f.status)+'</button>';
+  } else {
+    var label = !ready ? (w>ac.payload?'READY gesperrt – Gewicht über Limit':'READY gesperrt – kein Gast') : 'Flug auf READY setzen ▶';
+    readyBtn='<button class="btn lg" data-act="setReady" data-id="'+f.id+'"'+(ready?'':' disabled')+'>'+label+'</button>';
+  }
+  return '<div class="card"><div class="panel-h">'+esc(f.code)+' '+fStatusPill(f)
+    +'<span style="font-weight:600;color:var(--muted);font-size:13px">'+esc(ac.reg)+' '+esc(ac.type)+' · '+esc(pl?pl.name:'kein Pilot')+(ac.cost!=null?' · '+ac.cost+' €/h':'')+'</span></div>'
+    +'<div class="panel-b"'+(locked?'':' data-drop="flight"')+'>'+(ac.img?'<img src="'+ac.img+'" alt="'+esc(ac.reg)+'" class="fcimg" style="height:120px">':'')+assigned+slots
+    +'<div class="gauge"><div class="nums"><span>SITZE <b>'+f.guests.length+'</b> / '+ac.seats+'</span><span>GEWICHT <b>'+w+'</b> / '+ac.payload+' kg</span></div>'
+    +'<div class="bar '+(w>ac.payload?'warn':(pct>=85?'mid':''))+'"><i style="width:'+Math.min(pct,100)+'%"></i></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:7px"><span class="free '+(free<0?'over':'')+'">'+(free<0?Math.abs(free)+' kg über Limit':free+' kg frei')+'</span><span style="color:var(--muted)">Auslastung '+pct+'%</span></div></div>'
+    +splitW
+    +(nci>0 && (f.status==='ready'||f.status==='geplant')?'<div class="warnbanner" style="background:var(--blue-soft);border-color:#bfdbfe;color:#1d4ed8">ℹ '+nci+' Gast/Gäste noch nicht eingecheckt – Start im Tracking erst nach Boarding.</div>':'')
+    +'<div style="margin-top:14px">'+readyBtn+'</div></div></div>';
+}
+
+/* ---- CHECK-IN ---- */
+function viewCheckin(){
+  var fl=S.flights.filter(function(f){return f.status==='geplant'||f.status==='ready';});
+  if(ui.selCheckin && !flight(ui.selCheckin)) ui.selCheckin=null;
+  if(!ui.selCheckin && fl.length) ui.selCheckin=fl[0].id;
+  var tabs=fl.map(function(f){var nci=notCheckedIn(f).length;
+    return '<button class="ftab '+(ui.selCheckin===f.id?'on':'')+'" data-act="selCheckin" data-id="'+f.id+'">'+esc(f.code)+(nci?' <span class="pill s-yellow" style="font-size:10px"><span class="pd"></span>'+nci+' offen</span>':' <span class="pill s-green" style="font-size:10px"><span class="pd"></span>bereit</span>')+'</button>';
+  }).join('') || '<div style="color:var(--muted)">Keine Flüge mit zugewiesenen Gästen. Erst in der Flugplanung zuweisen.</div>';
+
+  var right;
+  if(!ui.selCheckin){ right='<div class="card"><div class="empty">Keinen Flug ausgewählt.</div></div>'; }
+  else {
+    var f=flight(ui.selCheckin), ac=fAircraft(f);
+    var rows=f.guests.map(function(gid){var x=guest(gid);
+      var r;
+      if(x.checkedIn) r='<span style="color:var(--green);font-weight:600">✓ eingecheckt</span> <button class="rowact" data-act="undoCheckin" data-id="'+x.id+'">↺</button>';
+      else r='<button class="rowact ok" data-act="checkin" data-id="'+x.id+'">✓ Check-in</button><button class="rowact warn" data-act="noshow" data-id="'+x.id+'">No-Show</button>';
+      return '<div class="listrow"><span><span class="pill '+(x.checkedIn?'s-green':'s-grey')+'"><span class="pd"></span></span> &nbsp;<b>'+esc(x.name)+'</b> <small style="color:var(--muted)">'+x.weight+' kg · '+esc(x.code)+'</small></span><span>'+r+'</span></div>';
+    }).join('') || '<div style="color:var(--muted);padding:8px 0">Keine Gäste zugewiesen.</div>';
+    var boarded=f.guests.filter(function(gid){return guest(gid).checkedIn;}).length;
+    right='<div class="card"><div class="panel-h">Boarding · '+esc(f.code)+' <span class="pill '+(boarded===f.guests.length&&f.guests.length?'s-green':'s-yellow')+'"><span class="pd"></span>'+boarded+' / '+f.guests.length+' an Bord</span></div><div class="panel-b">'+rows
+      +'<div style="margin-top:12px;color:var(--muted);font-size:13px">Freie Sitze: '+(ac.seats-f.guests.length)+' · No-Shows geben den Platz sofort frei.</div></div></div>';
+  }
+  return head('Check-in &amp; Boarding','QR/ID scannen oder Gast auswählen · physischer Check-in vor dem Start','')
+    + '<div class="flighttabs">'+tabs+'</div>'
+    + '<div class="checkin"><div class="card scan">'
+      + '<div class="scanbox"><svg viewBox="0 0 24 24"><path d="M4 7V4h3M20 7V4h-3M4 17v3h3M20 17v3h-3"/><path d="M4 12h16"/></svg><div>QR-Code scannen</div></div>'
+      + '<div class="or">— oder Gast-ID / Name —</div>'
+      + '<div style="display:flex;gap:8px;max-width:340px;margin:0 auto"><input class="input" id="ci_id" placeholder="z. B. G-01 oder Anna"><button class="btn" data-act="quickCheckin">✓</button></div>'
+      + '<div style="margin-top:12px;font-size:12.5px;color:var(--muted)">Findet einen zugewiesenen Gast und checkt ihn ein.</div>'
+    + '</div>'+right+'</div>';
+}
+
+/* ---- TRACKING ---- */
+function viewTrack(){
+  var fl=S.flights.slice().sort(function(a,b){var o={airborne:0,ready:1,geplant:2,completed:3};return o[a.status]-o[b.status];});
+  if(!fl.length) return head('Flugtracking','Start &amp; Landung erfassen','')+'<div class="card empty"><div class="big">🛰️</div>Noch keine Flüge. Lege einen Flug in der Planung an.</div>';
+  var cards=fl.map(trackCard).join('');
+  return head('Flugtracking','Start &amp; Landung erfassen · Statuswechsel','')+'<div class="grid" style="grid-template-columns:1fr 1fr;gap:16px;align-items:start">'+cards+'</div>';
+}
+function trackCard(f){
+  var ac=fAircraft(f), pl=pilot(f.pilotId), w=fWeight(f);
+  var steps=['geplant','ready','airborne','completed'], cur=steps.indexOf(f.status);
+  var tl='<div class="timeline">';
+  steps.forEach(function(s,i){
+    var cls=i<cur?'done':(i===cur?'cur':'');
+    tl+='<div class="tl-node '+cls+'"><span class="d"></span><span class="t">'+s+'</span></div>';
+    if(i<steps.length-1) tl+='<div class="tl-line '+(i<cur?'done':'')+'"></div>';
+  });
+  tl+='</div>';
+  var body='';
+  if(f.status==='airborne'){
+    body='<div class="airborne-box"><div class="big">🔵 IN DER LUFT</div><div class="t">Start '+hhmm(f.offBlock)+' · '+f.guests.length+'/'+ac.seats+' Pax · '+w+' kg</div></div>'
+      +'<button class="btn lg danger" data-act="land" data-id="'+f.id+'">🛬 Landung erfassen</button>';
+  } else if(f.status==='completed'){
+    body='<div style="text-align:center;padding:10px;color:var(--muted)">✓ Abgeschlossen · '+hhmm(f.offBlock)+'–'+hhmm(f.onBlock)+' · '+f.guests.length+' Pax</div>';
+  } else {
+    var ok=canStart(f), nci=notCheckedIn(f).length;
+    var reason = f.status!=='ready' ? 'Erst auf READY setzen (Flugplanung)' : (nci>0? nci+' Gast/Gäste nicht eingecheckt' : 'Start erfassen');
+    body='<button class="btn lg ok" data-act="start" data-id="'+f.id+'"'+(ok?'':' disabled')+'>'+(ok?'🛫 Start erfassen':'🛫 '+reason)+'</button>';
+  }
+  return '<div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">'+esc(f.code)+'</b>'+fStatusPill(f)+'</div>'
+    +'<div style="color:var(--muted);font-size:13px;margin:4px 0 2px">'+esc(ac.reg)+' '+esc(ac.type)+' · Pilot '+esc(pl?pl.name:'—')+(ac.cost!=null?' · '+ac.cost+' €/h':'')+'</div>'
+    +(ac.img?'<img src="'+ac.img+'" alt="'+esc(ac.reg)+'" class="fcimg">':'')
+    +tl+body
+    +'<div style="margin-top:12px;font-size:12.5px;color:var(--muted)"><b>An Bord:</b> '+(f.guests.map(function(gid){return esc(guest(gid).name);}).join(' · ')||'—')+'</div></div>';
+}
+
+/* ---- REPORTING ---- */
+function viewReport(){
+  var done=S.flights.filter(function(f){return f.status==='completed';});
+  var flown=S.guests.filter(function(x){return x.flown;}).length;
+  var noshow=S.guests.filter(function(x){return x.noShow;}).length;
+  var util= done.length? Math.round(done.reduce(function(s,f){return s+f.guests.length/fAircraft(f).seats;},0)/done.length*100):0;
+  // per pilot
+  var perPilot={}; done.forEach(function(f){var n=pilot(f.pilotId);var k=n?n.name:'—';perPilot[k]=(perPilot[k]||0)+1;});
+  var maxP=Math.max(1,Math.max.apply(null,Object.keys(perPilot).map(function(k){return perPilot[k];}).concat([1])));
+  var bars=Object.keys(perPilot).map(function(k){return '<div class="b" style="height:'+Math.round(perPilot[k]/maxP*100)+'%"><span>'+perPilot[k]+'</span><small>'+esc(k)+'</small></div>';}).join('')
+    || '<div style="color:var(--muted);align-self:center;margin:auto">Noch keine abgeschlossenen Flüge.</div>';
+  var log=done.concat(S.flights.filter(function(f){return f.status==='airborne';})).map(function(f){
+    var pl=pilot(f.pilotId), ac=fAircraft(f);
+    return '<tr><td><b>'+esc(f.code)+'</b></td><td>'+esc(pl?pl.name:'—')+'</td><td>'+(f.offBlock?hhmm(f.offBlock):'—')+'–'+(f.onBlock?hhmm(f.onBlock):'…')+'</td><td>'+f.guests.length+'</td><td>'+fWeight(f)+' kg</td><td>'+fStatusPill(f)+'</td></tr>';
+  }).join('') || '<tr><td colspan="6"><div class="empty">Noch keine Flüge durchgeführt.</div></td></tr>';
+  var donutDeg=util*3.6;
+  return head('Reporting','Flugtag '+esc(S.day.date)+' · '+esc(S.airfield.name)+' ('+esc(S.airfield.icao)+')','<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-act="exportCsv">⬇ Flüge (CSV)</button><button class="btn" data-act="exportGuestsCsv">⬇ Fluggäste (CSV)</button></div>')
+    + '<div class="grid kpis" style="margin-bottom:20px">'
+      + kpi('Flüge', done.length, 'abgeschlossen')
+      + kpi('Gäste geflogen', flown, 'Personen')
+      + kpi('Ø Auslastung', util+'%','Sitzplätze')
+      + kpi('Einnahmen', flown*S.day.price,'EUR')
+      + kpi('No-Shows', noshow,'Plätze frei','down')
+    + '</div>'
+    + '<div class="grid charts"><div class="card chart"><h3>Flüge je Pilot</h3><div class="bars">'+bars+'</div></div>'
+      + '<div class="card chart"><h3>Ø Sitzplatz-Auslastung</h3><div class="donut" style="background:conic-gradient(var(--blue) 0 '+donutDeg+'deg,#E2E8F0 '+donutDeg+'deg 360deg)"><div class="inner">'+util+'%</div></div>'
+      + '<div class="legend"><span><i style="background:var(--blue)"></i>belegt '+util+'%</span><span><i style="background:#E2E8F0"></i>frei '+(100-util)+'%</span></div></div></div>'
+    + '<div class="card" style="margin-top:16px;padding:4px 6px"><table><thead><tr><th>Flug</th><th>Pilot</th><th>Zeit</th><th>Pax</th><th>Gewicht</th><th>Status</th></tr></thead><tbody>'+log+'</tbody></table></div>';
+}
+
+/* ---- small view helpers ---- */
+function head(t,sub,right){ return '<div class="head"><div><h1>'+t+'</h1><div class="sub">'+sub+'</div></div>'+(right||'')+'</div>'; }
+function kpi(l,v,d,cls){ return '<div class="card kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div><div class="d '+(cls||'')+'">'+d+'</div></div>'; }
+function fieldI(label,id,val,type){ return '<div class="field"><label>'+label+'</label><input class="input" id="'+id+'" type="'+(type||'text')+'" value="'+esc(val==null?'':val)+'"></div>'; }
+
+/* ============ MODAL ============ */
+var modalCfg=null;
+function openModal(title,fields,onConfirm){
+  modalCfg={fields:fields,onConfirm:onConfirm};
+  byId('m-title').textContent=title;
+  byId('m-fields').innerHTML=fields.map(function(f){
+    if(f.type==='select'){
+      return '<div class="field'+(f.required?' req':'')+'"><label>'+esc(f.label)+'</label><select class="input" id="m_'+f.key+'">'
+        +f.options.map(function(o){return '<option value="'+esc(o.value)+'"'+(o.value===f.value?' selected':'')+'>'+esc(o.label)+'</option>';}).join('')+'</select></div>';
+    }
+    return '<div class="field'+(f.required?' req':'')+'"><label>'+esc(f.label)+'</label><input class="input" id="m_'+f.key+'" type="'+(f.type||'text')+'" value="'+esc(f.value==null?'':f.value)+'" placeholder="'+esc(f.placeholder||'')+'"></div>';
+  }).join('');
+  byId('modalbd').classList.add('show');
+  var first=byId('m_'+fields[0].key); if(first) first.focus();
+}
+function closeModal(){ byId('modalbd').classList.remove('show'); modalCfg=null; }
+function confirmModal(){
+  if(!modalCfg) return;
+  var out={},bad=false;
+  modalCfg.fields.forEach(function(f){
+    var el=byId('m_'+f.key); var v=el.value;
+    if(f.type==='number') v=(v===''?null:parseFloat(v));
+    else v=v.trim();
+    if(f.required && (v===''||v==null||(typeof v==='number'&&isNaN(v)))){ el.classList.add('err'); bad=true; }
+    else el.classList.remove('err');
+    out[f.key]=v;
+  });
+  if(bad){ toast('Bitte Pflichtfelder ausfüllen','err'); return; }
+  var cb=modalCfg.onConfirm; closeModal(); cb(out);
+}
+
+/* ============ ASSIGN LOGIC (shared by click + drag&drop) ============ */
+function assignGuest(id){
+  var f=flight(ui.selFlight); if(!f){toast('Erst einen Flug wählen/anlegen','err');return false;}
+  if(f.status==='airborne'||f.status==='completed'){toast('Flug ist bereits gestartet','err');return false;}
+  if(f.guests.indexOf(id)>=0) return false;
+  var x=guest(id), ac=fAircraft(f);
+  if(f.guests.length>=ac.seats){toast('⚠ Keine freien Sitze ('+ac.seats+'/'+ac.seats+')','err');return false;}
+  var nw=fWeight(f)+x.weight;
+  if(nw>ac.payload){toast('⚠ +'+(nw-ac.payload)+' kg über Limit – Zuweisung blockiert','err');return false;}
+  f.guests.push(x.id); if(f.status==='ready') f.status='geplant'; save(); render(); return true;
+}
+function assignGroup(gn){
+  var f=flight(ui.selFlight); if(!f){toast('Erst einen Flug wählen/anlegen','err');return;}
+  if(f.status==='airborne'||f.status==='completed'){toast('Flug ist bereits gestartet','err');return;}
+  var members=pool().filter(function(x){return x.group===gn;});
+  if(!members.length){toast('Keine zuweisbaren Mitglieder','err');return;}
+  var added=0, blocked=false;
+  for(var i=0;i<members.length;i++){
+    var x=members[i], ac=fAircraft(f);
+    if(f.guests.length>=ac.seats){blocked=true;break;}
+    if(fWeight(f)+x.weight>ac.payload){blocked=true;continue;}
+    f.guests.push(x.id); added++;
+  }
+  if(added && f.status==='ready') f.status='geplant';
+  save(); render();
+  if(!added) toast('Gruppe '+gn+' passt nicht (Sitze/Gewicht)','err');
+  else if(blocked) toast(added+' von Gruppe '+gn+' zugewiesen – Rest passt nicht','err');
+  else toast('Gruppe '+gn+' komplett zugewiesen ('+added+')','good');
+}
+function unassignGuest(id){
+  var f=flight(ui.selFlight); if(!f) return;
+  if(f.guests.indexOf(id)<0) return;
+  f.guests=f.guests.filter(function(g){return g!==id;});
+  var x=guest(id); if(x) x.checkedIn=false;
+  if(f.status==='ready') f.status='geplant'; save(); render();
+}
+
+/* ============ AIRCRAFT IMAGE UPLOAD ============ */
+function pickAircraftImage(id){
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+  inp.addEventListener('change',function(){
+    var file=inp.files&&inp.files[0]; if(!file){ return; }
+    if(file.size>12*1024*1024){ toast('Bild zu groß (max 12 MB)','err'); return; }
+    var fr=new FileReader();
+    fr.onload=function(){
+      var im=new Image();
+      im.onload=function(){
+        try{
+          var max=480, w=im.width, h=im.height;
+          if(w>=h && w>max){ h=Math.round(h*max/w); w=max; }
+          else if(h>w && h>max){ w=Math.round(w*max/h); h=max; }
+          var c=document.createElement('canvas'); c.width=w; c.height=h;
+          c.getContext('2d').drawImage(im,0,0,w,h);
+          var data=c.toDataURL('image/jpeg',0.78);
+          var ac=aircraft(id); if(!ac){ return; }
+          ac.img=data; var ok=save(); render();
+          toast(ok?'Bild gespeichert':'Bild gesetzt (zu groß für dauerhafte Speicherung)', ok?'good':'err');
+        }catch(e){ toast('Bild konnte nicht verarbeitet werden','err'); }
+      };
+      im.onerror=function(){ toast('Ungültiges Bildformat','err'); };
+      im.src=fr.result;
+    };
+    fr.onerror=function(){ toast('Bild konnte nicht gelesen werden','err'); };
+    fr.readAsDataURL(file);
+  });
+  inp.click();
+}
+
+/* ============ ACTIONS ============ */
+var H={
+  nav:function(el){ go(el.getAttribute('data-s')); },
+  reset:function(){ if(confirm('Alle Eingaben verwerfen und Demo-Daten neu laden?')) reset(); },
+  gotoTrack:function(el){ ui.selFlight=el.getAttribute('data-id'); go('track'); },
+
+  // setup
+  saveAirfield:function(){
+    S.airfield={name:val('f_name'),icao:val('f_icao').toUpperCase(),rwy:val('f_rwy'),freq:val('f_freq'),elev:val('f_elev'),operator:val('f_op')};
+    S.day.date=val('f_date'); S.day.status=val('f_status'); S.day.price=parseFloat(val('f_price'))||0;
+    save(); render(); toast('Flugplatz & Flugtag gespeichert','good');
+  },
+  startDay:function(){ S.day.status='Aktiv'; save(); render(); toast('Flugtag ist aktiv – '+S.airfield.icao,'good'); },
+  endDay:function(){
+    var air=S.flights.filter(function(f){return f.status==='airborne';}).length;
+    var pend=S.flights.filter(function(f){return f.status==='ready'||f.status==='geplant';}).length;
+    var msg='Flugtag '+S.day.date+' jetzt beenden?';
+    if(air) msg=air+' Flug/Flüge sind noch in der Luft! Trotzdem beenden?';
+    else if(pend) msg=pend+' Flug/Flüge sind noch offen (ready/geplant). Flugtag trotzdem beenden?';
+    if(!confirm(msg)) return;
+    S.day.status='Beendet'; save(); render(); toast('Flugtag beendet','good');
+  },
+  addPilot:function(){ openModal('Pilot hinzufügen',[{key:'name',label:'Name',required:true},{key:'lic',label:'Lizenzen',placeholder:'PPL, Nacht'}],function(v){
+    S.pilots.push({id:'p'+Date.now(),name:v.name,lic:v.lic,avail:true}); save(); render(); }); },
+  togglePilot:function(el){ var p=pilot(el.getAttribute('data-id')); p.avail=!p.avail; save(); render(); },
+  delPilot:function(el){ var id=el.getAttribute('data-id'); if(S.flights.some(function(f){return f.pilotId===id && f.status!=='completed';})){toast('Pilot ist einem aktiven Flug zugeordnet','err');return;} S.pilots=S.pilots.filter(function(p){return p.id!==id;}); save(); render(); },
+  addAircraft:function(){ openModal('Flugzeug hinzufügen',[{key:'reg',label:'Kennzeichen',required:true,placeholder:'D-EABC'},{key:'type',label:'Typ',placeholder:'Cessna 172'},{key:'seats',label:'Sitzplätze',type:'number',required:true,value:4},{key:'payload',label:'Max. Zuladung (kg)',type:'number',required:true,value:340},{key:'cost',label:'Kosten pro Stunde (EUR)',type:'number',placeholder:'z. B. 180'}],function(v){
+    var na={id:'a'+Date.now(),reg:v.reg,type:v.type||'—',seats:Math.max(1,v.seats|0),payload:v.payload,cost:(v.cost==null?null:v.cost),img:null};
+    S.aircraft.push(na); save(); render(); toast('Flugzeug angelegt – jetzt optional Bild hinzufügen','good'); }); },
+  acImage:function(el){ pickAircraftImage(el.getAttribute('data-id')); },
+  acImageDel:function(el){ var ac=aircraft(el.getAttribute('data-id')); if(ac){ ac.img=null; save(); render(); } },
+  delAircraft:function(el){ var id=el.getAttribute('data-id'); if(S.flights.some(function(f){return f.aircraftId===id && f.status!=='completed';})){toast('Flugzeug ist einem aktiven Flug zugeordnet','err');return;} S.aircraft=S.aircraft.filter(function(a){return a.id!==id;}); save(); render(); },
+
+  // guests
+  addGuest:function(){ openModal('Gast erfassen',[{key:'name',label:'Name',required:true},{key:'weight',label:'Gewicht (kg)',type:'number',placeholder:'optional'},{key:'group',label:'Gruppe',placeholder:'z. B. Weber (optional)'},{key:'paid',label:'Bezahlt?',type:'select',value:'ja',options:[{value:'ja',label:'Ja – bezahlt'},{value:'nein',label:'Nein – offen'}]}],function(v){
+    S.seq.g++; var n=S.seq.g;
+    var grp=v.group||null; if(grp && !S.groups[grp]){ var palette=['#2563EB','#7C3AED','#0891B2','#DB2777','#CA8A04','#15803D','#B91C1C','#0D9488']; S.groups[grp]=palette[Object.keys(S.groups).length%palette.length]; }
+    S.guests.push({id:'g'+Date.now(),code:'G-'+String(n).padStart(3,'0'),name:v.name,weight:v.weight,paid:v.paid==='ja',group:grp,checkedIn:false,noShow:false,flown:false});
+    save(); render(); toast('Gast erfasst','good'); }); },
+  togglePaid:function(el){ var x=guest(el.getAttribute('data-id')); x.paid=!x.paid; save(); render(); },
+  weigh:function(el){ var x=guest(el.getAttribute('data-id'));
+    var title='Gewicht erfassen – '+x.name+(x.declaredWeight!=null?'  (Selbstauskunft online: '+x.declaredWeight+' kg)':'');
+    openModal(title,[{key:'w',label:'Geprüftes Gewicht (kg)',type:'number',required:true,value:(x.weight!=null?x.weight:(x.declaredWeight!=null?x.declaredWeight:''))}],function(v){ x.weight=v.w; save(); render(); toast('Gewicht geprüft: '+v.w+' kg','good'); }); },
+  openReg:function(){ try{ window.open('SkyDispatch-Registrierung.html','_blank'); }catch(e){ toast('Bitte Registrierungsseite manuell öffnen','err'); } },
+  openTerminal:function(){ try{ window.open('SkyDispatch-Terminal.html','_blank'); }catch(e){ toast('Bitte Terminalseite manuell öffnen','err'); } },
+  delGuest:function(el){ var id=el.getAttribute('data-id'); if(activeFlightOf(id)){toast('Gast ist einem Flug zugewiesen – erst entfernen','err');return;} S.guests=S.guests.filter(function(x){return x.id!==id;}); save(); render(); },
+  gfilter:function(el){ ui.gfilter=el.getAttribute('data-v'); render(); },
+  gclear:function(){ ui.gsearch=''; render(); var s=byId('gsearch'); if(s) s.focus(); },
+
+  // planning
+  newFlight:function(){
+    var av=S.aircraft; var ap=S.pilots.filter(function(p){return p.avail;});
+    if(!av.length){toast('Erst ein Flugzeug im Setup anlegen','err');return;}
+    openModal('Neuen Flug anlegen',[
+      {key:'ac',label:'Flugzeug',type:'select',required:true,options:av.map(function(a){return{value:a.id,label:a.reg+' · '+a.type+' ('+a.seats+' Sitze, '+a.payload+' kg)'};}),value:av[0].id},
+      {key:'pl',label:'Pilot',type:'select',options:[{value:'',label:'— später —'}].concat(ap.map(function(p){return{value:p.id,label:p.name+' ('+p.lic+')'};})),value:ap[0]?ap[0].id:''}
+    ],function(v){
+      S.seq.f++; var code='FL-'+String(S.seq.f).padStart(3,'0');
+      var f={id:'f'+Date.now(),code:code,aircraftId:v.ac,pilotId:v.pl||null,guests:[],status:'geplant',offBlock:null,onBlock:null};
+      S.flights.push(f); ui.selFlight=f.id; save(); go('plan'); toast(code+' angelegt','good');
+    });
+  },
+  selFlight:function(el){ ui.selFlight=el.getAttribute('data-id'); render(); },
+  assign:function(el){ assignGuest(el.getAttribute('data-id')); },
+  unassign:function(el){ unassignGuest(el.getAttribute('data-id')); },
+  setReady:function(el){ var f=flight(el.getAttribute('data-id')); if(!canSetReady(f)){toast('Bedingungen nicht erfüllt','err');return;} f.status='ready'; save(); render(); toast(f.code+' auf READY','good'); },
+  unready:function(el){ var f=flight(el.getAttribute('data-id')); f.status='geplant'; save(); render(); },
+
+  // checkin
+  selCheckin:function(el){ ui.selCheckin=el.getAttribute('data-id'); render(); },
+  checkin:function(el){ var x=guest(el.getAttribute('data-id')); x.checkedIn=true; save(); render(); toast(x.name+' eingecheckt','good'); },
+  undoCheckin:function(el){ var x=guest(el.getAttribute('data-id')); x.checkedIn=false; save(); render(); },
+  noshow:function(el){ var x=guest(el.getAttribute('data-id')); var f=flight(ui.selCheckin); f.guests=f.guests.filter(function(g){return g!==x.id;}); x.noShow=true; x.checkedIn=false; if(f.status==='ready')f.status='geplant'; save(); render(); toast(x.name+' als No-Show markiert – Platz frei','good'); },
+  quickCheckin:function(){
+    var q=val('ci_id').trim().toLowerCase(); if(!q){toast('Bitte ID oder Name eingeben','err');return;}
+    var f=flight(ui.selCheckin); if(!f){toast('Erst Flug wählen','err');return;}
+    var hit=f.guests.map(guest).find(function(x){return x.code.toLowerCase()===q || x.name.toLowerCase().indexOf(q)>=0;});
+    if(!hit){toast('Kein zugewiesener Gast „'+q+'" auf '+f.code,'err');return;}
+    hit.checkedIn=true; save(); render(); toast(hit.name+' eingecheckt','good');
+  },
+
+  // tracking
+  start:function(el){ var f=flight(el.getAttribute('data-id')); if(!canStart(f)){toast('Start nicht möglich','err');return;} f.status='airborne'; f.offBlock=nowISO(); save(); render(); toast(f.code+' gestartet 🛫','good'); },
+  land:function(el){ var f=flight(el.getAttribute('data-id')); f.status='completed'; f.onBlock=nowISO(); f.guests.forEach(function(gid){var x=guest(gid);x.flown=true;}); save(); render(); toast(f.code+' gelandet 🛬','good'); },
+
+  exportCsv:function(){
+    var tag=S.day.date, ap=S.airfield.name, icao=S.airfield.icao;
+    var rows=[['Flugtag','Flugplatz','ICAO','Flug','Pilot','Kennzeichen','Flugzeug','Start','Landung','Flugzeit_min','Pax','Gewicht_kg','Status']];
+    S.flights.forEach(function(f){var pl=pilot(f.pilotId),ac=fAircraft(f);
+      var dur=(f.offBlock&&f.onBlock)?Math.round((new Date(f.onBlock)-new Date(f.offBlock))/60000):'';
+      rows.push([tag,ap,icao,f.code,pl?pl.name:'',ac?ac.reg:'',ac?ac.type:'',f.offBlock?hhmm(f.offBlock):'',f.onBlock?hhmm(f.onBlock):'',dur,f.guests.length,fWeight(f),f.status]);});
+    if(csvDownload(rows,'SkyDispatch-Fluege-'+icao+'-'+tag.replace(/\./g,'-')+'.csv')) toast('Flug-Export erstellt','good');
+  },
+  exportGuestsCsv:function(){
+    var tag=S.day.date, ap=S.airfield.name, icao=S.airfield.icao;
+    var rows=[['Flugtag','Flugplatz','ICAO','Fluggast-ID','Name','Gewicht_kg','Status','Flugnummer','Kennzeichen','Flugzeug','Pilot','Startzeit','Landezeit','Flugzeit_min']];
+    S.guests.forEach(function(x){
+      var f=S.flights.filter(function(fl){return fl.guests.indexOf(x.id)>=0;})[0];
+      var ac=f?fAircraft(f):null, pl=f?pilot(f.pilotId):null;
+      var off=(f&&f.offBlock)?hhmm(f.offBlock):'';
+      var on=(f&&f.onBlock)?hhmm(f.onBlock):'';
+      var dur=(f&&f.offBlock&&f.onBlock)?Math.round((new Date(f.onBlock)-new Date(f.offBlock))/60000):'';
+      var w=x.weight!=null?x.weight:(x.declaredWeight!=null?x.declaredWeight:'');
+      rows.push([tag,ap,icao,x.code,x.name,w,gStage(x).k,f?f.code:'',ac?ac.reg:'',ac?ac.type:'',pl?pl.name:'',off,on,dur]);
+    });
+    if(csvDownload(rows,'SkyDispatch-Fluggaeste-'+icao+'-'+tag.replace(/\./g,'-')+'.csv')) toast(S.guests.length+' Fluggäste exportiert','good');
+  },
+
+  modalConfirm:confirmModal,
+  modalCancel:closeModal
+};
+
+function go(s){
+  ui.screen=s;
+  Array.prototype.forEach.call(document.querySelectorAll('.nav button'),function(b){b.classList.toggle('active',b.getAttribute('data-s')===s);});
+  Array.prototype.forEach.call(document.querySelectorAll('.screen'),function(x){x.classList.toggle('active',x.id===s);});
+  renderScreen(s);
+  byId('checkin'); // noop
+  document.querySelector('.main').scrollTop=0;
+}
+function val(id){ var e=byId(id); return e?e.value:''; }
+
+/* toast */
+var tT;
+function toast(msg,kind){ var t=byId('toast'); t.textContent=msg; t.className='toast show'+(kind?' '+kind:''); clearTimeout(tT); tT=setTimeout(function(){t.className='toast';},2400); }
+
+/* ============ EVENTS ============ */
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-act]'); if(!el) return;
+  var act=el.getAttribute('data-act');
+  if(H[act]){ e.preventDefault(); H[act](el,e); }
+});
+
+/* ---- Drag & Drop (Flugplanung) ---- */
+var drag=null;
+function clearHl(){ Array.prototype.forEach.call(document.querySelectorAll('.drophl'),function(z){z.classList.remove('drophl');}); }
+function dropOk(zone){ return (zone==='flight' && (drag.type==='guest'||drag.type==='group')) || (zone==='pool' && drag.type==='assigned'); }
+document.addEventListener('dragstart',function(e){
+  var t=e.target; var el=t&&t.closest?t.closest('[data-drag]'):null; if(!el){ return; }
+  drag={type:el.getAttribute('data-drag'),id:el.getAttribute('data-id'),group:el.getAttribute('data-group')};
+  try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',drag.id||drag.group||'x'); }catch(_){}
+  el.classList.add('dragging');
+});
+document.addEventListener('dragend',function(e){
+  var t=e.target; var el=t&&t.closest?t.closest('[data-drag]'):null; if(el) el.classList.remove('dragging');
+  clearHl(); drag=null;
+});
+document.addEventListener('dragover',function(e){
+  if(!drag) return; var t=e.target; var z=t&&t.closest?t.closest('[data-drop]'):null; if(!z) return;
+  e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(_){}
+  if(dropOk(z.getAttribute('data-drop'))){ clearHl(); z.classList.add('drophl'); }
+});
+document.addEventListener('dragleave',function(e){
+  var t=e.target; var z=t&&t.closest?t.closest('[data-drop]'):null;
+  if(z && !z.contains(e.relatedTarget)) z.classList.remove('drophl');
+});
+document.addEventListener('drop',function(e){
+  if(!drag) return; var t=e.target; var z=t&&t.closest?t.closest('[data-drop]'):null; if(!z) return;
+  e.preventDefault(); var zone=z.getAttribute('data-drop'); var d=drag; drag=null; clearHl();
+  if(zone==='flight'){ if(d.type==='guest') assignGuest(d.id); else if(d.type==='group') assignGroup(d.group); }
+  else if(zone==='pool'){ if(d.type==='assigned') unassignGuest(d.id); }
+});
+document.addEventListener('input',function(e){
+  if(e.target && e.target.id==='gsearch'){
+    ui.gsearch=e.target.value;
+    var tb=byId('guestrows'); if(tb) tb.innerHTML=guestRowsHtml();
+    var cl=document.querySelector('[data-act="gclear"]'); if(cl) cl.style.display = ui.gsearch ? '' : 'none';
+  }
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter' && byId('modalbd').classList.contains('show')){ confirmModal(); }
+  if(e.key==='Escape' && byId('modalbd').classList.contains('show')){ closeModal(); }
+  if(e.key==='Enter' && document.activeElement && document.activeElement.id==='ci_id'){ H.quickCheckin(); }
+});
+byId('modalbd').addEventListener('click',function(e){ if(e.target===this) closeModal(); });
+
+/* ============ INIT ============ */
+load();
+render();
+})();
+</script>
+</body>
+</html>

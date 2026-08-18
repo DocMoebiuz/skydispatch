@@ -1,0 +1,14 @@
+{
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "version": "2.5.9",
+      "resolved": "ghcr.io/devcontainers/features/common-utils@sha256:cb0c4d3c276f157eed17935747e364178d75fee17f55c4e129966f64633deb3a",
+      "integrity": "sha256:cb0c4d3c276f157eed17935747e364178d75fee17f55c4e129966f64633deb3a"
+    },
+    "ghcr.io/jlaundry/devcontainer-features/azure-functions-core-tools:1": {
+      "version": "1.0.1",
+      "resolved": "ghcr.io/jlaundry/devcontainer-features/azure-functions-core-tools@sha256:a8b16ec41e15f0b28e49b831b02361b2519aa000d048e7d4d21e6a3b6486356c",
+      "integrity": "sha256:a8b16ec41e15f0b28e49b831b02361b2519aa000d048e7d4d21e6a3b6486356c"
+    }
+  }
+}

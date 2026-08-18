@@ -1,0 +1,12 @@
+{
+  "$schema": "https://aka.ms/azure/static-web-apps-cli/schema",
+  "configurations": {
+    "skydispatch": {
+      "appLocation": "apps/web",
+      "outputLocation": "dist",
+      "apiLocation": "apps/api",
+      "appDevserverUrl": "http://localhost:5173",
+      "run": "pnpm --filter web dev"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "api",
+  "private": true,
+  "version": "0.0.1",
+  "main": "dist/src/functions/*.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "func start",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.6.0",
+    "@azure/cosmos": "^4.2.0"
+  },
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.0.6610",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    # Same image as .devcontainer/Dockerfile — Playwright browsers pre-baked, so CI
+    # matches local dev exactly instead of needing a separate `playwright install`
+    # step. Keep the tag in sync with @playwright/test in package.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r build
+
+      - run: pnpm -r lint
+
+      # API unit tests mock the Cosmos SDK client — no live Cosmos account needed in CI.
+      - run: pnpm -r test
+
+      - run: pnpm test:e2e

@@ -1,0 +1,20 @@
+{
+  "name": "skydispatch",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "swa start",
+    "build": "pnpm -r --filter=./apps/** build",
+    "test": "pnpm -r test",
+    "test:e2e": "playwright test",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "@azure/static-web-apps-cli": "^2.0.0",
+    "typescript": "^5.7.0"
+  }
+}
