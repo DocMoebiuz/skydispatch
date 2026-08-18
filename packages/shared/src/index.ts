@@ -1,3 +1,6 @@
-// Placeholder — shared domain types (Guest, Flight, Aircraft, Pilot, Airfield) land
-// here once the domain model is designed. See docs/architecture.md.
-export const SHARED_PACKAGE_PLACEHOLDER = true;
+export type { Guest } from "./types/guest";
+export type { GuestStatus } from "./status";
+export { deriveGuestStatus } from "./status";
+export type { GuestCreateRequest } from "./schemas/guestCreateRequest";
+export { guestCreateRequestSchema } from "./schemas/guestCreateRequest";
+export { DEFAULT_FLIGHT_DAY_ID } from "./constants";

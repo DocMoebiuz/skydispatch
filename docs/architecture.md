@@ -20,6 +20,46 @@ carries over directly:
 All three are route groups within **one** React SPA (`apps/web`), not three separate
 apps — see [tech-stack.md](./tech-stack.md#frontend) for why.
 
+## Prototype reference (docs/static-html-app/)
+
+A coworker built a working static HTML prototype alongside the manual —
+`docs/static-html-app/SkyDispatch-UI-Mockup.html` (dispatcher),
+`SkyDispatch-Registrierung.html` (registration), `SkyDispatch-Terminal.html`
+(departure board) — proving the flows out before any real persistence existed. It's a
+source for **flow/business rules/copy/data model**, not for pixels: the real UI is
+built fresh in shadcn/ui + Tailwind (see [tech-stack.md § Frontend](./tech-stack.md#frontend)),
+not ported CSS.
+
+**Kept:**
+- The domain model shape — Guest/Flight/Aircraft/Pilot fields, see
+  [Data model & persistence](#data-model--persistence) below.
+- Two-stage weight capture: guest self-reports a declared weight at registration;
+  stays unverified until staff weigh and confirm it at check-in.
+- Hard-limit enforcement *order* — seat/weight limits are checked **before** allowing
+  an assignment, never warn-and-allow-anyway (matches
+  [nfr.md § Reliability & safety](./nfr.md#reliability--safety-matches-manual-53-eingebaute-sicherheiten)).
+- The group-aware assignment concept — assign a whole named group at once, report
+  which members didn't fit and why.
+- Deriving guest status from its fields (paid/weight/checkedIn/noShow/flown/assigned)
+  as a pure function, rather than storing a redundant status field that can drift.
+
+**Discarded:**
+- `localStorage` as the persistence layer — the prototype's three pages only
+  "integrate" by being opened as tabs in the same browser; that can't support three
+  real devices (guest's phone, dispatcher's tablet, kiosk board). Replaced by Cosmos
+  DB + the Functions API below.
+- The fake payment step in registration (PayPal/Kreditkarte/Klarna, always succeeds) —
+  the real MVP has **no payment step at registration at all**; guests pay at the
+  front desk and `paid` is a staff action (see
+  [nfr.md § Security & Privacy](./nfr.md#security--privacy)).
+- Inconsistent id generation (seeded counter in one file, `Date.now()` in another) —
+  moot once Cosmos owns id generation/uniqueness.
+- "QR scanning" at check-in — decorative in the prototype, no camera wiring ever
+  existed. Manual code/name entry (the part that actually worked) is the MVP
+  check-in method; camera scanning is future work, not a regression.
+- Client-side-only validation (email format, weight bounds) — must be re-validated
+  server-side; the prototype had no server to do that at all.
+
 ## Data flow
 
 ```
@@ -31,8 +71,12 @@ Dispatcher-App (/dispatch) ◀──read/write guests,──────┘  │
 Terminal board (/board)    ◀────────────────── read flights, guest lookup by ID
 ```
 
-- **Registration** writes new guests (status starts at "bezahlt, noch nicht gewogen" /
-  paid-not-weighed, per manual §3) through the API into Cosmos.
+- **Registration** writes new guests through the API into Cosmos. Status starts at
+  "registriert" (`paid:false`) — the manual's prototype started guests as
+  paid-not-weighed, but the real MVP moved payment out of registration entirely (see
+  [Prototype reference](#prototype-reference-docsstatic-html-app) above and
+  [nfr.md § Security & Privacy](./nfr.md#security--privacy)); a guest only becomes
+  "bezahlt" once staff mark them paid at the front desk.
 - **Dispatcher-App** is the read/write control surface for the whole operational day:
   setup, guest management, flight planning, check-in/boarding, tracking, reporting —
   all manual §2 flows, now backed by the API instead of shared `localStorage`.
@@ -44,16 +88,118 @@ Each surface keeps an IndexedDB-backed local cache so brief connectivity drops d
 a live flight day don't block operators (see
 [nfr.md](./nfr.md#offline--local-first-behavior)).
 
+## Data model & persistence
+
+**One Cosmos database (`skydispatch`), one container (`operations`)**, holding
+several document `type`s in the same partition rather than split across containers —
+a dispatcher screen reads guests/flights/aircraft/pilots for *today* together
+constantly, so one partition keeps that cheap, and at this volume (one flight day,
+low hundreds of guests) there's nothing to gain from separate containers. KISS call;
+revisit only if access patterns genuinely diverge.
+
+**Partition key: `/flightDayId`.** Every document belonging to one operational day
+lives in one logical partition. This directly informs Open decision #4 below without
+resolving it: "one flight day" (MVP) and "multiple concurrent flight days" (future)
+become the same design — a future day-switcher just changes which `flightDayId` is
+queried. **MVP shortcut:** there's no FlightDay-setup UI yet, so a hardcoded
+`DEFAULT_FLIGHT_DAY_ID` constant (in `packages/shared`) stands in everywhere until
+real FlightDay management becomes a priority.
+
+**No separate `Group` document.** A `groupId`/`groupName` pair on `Guest` is enough
+for group registration/assignment — group operations are `WHERE groupId = X` queries.
+Revisit only if group-level metadata (a discount, a primary contact) needs a home of
+its own.
+
+Document shapes (English identifiers throughout, per
+[Domain-model naming](#domain-model-naming) below):
+
+```ts
+interface Guest {
+  id: string;                    // crypto.randomUUID()
+  type: "Guest";
+  flightDayId: string;           // partition key
+  code: string;                  // e.g. "G-001" — manual check-in entry
+  name: string;
+  email: string;
+  phone?: string | null;
+  declaredWeightKg: number;      // self-reported at registration
+  weightKg: number | null;       // staff-verified at check-in
+  paid: boolean;                 // false at creation; only a staff action sets true
+  consent: boolean;
+  groupId?: string | null;
+  groupName?: string | null;
+  checkedIn: boolean;
+  noShow: boolean;
+  flown: boolean;
+  assignedFlightId: string | null;
+  createdAt: string; updatedAt: string;
+}
+
+interface Flight {
+  id: string; type: "Flight"; flightDayId: string;
+  code: string;                  // e.g. "FL-003"
+  aircraftId: string; pilotId: string | null;
+  guestIds: string[];
+  status: "planned" | "ready" | "airborne" | "completed"; // English values in data —
+  // the prototype used German strings as data, which the localization convention
+  // below rules out; the UI maps these to German labels for display.
+  offBlock: string | null; onBlock: string | null;
+  createdAt: string; updatedAt: string;
+}
+
+interface Aircraft {
+  id: string; type: "Aircraft"; flightDayId: string;
+  reg: string; model: string; seats: number; maxPayloadKg: number;
+  costPerHourEur?: number | null; imageUrl?: string | null;
+}
+
+interface Pilot {
+  id: string; type: "Pilot"; flightDayId: string;
+  name: string; license: string; available: boolean;
+}
+
+interface FlightDay {
+  id: string; type: "FlightDay"; flightDayId: string; // == id
+  date: string; airfieldId: string; status: "planned" | "active" | "closed";
+}
+```
+
+### Group registration
+
+Guests can register solo or as a group registered together in one sitting: the first
+member's submission generates a `groupId` server-side; subsequent members submit with
+that `groupId` (and a server-validated matching `groupName`) rather than re-entering
+group info from scratch. `GET /api/guests?groupId=` powers an in-progress "who's
+registered so far" summary during the loop.
+
+### API surface (current scope only — not full CRUD)
+
+| Method & route | Purpose |
+|---|---|
+| `POST /api/guests` | Register a guest, solo or as a group member |
+| `GET /api/guests` | List today's guests; `?groupId=` filters |
+| `POST /api/guests/{id}/mark-paid` | Front-desk marks a guest paid (narrow action, not a generic PATCH) |
+| `GET /api/flights` | List today's flights with resolved aircraft + assignment summary |
+| `POST /api/flights/{id}/assign` | Assign a guest or a whole group, enforcing hard seat/weight limits, greedy partial-fit for groups; returns `{assigned, rejected: [{guestId, reason}]}` |
+
+Flight/Aircraft/Pilot CRUD beyond what assignment needs is intentionally not built —
+see [tech-stack.md § Known cross-cutting risks](./tech-stack.md#known-cross-cutting-risks)
+for the accepted technical debt this scope currently carries (non-atomic `code`
+generation, non-transactional assignment writes).
+
 ## Open decisions
 
 These are flagged, not resolved — don't assume an answer exists in code yet.
 
 1. **Dispatcher-App authentication.** The manual's prototype has none — "just open the
    file." The real system, with a shared Cosmos backend reachable over the network,
-   plausibly needs *something* (SWA's built-in auth providers, or Entra ID, or a
-   simple shared PIN for a single-day event) so a random visitor to the SWA URL can't
-   modify a live flight day. Needs a decision before `/dispatch` goes further than a
-   placeholder.
+   needs *something* so a random visitor to the SWA URL can't modify a live flight
+   day. **OIDC is the intended direction** (SWA's built-in auth providers support it,
+   or a standalone provider) — narrowed from an open menu of options, but explicitly
+   **not MVP**: `/dispatch` stays unauthenticated through the registration/grouping/
+   assignment increments currently being built. That's an accepted, documented gap,
+   not an oversight — revisit before `/dispatch` goes to a real, unsupervised
+   deployment.
 2. **IndexedDB ⇄ Cosmos sync strategy.** What happens when a Dispatcher-App tablet
    goes offline mid-check-in and comes back — last-write-wins? Queued mutation replay?
    Does the API need idempotency keys? Not designed yet; the NFR only establishes that
@@ -65,8 +211,12 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
 4. **Multi-flight-day / multi-airfield scope.** The manual's demo reset targets one
    flight day at one airfield (EDSH, Backnang-Heiningen). Whether the real system is
    single-tenant-per-deployment or needs to support multiple concurrent flight days /
-   airfields in one Cosmos account isn't decided — affects partition key design once
-   the data model is built.
+   airfields in one Cosmos account isn't decided. **Partially informed, still
+   unresolved:** the `/flightDayId` partition key (see
+   [Data model & persistence](#data-model--persistence) above) already supports
+   multiple flight days without a redesign, but no FlightDay-setup UI or
+   day-switching logic exists yet — a hardcoded `DEFAULT_FLIGHT_DAY_ID` stands in for
+   now.
 
 ## Domain-model naming
 

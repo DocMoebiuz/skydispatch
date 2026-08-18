@@ -16,3 +16,8 @@ the same PR as the decision they describe changes, not after the fact.
 - [SkyDispatch-Benutzerhandbuch.docx](./SkyDispatch-Benutzerhandbuch.docx) — the
   original German user manual these requirements are derived from. Source of truth
   for user flows; the docs above are the engineering interpretation of it.
+- [static-html-app/](./static-html-app/) — a working static HTML prototype (one page
+  per surface: dispatcher, registration, departure board) built alongside the manual.
+  Source for flows/business rules/copy/data model, not for pixels — see
+  [architecture.md § Prototype reference](./architecture.md#prototype-reference-docsstatic-html-app)
+  for what's being kept vs. discarded from it.

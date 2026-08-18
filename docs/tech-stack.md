@@ -2,7 +2,11 @@
 
 Living decisions log — the "why", not just the "what". When a decision changes, edit
 the entry in place and note the date/reason rather than deleting history silently.
-Cross-reference: [architecture.md](./architecture.md), [nfr.md](./nfr.md).
+Cross-reference: [architecture.md](./architecture.md), [nfr.md](./nfr.md). Several
+entries below (no build orchestrator, single-container devcontainer, no numeric
+coverage gate) are direct applications of the KISS principle stated in
+[CLAUDE.md § Principles](../CLAUDE.md#principles) — cite that instead of
+re-justifying simplicity per decision.
 
 ## Frontend
 
@@ -14,6 +18,19 @@ Cross-reference: [architecture.md](./architecture.md), [nfr.md](./nfr.md).
   Static Web Apps' model is one app + one API per resource, and the three surfaces
   share enough UI primitives (status colors, cards, tables) that one build/one
   component library is simpler to keep consistent than coordinating three.
+- **`react-router-dom`** for the three route groups — nothing routed before this;
+  a router is the boring-correct default over hand-rolled pathname switching.
+- **Zod** for request/response validation, defined once in `packages/shared` and
+  consumed by both `apps/web` (form validation) and `apps/api` (real server-side
+  re-validation) so the two can't drift out of sync — see
+  [architecture.md § Data model & persistence](./architecture.md#data-model--persistence).
+- **`react-hook-form`** paired with Zod via `zodResolver` for form state — shadcn/ui's
+  own form primitives assume it.
+- **`i18next` + `react-i18next`** for all UI copy, from the start — even though German
+  is the only shipped locale for v1 (see [nfr.md § Localization](./nfr.md#localization)),
+  translation keys mean a second locale is a resource file, not a rewrite, and they
+  give one place (`apps/web/src/locales/`) to audit all UI copy instead of it being
+  scattered through components as inline strings.
 
 ## Backend
 
@@ -36,6 +53,12 @@ Cross-reference: [architecture.md](./architecture.md), [nfr.md](./nfr.md).
   Registration) — see [nfr.md](./nfr.md#offline--local-first-behavior) for why, and
   [architecture.md](./architecture.md#open-decisions) for the (not yet solved) sync
   strategy.
+- **One Cosmos database (`skydispatch`), one container (`operations`)**, holding
+  guests/flights/aircraft/pilots/flight-days as distinct document `type`s in the same
+  partition rather than split across containers, partitioned by `/flightDayId`. No
+  custom indexing policy for MVP (default indexing is fine at this scale — one flight
+  day, low hundreds of guests). Full schema and reasoning:
+  [architecture.md § Data model & persistence](./architecture.md#data-model--persistence).
 
 ## Testing
 
@@ -46,6 +69,17 @@ Cross-reference: [architecture.md](./architecture.md), [nfr.md](./nfr.md).
 - API unit tests mock the Cosmos SDK client rather than hitting the real dev account —
   keeps CI fast and independent of network/account availability. Live-account
   integration tests are a deliberate future addition, not assumed to exist yet.
+- **No numeric coverage threshold/gate.** Tests are expected for all new logic and bug
+  fixes (a bug fix ships with a regression test) — enforced through review and
+  [definition-of-done.md](./definition-of-done.md), not coverage tooling/CI
+  percentages. KISS call (see [CLAUDE.md § Principles](../CLAUDE.md#principles));
+  revisit only if untested code becomes a real, recurring problem.
+- **Every increment gets its own Playwright e2e test**, not just changes that happen
+  to touch a full user flow — this is a standing process rule, see
+  [definition-of-done.md](./definition-of-done.md).
+- Playwright e2e runs against the **real dev Cosmos account** (no emulator, see
+  § Data above) — tests must delete what they create. It's a shared account that
+  persists between runs, not an emulator that resets.
 
 ## Package manager / workspace
 
@@ -63,11 +97,18 @@ Cross-reference: [architecture.md](./architecture.md), [nfr.md](./nfr.md).
   Docker pattern) — bump both together.
 - Adds pnpm (via corepack), Azure Functions Core Tools v4, and the Azure Static Web
   Apps CLI on top of the base image.
-- Cosmos connection secrets (`COSMOS_ENDPOINT`/`COSMOS_KEY`) are passed through from the
-  developer's host environment via `remoteEnv`/`${localEnv:...}` in
-  `devcontainer.json` — never written to a committed file. `apps/api/local.settings.json`
-  is gitignored; `local.settings.json.example` (committed) documents the shape with
-  blank values.
+- **Azurite** (the Azure Storage emulator) runs as the `azurite` npm dev-dependency, not
+  Docker — there's no docker-in-docker feature here (deliberate, see the
+  single-container decision above), so it's a plain dev-time Node process like every
+  other devcontainer tool, started manually via `pnpm azurite` before `pnpm dev`. This
+  is a **different concern** from the "no local Cosmos emulator" decision under
+  [Data](#data) above: Azurite backs the Functions host's own `AzureWebJobsStorage`
+  requirement, not the Cosmos data store — the two aren't in tension.
+- The Cosmos connection secret (`COSMOS_CONNECTION_STRING` — one connection string,
+  not a separate endpoint/key pair) is passed through from the developer's host
+  environment via `remoteEnv`/`${localEnv:...}` in `devcontainer.json` — never
+  written to a committed file. `apps/api/local.settings.json` is gitignored;
+  `local.settings.json.example` (committed) documents the shape with a blank value.
 - No mount of the host `~/.claude` directory — cross-session continuity is handled
   entirely through this `docs/` tree and root `CLAUDE.md`, which are identical whether
   you're inside or outside the container (decided explicitly, see git history of this
@@ -105,3 +146,14 @@ enough surface area to make manual bumps tedious.
 - `swa start` can race Vite/Functions binding their ports on first run
   (`ECONNREFUSED` on the very first request) — known flake, revisit with a `wait-on`
   step in `swa-cli.config.json`'s `run` command if it becomes a real annoyance.
+- `func start` needs Azurite already running (`pnpm azurite`) or Functions-host
+  storage operations fail — it's a manual second-terminal step, not auto-started, so
+  it's easy to forget after a restart.
+- Guest `code` generation (`POST /api/guests`) is a count-then-assign, not atomic
+  under concurrent writes — acceptable for a single-airfield, low-concurrency event;
+  revisit with a counter document or a Cosmos transactional batch if collisions ever
+  actually occur.
+- `POST /api/flights/{id}/assign`'s multi-document writes (flight + each accepted
+  guest) are sequential, not one Cosmos transactional batch — available later without
+  a redesign since every document in an assignment shares `flightDayId`, but not done
+  now. Revisit if partial-write failures become a real problem.

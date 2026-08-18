@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "SkyDispatch"
+  },
+  "home": {
+    "intro": "Wählen Sie einen Bereich:"
+  },
+  "dispatch": {
+    "title": "Dispatcher",
+    "guests": {
+      "heading": "Fluggäste",
+      "loading": "Lädt …",
+      "error": "Gästeliste konnte nicht geladen werden.",
+      "empty": "Noch keine Gäste registriert.",
+      "table": {
+        "code": "ID",
+        "name": "Name",
+        "weight": "Gewicht (kg)",
+        "status": "Status"
+      },
+      "status": {
+        "registered": "registriert",
+        "paid": "bezahlt",
+        "weighed": "gewogen",
+        "assigned": "zugewiesen",
+        "checked-in": "eingecheckt",
+        "flown": "geflogen",
+        "no-show": "No-Show"
+      }
+    }
+  },
+  "register": {
+    "title": "Rundflug-Anmeldung",
+    "lead": "Sichern Sie sich Ihren Platz für einen Rundflug. Bezahlt wird vor Ort am Check-in.",
+    "form": {
+      "name": "Vor- und Nachname",
+      "email": "E-Mail-Adresse",
+      "phone": "Telefon (optional)",
+      "declaredWeightKg": "Ihr Gewicht (kg)",
+      "declaredWeightKgHint": "Selbstauskunft – wird beim Check-in nochmals durch Wiegen geprüft.",
+      "consent": "Ich stimme der Verarbeitung meiner personenbezogenen Daten ausschließlich zum Zweck der Flugorganisation zu.",
+      "submit": "Anmelden"
+    },
+    "errors": {
+      "name": "Bitte Namen eingeben.",
+      "email": "Bitte eine gültige E-Mail-Adresse angeben.",
+      "declaredWeightKg": "Bitte ein gültiges Gewicht zwischen 30 und 200 kg angeben.",
+      "consent": "Bitte stimmen Sie der Erklärung zu.",
+      "submit": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
+    },
+    "success": {
+      "title": "Anmeldung abgeschlossen!",
+      "lead": "Vielen Dank, {{name}}. Ihre Fluggast-ID lautet:",
+      "note": "Bitte am Flugplatz beim Check-in melden, wiegen lassen und die Bezahlung vor Ort vornehmen.",
+      "again": "Weitere Person anmelden"
+    }
+  },
+  "board": {
+    "title": "Abflugtafel",
+    "placeholder": "Platzhalter – die Live-Abflugtafel folgt hier."
+  }
+}

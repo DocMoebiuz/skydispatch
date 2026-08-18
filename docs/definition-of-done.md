@@ -9,9 +9,10 @@ the test bullets). Cross-reference: [tech-stack.md](./tech-stack.md),
 - [ ] **Lint clean** — `pnpm -r lint` passes.
 - [ ] **Unit/component tests** — Vitest tests exist for new logic/components and pass
       (`pnpm -r test`). Bug fixes include a regression test.
-- [ ] **E2E tests** — Playwright covers the touched user flow(s) end-to-end where the
-      change affects one of the three surfaces' happy paths, and passes
-      (`pnpm test:e2e`).
+- [ ] **E2E tests** — every increment ships its own Playwright test covering the
+      behavior it adds, and it passes (`pnpm test:e2e`). This is unconditional, not
+      scoped to "when it happens to touch a happy path" — small increments still get
+      a test each.
 - [ ] **No console errors/warnings** introduced in the browser console during the
       touched flow.
 - [ ] **Docs updated in the same PR** when the change affects a decision recorded in
@@ -35,3 +36,6 @@ the test bullets). Cross-reference: [tech-stack.md](./tech-stack.md),
   [nfr.md § Accessibility](./nfr.md#accessibility).
 - Cross-browser matrix beyond the primary dev/target browser — minimums not yet set,
   see [nfr.md § Device / browser support](./nfr.md#device--browser-support).
+- Numeric test-coverage threshold — deliberately not set; the qualitative expectation
+  (tests for new logic/bug fixes, above) is the whole policy for now, see
+  [tech-stack.md § Testing](./tech-stack.md#testing).

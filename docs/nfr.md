@@ -57,6 +57,13 @@ These are hard product requirements carried over from the manual, not aspiration
   charge). Real-money payment processing is **out of scope** until explicitly decided —
   treat any payment integration as a separate, later decision with its own PCI-scope
   review.
+- **MVP decision: no payment step — real or simulated — at registration at all.**
+  Guests pay at the front desk; `paid` on a guest record is a staff-recorded action
+  (`POST /api/guests/{id}/mark-paid`) taken later, not something registration sets.
+  This supersedes the prototype's fake-checkout step (see
+  [architecture.md § Prototype reference](./architecture.md#prototype-reference-docsstatic-html-app)).
+  The "real payment processing is out of scope" decision above is unaffected — this
+  is about *when* `paid` gets set, not about ever taking real money through the app.
 - Secrets (Cosmos connection string, SWA deploy token, future payment provider keys)
   are never committed — see [tech-stack.md](./tech-stack.md) for how dev/CI/prod handle
   them.
@@ -85,6 +92,13 @@ These are hard product requirements carried over from the manual, not aspiration
 - Manual and target users are German-speaking (Flugplatz Backnang-Heiningen, EDSH) —
   **UI copy ships in German** as the primary/only language for v1 unless decided
   otherwise.
+- All UI copy is routed through `i18next`/`react-i18next` translation keys from the
+  start (resource files under `apps/web/src/locales/`), never hardcoded inline
+  strings — even though German is the only shipped locale for v1. A future locale
+  becomes adding a resource file, not a rewrite, and translation files give one place
+  to audit all UI copy. Data model/status values stay English (see
+  [architecture.md § Domain-model naming](./architecture.md#domain-model-naming)) —
+  only their *rendered labels* are localized.
 - Code, identifiers, commit messages, and these docs are written in **English** per
   standard engineering practice — domain terms get an English name in code with the
   German label as the UI string, not the other way round (e.g. `Guest`/`Flight`/
