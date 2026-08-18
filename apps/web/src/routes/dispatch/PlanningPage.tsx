@@ -2,7 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Guest, Aircraft, Pilot, Flight, AssignResult } from "shared";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardAction,
+  CardContent,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Plus } from "lucide-react";
 
 // Increment 3 — the heart of the app: assign guests/groups to flights, hard
 // seat/weight limits enforced server-side (checked before allowing, never
@@ -16,6 +30,7 @@ export function PlanningPage() {
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
+  const [newFlightDialogOpen, setNewFlightDialogOpen] = useState(false);
   const [newFlightAircraftId, setNewFlightAircraftId] = useState("");
   const [newFlightPilotId, setNewFlightPilotId] = useState("");
   const [creatingFlight, setCreatingFlight] = useState(false);
@@ -103,6 +118,9 @@ export function PlanningPage() {
         const flight = (await response.json()) as Flight;
         setFlights((prev) => [...prev, flight]);
         setSelectedFlightId(flight.id);
+        setNewFlightAircraftId("");
+        setNewFlightPilotId("");
+        setNewFlightDialogOpen(false);
       }
     } finally {
       setCreatingFlight(false);
@@ -137,72 +155,98 @@ export function PlanningPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t("dispatch.planning.newFlight.title")}</CardTitle>
+          <CardTitle>{t("dispatch.planning.flights.title")}</CardTitle>
+          <CardAction>
+            <Button
+              size="icon-sm"
+              variant="outline"
+              data-testid="open-create-flight"
+              onClick={() => setNewFlightDialogOpen(true)}
+              aria-label={t("dispatch.planning.newFlight.create")}
+            >
+              <Plus />
+            </Button>
+          </CardAction>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-4">
-          <div className="grid gap-2">
-            <label className="text-sm font-medium" htmlFor="pf-aircraft">
-              {t("dispatch.planning.newFlight.aircraft")}
-            </label>
-            <select
-              id="pf-aircraft"
-              data-testid="new-flight-aircraft"
-              className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
-              value={newFlightAircraftId}
-              onChange={(e) => setNewFlightAircraftId(e.target.value)}
-            >
-              <option value="">—</option>
-              {aircraftList.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.reg} — {a.model}
-                </option>
+        <CardContent>
+          {flights.length > 0 ? (
+            <div className="flex flex-wrap gap-2" data-testid="flight-tabs">
+              {flights.map((f) => (
+                <Button
+                  key={f.id}
+                  size="sm"
+                  variant={f.id === selectedFlightId ? "default" : "outline"}
+                  data-testid="flight-tab"
+                  onClick={() => setSelectedFlightId(f.id)}
+                >
+                  {f.code}
+                </Button>
               ))}
-            </select>
-          </div>
-          <div className="grid gap-2">
-            <label className="text-sm font-medium" htmlFor="pf-pilot">
-              {t("dispatch.planning.newFlight.pilot")}
-            </label>
-            <select
-              id="pf-pilot"
-              data-testid="new-flight-pilot"
-              className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
-              value={newFlightPilotId}
-              onChange={(e) => setNewFlightPilotId(e.target.value)}
-            >
-              <option value="">—</option>
-              {pilots.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Button
-            data-testid="create-flight"
-            disabled={!newFlightAircraftId || creatingFlight}
-            onClick={() => void createFlight()}
-          >
-            {t("dispatch.planning.newFlight.create")}
-          </Button>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {t("dispatch.planning.flights.empty")}
+            </p>
+          )}
         </CardContent>
       </Card>
 
-      {flights.length > 0 && (
-        <div className="flex flex-wrap gap-2" data-testid="flight-tabs">
-          {flights.map((f) => (
+      <Dialog open={newFlightDialogOpen} onOpenChange={setNewFlightDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("dispatch.planning.newFlight.title")}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium" htmlFor="pf-aircraft">
+                {t("dispatch.planning.newFlight.aircraft")}
+              </label>
+              <select
+                id="pf-aircraft"
+                data-testid="new-flight-aircraft"
+                className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
+                value={newFlightAircraftId}
+                onChange={(e) => setNewFlightAircraftId(e.target.value)}
+              >
+                <option value="">—</option>
+                {aircraftList.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.reg} — {a.model}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium" htmlFor="pf-pilot">
+                {t("dispatch.planning.newFlight.pilot")}
+              </label>
+              <select
+                id="pf-pilot"
+                data-testid="new-flight-pilot"
+                className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
+                value={newFlightPilotId}
+                onChange={(e) => setNewFlightPilotId(e.target.value)}
+              >
+                <option value="">—</option>
+                {pilots.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
             <Button
-              key={f.id}
-              size="sm"
-              variant={f.id === selectedFlightId ? "default" : "outline"}
-              data-testid="flight-tab"
-              onClick={() => setSelectedFlightId(f.id)}
+              data-testid="create-flight"
+              disabled={!newFlightAircraftId || creatingFlight}
+              onClick={() => void createFlight()}
             >
-              {f.code}
+              {t("dispatch.planning.newFlight.create")}
             </Button>
-          ))}
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>

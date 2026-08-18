@@ -51,6 +51,10 @@
       }
     },
     "planning": {
+      "flights": {
+        "title": "Flüge",
+        "empty": "Noch keine Flüge angelegt."
+      },
       "newFlight": {
         "title": "Neuer Flug",
         "aircraft": "Flugzeug",

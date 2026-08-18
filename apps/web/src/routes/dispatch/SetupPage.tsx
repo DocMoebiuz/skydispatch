@@ -4,13 +4,28 @@ import type { FlightDay, Pilot, Aircraft } from "shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardAction,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Plus } from "lucide-react";
 
-// Increment 3 prerequisite — entity setup (flight day/pilots/aircraft), plain
-// create+list, no edit/delete yet (KISS: not needed for priorities 1-3). Matches
-// docs/static-html-app/SkyDispatch-UI-Mockup.html's Setup screen in spirit, not
-// pixels (rebuilt fresh in shadcn/ui — see docs/architecture.md § Prototype
-// reference).
+// Increment 3 prerequisite — entity setup (flight day/pilots/aircraft). Pilots and
+// aircraft are created via a "+" button opening a modal dialog, not an inline form —
+// takes far less space in a list of entities (matches the prototype's own
+// openModal() pattern for "Pilot hinzufügen"/"Flugzeug hinzufügen"). Plain
+// create+list, no edit/delete yet (KISS: not needed for priorities 1-3).
 export function SetupPage() {
   const { t } = useTranslation();
 
@@ -21,11 +36,13 @@ export function SetupPage() {
   const [savingDay, setSavingDay] = useState(false);
 
   const [pilots, setPilots] = useState<Pilot[]>([]);
+  const [pilotDialogOpen, setPilotDialogOpen] = useState(false);
   const [pilotName, setPilotName] = useState("");
   const [pilotLicense, setPilotLicense] = useState("");
   const [savingPilot, setSavingPilot] = useState(false);
 
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
+  const [aircraftDialogOpen, setAircraftDialogOpen] = useState(false);
   const [reg, setReg] = useState("");
   const [model, setModel] = useState("");
   const [seats, setSeats] = useState("");
@@ -83,6 +100,7 @@ export function SetupPage() {
         setPilots((prev) => [...prev, created]);
         setPilotName("");
         setPilotLicense("");
+        setPilotDialogOpen(false);
       }
     } finally {
       setSavingPilot(false);
@@ -107,6 +125,7 @@ export function SetupPage() {
         setModel("");
         setSeats("");
         setMaxPayloadKg("");
+        setAircraftDialogOpen(false);
       }
     } finally {
       setSavingAircraft(false);
@@ -158,8 +177,19 @@ export function SetupPage() {
       <Card>
         <CardHeader>
           <CardTitle>{t("dispatch.setup.pilots.title")}</CardTitle>
+          <CardAction>
+            <Button
+              size="icon-sm"
+              variant="outline"
+              data-testid="open-add-pilot"
+              onClick={() => setPilotDialogOpen(true)}
+              aria-label={t("dispatch.setup.pilots.add")}
+            >
+              <Plus />
+            </Button>
+          </CardAction>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent>
           <ul className="flex flex-col gap-1" data-testid="pilot-list">
             {pilots.map((p) => (
               <li key={p.id} className="text-sm" data-testid="pilot-row">
@@ -172,7 +202,15 @@ export function SetupPage() {
               </li>
             )}
           </ul>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        </CardContent>
+      </Card>
+
+      <Dialog open={pilotDialogOpen} onOpenChange={setPilotDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("dispatch.setup.pilots.add")}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
             <div className="grid gap-2">
               <Label htmlFor="pilot-name">{t("dispatch.setup.pilots.name")}</Label>
               <Input id="pilot-name" value={pilotName} onChange={(e) => setPilotName(e.target.value)} />
@@ -186,19 +224,30 @@ export function SetupPage() {
               />
             </div>
           </div>
-        </CardContent>
-        <CardFooter>
-          <Button data-testid="add-pilot" disabled={savingPilot} onClick={() => void addPilot()}>
-            {t("dispatch.setup.pilots.add")}
-          </Button>
-        </CardFooter>
-      </Card>
+          <DialogFooter>
+            <Button data-testid="add-pilot" disabled={savingPilot} onClick={() => void addPilot()}>
+              {t("dispatch.setup.pilots.add")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
           <CardTitle>{t("dispatch.setup.aircraft.title")}</CardTitle>
+          <CardAction>
+            <Button
+              size="icon-sm"
+              variant="outline"
+              data-testid="open-add-aircraft"
+              onClick={() => setAircraftDialogOpen(true)}
+              aria-label={t("dispatch.setup.aircraft.add")}
+            >
+              <Plus />
+            </Button>
+          </CardAction>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent>
           <ul className="flex flex-col gap-1" data-testid="aircraft-list">
             {aircraft.map((a) => (
               <li key={a.id} className="text-sm" data-testid="aircraft-row">
@@ -212,7 +261,15 @@ export function SetupPage() {
               </li>
             )}
           </ul>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        </CardContent>
+      </Card>
+
+      <Dialog open={aircraftDialogOpen} onOpenChange={setAircraftDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("dispatch.setup.aircraft.add")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="ac-reg">{t("dispatch.setup.aircraft.reg")}</Label>
               <Input id="ac-reg" value={reg} onChange={(e) => setReg(e.target.value)} />
@@ -240,17 +297,17 @@ export function SetupPage() {
               />
             </div>
           </div>
-        </CardContent>
-        <CardFooter>
-          <Button
-            data-testid="add-aircraft"
-            disabled={savingAircraft}
-            onClick={() => void addAircraft()}
-          >
-            {t("dispatch.setup.aircraft.add")}
-          </Button>
-        </CardFooter>
-      </Card>
+          <DialogFooter>
+            <Button
+              data-testid="add-aircraft"
+              disabled={savingAircraft}
+              onClick={() => void addAircraft()}
+            >
+              {t("dispatch.setup.aircraft.add")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

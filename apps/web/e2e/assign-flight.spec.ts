@@ -50,21 +50,33 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
   }
 
   try {
-    // --- Setup: pilot + small-capacity aircraft ---
+    // --- Setup: pilot + small-capacity aircraft, both via the "+" dialog pattern ---
     await page.goto("/dispatch/setup");
+    await page.getByTestId("open-add-pilot").click();
     // exact: true — "Name" would otherwise also substring-match the airfield's
-    // "Flugplatz – Name" label further down the same page.
+    // "Flugplatz – Name" label on the page behind the dialog.
     await page.getByLabel("Name", { exact: true }).fill(pilotName);
     await page.getByLabel("Lizenzen").fill("PPL");
     await page.getByTestId("add-pilot").click();
     await expect(page.getByTestId("pilot-list")).toContainText(pilotName);
+    // Captured immediately, not deferred to later — so a failure further into the
+    // test still leaves cleanup able to find and delete this pilot.
+    pilotId = await fetch("http://localhost:4280/api/pilots")
+      .then((r) => r.json() as Promise<{ id: string; name: string }[]>)
+      .then((list) => list.find((p) => p.name === pilotName)?.id);
+    expect(pilotId).toBeTruthy();
 
+    await page.getByTestId("open-add-aircraft").click();
     await page.getByLabel("Kennzeichen").fill(reg);
     await page.getByLabel("Typ").fill("Cessna 172");
     await page.getByLabel("Sitze").fill("2");
     await page.getByLabel("Max. Zuladung (kg)").fill("150");
     await page.getByTestId("add-aircraft").click();
     await expect(page.getByTestId("aircraft-list")).toContainText(reg);
+    aircraftId = await fetch("http://localhost:4280/api/aircraft")
+      .then((r) => r.json() as Promise<{ id: string; reg: string }[]>)
+      .then((list) => list.find((a) => a.reg === reg)?.id);
+    expect(aircraftId).toBeTruthy();
 
     // --- Register: one solo guest (70kg), one group of two (80kg + 90kg) ---
     await page.goto("/register");
@@ -82,20 +94,16 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     await payAndWeigh("E2E Assign G One", "80");
     await payAndWeigh("E2E Assign G Two", "90");
 
-    // --- Planning: create the flight, capture ids for cleanup ---
+    // --- Planning: create the flight ---
     await page.goto("/dispatch/planning");
-    const [aircraftRes, pilotRes] = await Promise.all([
-      fetch("http://localhost:4280/api/aircraft").then((r) => r.json() as Promise<{ id: string; reg: string }[]>),
-      fetch("http://localhost:4280/api/pilots").then((r) => r.json() as Promise<{ id: string; name: string }[]>),
-    ]);
-    aircraftId = aircraftRes.find((a) => a.reg === reg)?.id;
-    pilotId = pilotRes.find((p) => p.name === pilotName)?.id;
-    expect(aircraftId).toBeTruthy();
-
+    await page.getByTestId("open-create-flight").click();
     await page.getByTestId("new-flight-aircraft").selectOption(aircraftId!);
     if (pilotId) await page.getByTestId("new-flight-pilot").selectOption(pilotId);
     await page.getByTestId("create-flight").click();
-    await expect(page.getByTestId("flight-tabs")).toBeVisible();
+    // Not flight-tabs visibility — that section can already be visible from other
+    // flights, so it doesn't prove *this* flight's POST has landed. The dialog only
+    // closes on a successful create, so that's the real completion signal.
+    await expect(page.getByTestId("create-flight")).not.toBeVisible();
 
     const flightsAfter = await fetch("http://localhost:4280/api/flights").then(
       (r) => r.json() as Promise<{ id: string; aircraftId: string }[]>,
