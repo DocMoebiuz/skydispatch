@@ -14,6 +14,7 @@ test("registration writes through the API into Cosmos and appears on /dispatch",
     await page.goto("/register");
     await page.getByLabel("Vor- und Nachname").fill("E2E Test Guest");
     await page.getByLabel("E-Mail-Adresse").fill(email);
+    await page.getByRole("button", { name: "Weiter" }).click();
     await page.getByLabel("Ihr Gewicht (kg)").fill("75");
     await page.getByLabel(/personenbezogenen Daten/).check();
     await page.getByRole("button", { name: "Anmelden" }).click();

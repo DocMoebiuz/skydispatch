@@ -29,33 +29,34 @@ export function DispatchPage() {
   }, []);
 
   return (
-    <main className="p-8">
+    <main className="flex flex-col gap-6 p-8">
       <h1 className="text-2xl font-semibold">{t("dispatch.title")}</h1>
 
-      <section className="mt-6">
+      <section className="flex flex-col gap-4">
         <h2 className="text-lg font-medium">{t("dispatch.guests.heading")}</h2>
 
         {loadError && (
-          <p className="text-destructive mt-2 text-sm">{t("dispatch.guests.error")}</p>
+          <p className="text-destructive text-sm">{t("dispatch.guests.error")}</p>
         )}
         {!loadError && guests === null && (
-          <p className="text-muted-foreground mt-2 text-sm">
+          <p className="text-muted-foreground text-sm">
             {t("dispatch.guests.loading")}
           </p>
         )}
         {!loadError && guests?.length === 0 && (
-          <p className="text-muted-foreground mt-2 text-sm">
+          <p className="text-muted-foreground text-sm">
             {t("dispatch.guests.empty")}
           </p>
         )}
         {!loadError && guests && guests.length > 0 && (
-          <table className="mt-4 w-full text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-border border-b">
                 <th className="py-2 pr-4">{t("dispatch.guests.table.code")}</th>
                 <th className="py-2 pr-4">{t("dispatch.guests.table.name")}</th>
                 <th className="py-2 pr-4">{t("dispatch.guests.table.weight")}</th>
                 <th className="py-2 pr-4">{t("dispatch.guests.table.status")}</th>
+                <th className="py-2 pr-4">{t("dispatch.guests.group")}</th>
               </tr>
             </thead>
             <tbody>
@@ -64,6 +65,7 @@ export function DispatchPage() {
                   key={guest.id}
                   data-testid="guest-row"
                   data-code={guest.code}
+                  data-group-id={guest.groupId ?? ""}
                   className="border-border border-b"
                 >
                   <td className="py-2 pr-4">{guest.code}</td>
@@ -71,6 +73,9 @@ export function DispatchPage() {
                   <td className="py-2 pr-4">{guest.declaredWeightKg}</td>
                   <td className="py-2 pr-4">
                     {t(`dispatch.guests.status.${deriveGuestStatus(guest)}`)}
+                  </td>
+                  <td className="py-2 pr-4" data-testid="guest-group-name">
+                    {guest.groupName ?? "—"}
                   </td>
                 </tr>
               ))}

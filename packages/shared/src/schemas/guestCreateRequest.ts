@@ -8,8 +8,6 @@ import { z } from "zod";
 // Consumed by both apps/web (form validation, via zodResolver) and apps/api (real
 // server-side re-validation) so the two rule sets can't drift — see
 // docs/architecture.md § Data model & persistence.
-//
-// No group fields yet — added in Increment 2 (group registration loop).
 export const guestCreateRequestSchema = z.object({
   name: z.string().trim().min(1),
   email: z.email(),
@@ -27,6 +25,19 @@ export const guestCreateRequestSchema = z.object({
   // — without it TS 5.5+ infers `v is true` from the comparison and narrows the
   // schema's output type back to the `true` literal anyway.
   consent: z.boolean().refine((v): boolean => v === true),
+  newsletter: z.boolean(),
+  // Increment 2 — group registration loop. Only present from the second member of a
+  // group onward: the first member is registered solo (no group field at all, same
+  // as Increment 1), and only becomes grouped retroactively via
+  // POST /api/guests/{id}/start-group once the registrant chooses to add another
+  // person. From then on the web form already knows groupId/groupName and sends
+  // both on every subsequent create — see docs/architecture.md § Group registration.
+  group: z
+    .object({
+      groupId: z.string().min(1),
+      groupName: z.string().trim().min(1),
+    })
+    .optional(),
 });
 
 export type GuestCreateRequest = z.infer<typeof guestCreateRequestSchema>;

@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import {
   DEFAULT_FLIGHT_DAY_ID,
   guestCreateRequestSchema,
+  startGroupRequestSchema,
   type Guest,
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
@@ -26,6 +27,28 @@ async function nextGuestCode(flightDayId: string): Promise<string> {
     .fetchAll();
   const count = resources[0] ?? 0;
   return `G-${String(count + 1).padStart(3, "0")}`;
+}
+
+// A groupId a client sends must actually exist and its canonical name must match —
+// the group name is fixed once (via startGroup below) and never re-typed by the
+// client on later members, but this still guards against a stale/tampered request.
+// See docs/architecture.md § Group registration.
+async function isValidGroup(
+  flightDayId: string,
+  group: { groupId: string; groupName: string },
+): Promise<boolean> {
+  const container = await getOperationsContainer();
+  const { resources } = await container.items
+    .query<{ groupName: string | null }>({
+      query:
+        "SELECT TOP 1 c.groupName FROM c WHERE c.type = 'Guest' AND c.flightDayId = @flightDayId AND c.groupId = @groupId",
+      parameters: [
+        { name: "@flightDayId", value: flightDayId },
+        { name: "@groupId", value: group.groupId },
+      ],
+    })
+    .fetchAll();
+  return resources[0]?.groupName === group.groupName;
 }
 
 export async function createGuest(
@@ -51,6 +74,11 @@ export async function createGuest(
   }
 
   const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+
+  if (parsed.data.group && !(await isValidGroup(flightDayId, parsed.data.group))) {
+    return { status: 400, jsonBody: { error: "invalid-group" } };
+  }
+
   const container = await getOperationsContainer();
   const code = await nextGuestCode(flightDayId);
   const now = new Date().toISOString();
@@ -67,8 +95,9 @@ export async function createGuest(
     weightKg: null,
     paid: false, // no payment at registration — see docs/nfr.md § Security & Privacy
     consent: parsed.data.consent,
-    groupId: null,
-    groupName: null,
+    newsletter: parsed.data.newsletter,
+    groupId: parsed.data.group?.groupId ?? null,
+    groupName: parsed.data.group?.groupName ?? null,
     checkedIn: false,
     noShow: false,
     flown: false,
@@ -79,6 +108,52 @@ export async function createGuest(
 
   await container.items.create(guest);
   return { status: 201, jsonBody: guest };
+}
+
+// Retroactively turns an already-registered (ungrouped) guest into the first member
+// of a brand-new group — called once, the first time a registrant chooses to add
+// another person. Every later member is created already-grouped via createGuest's
+// `group` field instead of calling this again. See docs/architecture.md § Group
+// registration.
+export async function startGroup(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const guestId = request.params.id;
+  if (!guestId) {
+    return { status: 400, jsonBody: { error: "missing-id" } };
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { status: 400, jsonBody: { error: "invalid-json" } };
+  }
+
+  const parsed = startGroupRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return {
+      status: 400,
+      jsonBody: { error: "validation", issues: parsed.error.issues },
+    };
+  }
+
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+  if (!guest) {
+    return { status: 404, jsonBody: { error: "not-found" } };
+  }
+
+  const updated: Guest = {
+    ...guest,
+    groupId: randomUUID(),
+    groupName: parsed.data.groupName,
+    updatedAt: new Date().toISOString(),
+  };
+  await container.item(guestId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
 }
 
 export async function listGuests(
@@ -107,4 +182,11 @@ app.http("listGuests", {
   route: "guests",
   authLevel: "anonymous",
   handler: listGuests,
+});
+
+app.http("startGroup", {
+  methods: ["POST"],
+  route: "guests/{id}/start-group",
+  authLevel: "anonymous",
+  handler: startGroup,
 });

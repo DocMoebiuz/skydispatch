@@ -13,6 +13,7 @@ export interface Guest {
   weightKg: number | null; // staff-verified at check-in (not built yet)
   paid: boolean; // false at creation; only POST /api/guests/{id}/mark-paid sets true
   consent: boolean;
+  newsletter: boolean; // opt-in, asked alongside consent — not required, no default
   groupId?: string | null;
   groupName?: string | null;
   checkedIn: boolean;

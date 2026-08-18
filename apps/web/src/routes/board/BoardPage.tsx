@@ -6,9 +6,9 @@ import { useTranslation } from "react-i18next";
 export function BoardPage() {
   const { t } = useTranslation();
   return (
-    <main className="p-8">
+    <main className="flex flex-col gap-2 p-8">
       <h1 className="text-2xl font-semibold">{t("board.title")}</h1>
-      <p className="text-muted-foreground mt-2">{t("board.placeholder")}</p>
+      <p className="text-muted-foreground">{t("board.placeholder")}</p>
     </main>
   );
 }

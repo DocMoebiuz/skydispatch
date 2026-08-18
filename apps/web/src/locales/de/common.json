@@ -26,19 +26,27 @@
         "checked-in": "eingecheckt",
         "flown": "geflogen",
         "no-show": "No-Show"
-      }
+      },
+      "group": "Gruppe"
     }
   },
   "register": {
     "title": "Rundflug-Anmeldung",
     "lead": "Sichern Sie sich Ihren Platz für einen Rundflug. Bezahlt wird vor Ort am Check-in.",
+    "steps": {
+      "contact": "Kontaktdaten",
+      "weight": "Gewicht & Einverständnis"
+    },
     "form": {
       "name": "Vor- und Nachname",
       "email": "E-Mail-Adresse",
       "phone": "Telefon (optional)",
+      "next": "Weiter",
+      "back": "Zurück",
       "declaredWeightKg": "Ihr Gewicht (kg)",
       "declaredWeightKgHint": "Selbstauskunft – wird beim Check-in nochmals durch Wiegen geprüft.",
       "consent": "Ich stimme der Verarbeitung meiner personenbezogenen Daten ausschließlich zum Zweck der Flugorganisation zu.",
+      "newsletter": "Ich möchte den Newsletter mit Neuigkeiten und Angeboten erhalten (optional).",
       "submit": "Anmelden"
     },
     "errors": {
@@ -52,7 +60,19 @@
       "title": "Anmeldung abgeschlossen!",
       "lead": "Vielen Dank, {{name}}. Ihre Fluggast-ID lautet:",
       "note": "Bitte am Flugplatz beim Check-in melden, wiegen lassen und die Bezahlung vor Ort vornehmen.",
-      "again": "Weitere Person anmelden"
+      "again": "Weitere Person anmelden",
+      "groupLabel": "Gruppe",
+      "sessionListHeading": "Bisher angemeldet in dieser Gruppe:"
+    },
+    "group": {
+      "prompt": {
+        "title": "Gruppenname",
+        "lead": "Da Sie eine weitere Person anmelden, fassen wir alle gemeinsam angemeldeten Personen als Gruppe zusammen. Bitte vergeben Sie einen Namen für die Gruppe.",
+        "label": "Gruppenname",
+        "error": "Bitte einen Gruppennamen angeben.",
+        "submitError": "Gruppenname konnte nicht gespeichert werden. Bitte erneut versuchen.",
+        "submit": "Weiter"
+      }
     }
   },
   "board": {
