@@ -63,7 +63,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
     // counter (see docs/tech-stack.md § Known cross-cutting risks), so two tests'
     // guests can legitimately land on the same code when the suite runs in
     // parallel against the same dev Cosmos account; that's not a product bug.
-    await page.goto("/dispatch");
+    await page.goto("/dispatch/guests");
     const rows = page.getByTestId("guest-row").filter({ hasText: groupName });
     await expect(rows).toHaveCount(3);
     const groupIds = await rows.evaluateAll((els) =>

@@ -7,6 +7,39 @@
   },
   "dispatch": {
     "title": "Dispatcher",
+    "nav": {
+      "dashboard": "Dashboard",
+      "setup": "Setup",
+      "guests": "Gäste",
+      "planning": "Planung",
+      "checkin": "Check-in",
+      "tracking": "Tracking",
+      "reporting": "Reporting"
+    },
+    "dashboard": {
+      "kpi": {
+        "activeFlights": "Flüge aktiv",
+        "guests": "Gäste",
+        "waiting": "Wartend",
+        "utilization": "Auslastung"
+      },
+      "placeholder": "Platzhalter – Live-Kennzahlen folgen, sobald Flüge und Zuweisungen existieren."
+    },
+    "setup": {
+      "placeholder": "Platzhalter – Flugtag, Flugplatz, Piloten und Flugzeuge folgen hier."
+    },
+    "planning": {
+      "placeholder": "Platzhalter – Flugzuteilung (Gäste/Gruppen den Flügen zuweisen) folgt hier."
+    },
+    "checkin": {
+      "placeholder": "Platzhalter – Check-in & Boarding folgen hier."
+    },
+    "tracking": {
+      "placeholder": "Platzhalter – Start-/Landungserfassung folgt hier."
+    },
+    "reporting": {
+      "placeholder": "Platzhalter – Auswertungen und Exporte folgen hier."
+    },
     "guests": {
       "heading": "Fluggäste",
       "loading": "Lädt …",

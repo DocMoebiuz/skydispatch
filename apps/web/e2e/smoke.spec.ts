@@ -16,7 +16,13 @@ function collectConsoleErrors(page: Page): string[] {
 const routes: { path: string; heading: string }[] = [
   { path: "/", heading: "SkyDispatch" },
   { path: "/register", heading: "Rundflug-Anmeldung" },
-  { path: "/dispatch", heading: "Dispatcher" },
+  { path: "/dispatch", heading: "Dashboard" },
+  { path: "/dispatch/setup", heading: "Setup" },
+  { path: "/dispatch/guests", heading: "Fluggäste" },
+  { path: "/dispatch/planning", heading: "Planung" },
+  { path: "/dispatch/checkin", heading: "Check-in" },
+  { path: "/dispatch/tracking", heading: "Tracking" },
+  { path: "/dispatch/reporting", heading: "Reporting" },
   { path: "/board", heading: "Abflugtafel" },
 ];
 

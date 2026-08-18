@@ -47,4 +47,15 @@ export default tseslint.config(
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
     },
   },
+  {
+    // shadcn CLI-generated files (components/ui/**, the use-mobile hook) — vendored
+    // from the registry, not hand-written here. Don't hand-maintain diffs against
+    // upstream just to satisfy react-hooks' newer strict rules (purity,
+    // set-state-in-effect); upstream owns fixing those, not us.
+    files: ["apps/web/src/components/ui/**/*.tsx", "apps/web/src/hooks/use-mobile.ts"],
+    rules: {
+      "react-hooks/purity": "off",
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
 );

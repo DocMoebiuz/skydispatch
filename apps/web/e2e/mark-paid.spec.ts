@@ -18,7 +18,7 @@ test("front-desk marks a guest paid on /dispatch", async ({ page }) => {
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
 
-    await page.goto("/dispatch");
+    await page.goto("/dispatch/guests");
     const row = page.getByTestId("guest-row").filter({ hasText: "E2E Mark Paid Guest" });
     await expect(row).toBeVisible();
     await expect(row.getByTestId("guest-status")).toHaveText("registriert");
