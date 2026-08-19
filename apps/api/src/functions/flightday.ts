@@ -24,6 +24,13 @@ export async function upsertFlightDay(
     return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
   }
 
+  const container = await getOperationsContainer();
+  // Preserve status on an existing day (this endpoint only edits settings) —
+  // start-day/end-day below own the status transition.
+  const { resource: existing } = await container
+    .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)
+    .read<FlightDay>();
+
   const flightDay: FlightDay = {
     id: DEFAULT_FLIGHT_DAY_ID,
     type: "FlightDay",
@@ -31,9 +38,8 @@ export async function upsertFlightDay(
     date: parsed.data.date,
     airfieldName: parsed.data.airfieldName,
     airfieldIcao: parsed.data.airfieldIcao,
-    status: "active",
+    status: existing?.status ?? "planned",
   };
-  const container = await getOperationsContainer();
   await container.items.upsert(flightDay);
   return { status: 200, jsonBody: flightDay };
 }
@@ -49,6 +55,34 @@ export async function getFlightDay(
   return { status: 200, jsonBody: resource ?? null };
 }
 
+export async function startDay(
+  _request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const container = await getOperationsContainer();
+  const { resource: existing } = await container
+    .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)
+    .read<FlightDay>();
+  if (!existing) return { status: 404, jsonBody: { error: "not-found" } };
+  const updated: FlightDay = { ...existing, status: "active" };
+  await container.items.upsert(updated);
+  return { status: 200, jsonBody: updated };
+}
+
+export async function endDay(
+  _request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const container = await getOperationsContainer();
+  const { resource: existing } = await container
+    .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)
+    .read<FlightDay>();
+  if (!existing) return { status: 404, jsonBody: { error: "not-found" } };
+  const updated: FlightDay = { ...existing, status: "closed" };
+  await container.items.upsert(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 app.http("upsertFlightDay", {
   methods: ["POST"],
   route: "flightday",
@@ -61,4 +95,18 @@ app.http("getFlightDay", {
   route: "flightday",
   authLevel: "anonymous",
   handler: getFlightDay,
+});
+
+app.http("startDay", {
+  methods: ["POST"],
+  route: "flightday/actions/start",
+  authLevel: "anonymous",
+  handler: startDay,
+});
+
+app.http("endDay", {
+  methods: ["POST"],
+  route: "flightday/actions/end",
+  authLevel: "anonymous",
+  handler: endDay,
 });

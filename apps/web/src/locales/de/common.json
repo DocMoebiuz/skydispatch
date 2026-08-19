@@ -22,8 +22,7 @@
         "guests": "Gäste",
         "waiting": "Wartend",
         "utilization": "Auslastung"
-      },
-      "placeholder": "Platzhalter – Live-Kennzahlen folgen, sobald Flüge und Zuweisungen existieren."
+      }
     },
     "setup": {
       "flightDay": {
@@ -31,14 +30,26 @@
         "date": "Datum",
         "airfieldName": "Flugplatz – Name",
         "airfieldIcao": "ICAO-Kennung",
-        "save": "Speichern"
+        "save": "Speichern",
+        "start": "Tag starten",
+        "end": "Tag beenden",
+        "endConfirm": "Flugtag jetzt beenden?",
+        "status": {
+          "planned": "geplant",
+          "active": "aktiv",
+          "closed": "beendet"
+        }
       },
       "pilots": {
         "title": "Piloten",
         "name": "Name",
         "license": "Lizenzen",
         "add": "Pilot hinzufügen",
-        "empty": "Noch keine Piloten."
+        "empty": "Noch keine Piloten.",
+        "available": "frei",
+        "unavailable": "Pause",
+        "delete": "Pilot entfernen",
+        "deleteError": "Pilot ist einem aktiven Flug zugeordnet."
       },
       "aircraft": {
         "title": "Flugzeuge",
@@ -47,7 +58,9 @@
         "seats": "Sitze",
         "maxPayloadKg": "Max. Zuladung (kg)",
         "add": "Flugzeug hinzufügen",
-        "empty": "Noch keine Flugzeuge."
+        "empty": "Noch keine Flugzeuge.",
+        "delete": "Flugzeug entfernen",
+        "deleteError": "Flugzeug ist einem aktiven Flug zugeordnet."
       }
     },
     "planning": {
@@ -71,17 +84,50 @@
         "seats": "Sitze",
         "weight": "Gewicht",
         "empty": "Noch keine Gäste zugewiesen.",
-        "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen."
+        "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen.",
+        "unassign": "Entfernen",
+        "setReady": "Auf READY setzen",
+        "unready": "READY zurücksetzen"
+      },
+      "status": {
+        "planned": "geplant",
+        "ready": "READY",
+        "airborne": "in der Luft",
+        "completed": "abgeschlossen"
       }
     },
     "checkin": {
-      "placeholder": "Platzhalter – Check-in & Boarding folgen hier."
+      "noFlights": "Keine Flüge mit zugewiesenen Gästen. Erst in der Flugplanung zuweisen.",
+      "quickTitle": "Schnell-Check-in",
+      "quickPlaceholder": "z. B. G-001 oder Name",
+      "quickSubmit": "Check-in",
+      "quickError": "Kein zugewiesener Gast gefunden.",
+      "checkedIn": "eingecheckt",
+      "undo": "Rückgängig",
+      "checkin": "Check-in",
+      "empty": "Keine Gäste zugewiesen."
     },
     "tracking": {
-      "placeholder": "Platzhalter – Start-/Landungserfassung folgt hier."
+      "pax": "Pax",
+      "notCheckedIn": "nicht eingecheckt",
+      "takeoff": "Start",
+      "landing": "Landung",
+      "land": "Landung erfassen",
+      "start": "Start erfassen",
+      "startBlocked": "Start nicht möglich",
+      "completed": "Abgeschlossen",
+      "empty": "Noch keine Flüge angelegt."
     },
     "reporting": {
-      "placeholder": "Platzhalter – Auswertungen und Exporte folgen hier."
+      "kpi": {
+        "completed": "Flüge abgeschlossen",
+        "flown": "Gäste geflogen",
+        "utilization": "Ø Auslastung",
+        "noShows": "No-Shows"
+      },
+      "exportFlights": "Flüge exportieren (CSV)",
+      "exportGuests": "Fluggäste exportieren (CSV)",
+      "log": "Flugprotokoll"
     },
     "guests": {
       "heading": "Fluggäste",
@@ -108,7 +154,19 @@
         "flown": "geflogen",
         "no-show": "No-Show"
       },
-      "group": "Gruppe"
+      "group": "Gruppe",
+      "filter": {
+        "all": "Alle",
+        "open": "Offen",
+        "ready": "Flugbereit",
+        "flown": "Geflogen",
+        "noshow": "No-Show"
+      },
+      "searchPlaceholder": "Name oder ID suchen…",
+      "noShow": "No-Show",
+      "delete": "Gast entfernen",
+      "deleteConfirm": "Diesen Gast wirklich entfernen?",
+      "actionError": "Aktion fehlgeschlagen."
     }
   },
   "register": {
@@ -158,6 +216,20 @@
   },
   "board": {
     "title": "Abflugtafel",
-    "placeholder": "Platzhalter – die Live-Abflugtafel folgt hier."
+    "empty": "Keine Flüge.",
+    "table": {
+      "flight": "Flug",
+      "aircraft": "Flugzeug",
+      "time": "Zeit",
+      "status": "Status"
+    },
+    "lookup": {
+      "title": "Wann bin ich an der Reihe?",
+      "submit": "Anzeigen",
+      "notFound": "ID nicht gefunden.",
+      "flown": "{{name}} – Ihr Rundflug ist abgeschlossen.",
+      "assigned": "{{name}} – Flug {{flight}} ({{status}}).",
+      "waiting": "{{name}} – noch keinem Flug zugewiesen."
+    }
   }
 }

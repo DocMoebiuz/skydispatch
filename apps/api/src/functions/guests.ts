@@ -11,8 +11,24 @@ import {
   startGroupRequestSchema,
   weighRequestSchema,
   type Guest,
+  type Flight,
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
+
+// Shared shape for the many "flip one boolean on a guest" actions below (checkin,
+// undo-checkin — mark-paid/weigh predate this helper and aren't worth churning).
+async function updateGuest(
+  guestId: string,
+  patch: Partial<Guest>,
+): Promise<Guest | null> {
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+  if (!guest) return null;
+  const updated: Guest = { ...guest, ...patch, updatedAt: new Date().toISOString() };
+  await container.item(guestId, flightDayId).replace(updated);
+  return updated;
+}
 
 // Not atomic under concurrent writes — accepted technical debt for a
 // single-airfield, low-concurrency event. See docs/tech-stack.md § Known
@@ -221,6 +237,133 @@ export async function weighGuest(
   return { status: 200, jsonBody: updated };
 }
 
+export async function checkInGuest(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const guestId = request.params.id;
+  if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
+  const updated = await updateGuest(guestId, { checkedIn: true });
+  if (!updated) return { status: 404, jsonBody: { error: "not-found" } };
+  return { status: 200, jsonBody: updated };
+}
+
+export async function undoCheckInGuest(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const guestId = request.params.id;
+  if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
+  const updated = await updateGuest(guestId, { checkedIn: false });
+  if (!updated) return { status: 404, jsonBody: { error: "not-found" } };
+  return { status: 200, jsonBody: updated };
+}
+
+// No-show frees the seat immediately — removes the guest from whatever flight it
+// was assigned to, same as the prototype (a no-show shouldn't hold a seat another
+// guest could use). See docs/architecture.md § Prototype reference.
+export async function markNoShow(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const guestId = request.params.id;
+  if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
+
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+  if (!guest) return { status: 404, jsonBody: { error: "not-found" } };
+
+  if (guest.assignedFlightId) {
+    const { resource: flight } = await container
+      .item(guest.assignedFlightId, flightDayId)
+      .read<Flight>();
+    if (flight) {
+      const updatedFlight: Flight = {
+        ...flight,
+        guestIds: flight.guestIds.filter((id) => id !== guestId),
+        updatedAt: new Date().toISOString(),
+      };
+      await container.item(flight.id, flightDayId).replace(updatedFlight);
+    }
+  }
+
+  const updated: Guest = {
+    ...guest,
+    noShow: true,
+    checkedIn: false,
+    assignedFlightId: null,
+    updatedAt: new Date().toISOString(),
+  };
+  await container.item(guestId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
+// Removes a guest from its currently assigned flight, freeing the seat — the
+// correction path for a bad assignment. Guest itself stays "flugbereit".
+export async function unassignGuest(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const guestId = request.params.id;
+  if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
+
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+  if (!guest) return { status: 404, jsonBody: { error: "not-found" } };
+  if (!guest.assignedFlightId) return { status: 200, jsonBody: guest };
+
+  const { resource: flight } = await container
+    .item(guest.assignedFlightId, flightDayId)
+    .read<Flight>();
+  if (flight) {
+    const updatedFlight: Flight = {
+      ...flight,
+      guestIds: flight.guestIds.filter((id) => id !== guestId),
+      updatedAt: new Date().toISOString(),
+    };
+    await container.item(flight.id, flightDayId).replace(updatedFlight);
+  }
+
+  const updated: Guest = {
+    ...guest,
+    assignedFlightId: null,
+    checkedIn: false,
+    updatedAt: new Date().toISOString(),
+  };
+  await container.item(guestId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
+// Blocked if the guest is currently assigned to a flight that hasn't completed yet
+// — matches the prototype's delGuest guard (can't quietly disappear someone the
+// flight plan already counts on).
+export async function deleteGuest(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const guestId = request.params.id;
+  if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
+
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+  if (!guest) return { status: 404, jsonBody: { error: "not-found" } };
+
+  if (guest.assignedFlightId) {
+    const { resource: flight } = await container
+      .item(guest.assignedFlightId, flightDayId)
+      .read<Flight>();
+    if (flight && flight.status !== "completed") {
+      return { status: 409, jsonBody: { error: "guest-assigned-to-active-flight" } };
+    }
+  }
+
+  await container.item(guestId, flightDayId).delete();
+  return { status: 204 };
+}
+
 export async function listGuests(
   _request: HttpRequest,
   _context: InvocationContext,
@@ -270,4 +413,39 @@ app.http("markGuestPaid", {
   route: "guests/{id}/actions/mark-paid",
   authLevel: "anonymous",
   handler: markGuestPaid,
+});
+
+app.http("checkInGuest", {
+  methods: ["POST"],
+  route: "guests/{id}/actions/check-in",
+  authLevel: "anonymous",
+  handler: checkInGuest,
+});
+
+app.http("undoCheckInGuest", {
+  methods: ["POST"],
+  route: "guests/{id}/actions/undo-check-in",
+  authLevel: "anonymous",
+  handler: undoCheckInGuest,
+});
+
+app.http("markNoShow", {
+  methods: ["POST"],
+  route: "guests/{id}/actions/no-show",
+  authLevel: "anonymous",
+  handler: markNoShow,
+});
+
+app.http("unassignGuest", {
+  methods: ["POST"],
+  route: "guests/{id}/actions/unassign",
+  authLevel: "anonymous",
+  handler: unassignGuest,
+});
+
+app.http("deleteGuest", {
+  methods: ["DELETE"],
+  route: "guests/{id}",
+  authLevel: "anonymous",
+  handler: deleteGuest,
 });

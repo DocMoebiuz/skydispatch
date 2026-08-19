@@ -86,6 +86,35 @@ export function SetupPage() {
     }
   }
 
+  async function toggleDayStatus() {
+    const action = flightDay?.status === "active" ? "end" : "start";
+    if (action === "end" && !confirm(t("dispatch.setup.flightDay.endConfirm"))) return;
+    const response = await fetch(`/api/flightday/actions/${action}`, { method: "POST" });
+    if (response.ok) setFlightDay((await response.json()) as FlightDay);
+  }
+
+  async function togglePilotAvailable(pilotId: string) {
+    const response = await fetch(`/api/pilots/${pilotId}/actions/toggle-available`, {
+      method: "POST",
+    });
+    if (response.ok) {
+      const updated = (await response.json()) as Pilot;
+      setPilots((prev) => prev.map((p) => (p.id === pilotId ? updated : p)));
+    }
+  }
+
+  async function deletePilot(pilotId: string) {
+    const response = await fetch(`/api/pilots/${pilotId}`, { method: "DELETE" });
+    if (response.ok) setPilots((prev) => prev.filter((p) => p.id !== pilotId));
+    else alert(t("dispatch.setup.pilots.deleteError"));
+  }
+
+  async function deleteAircraft(aircraftId: string) {
+    const response = await fetch(`/api/aircraft/${aircraftId}`, { method: "DELETE" });
+    if (response.ok) setAircraft((prev) => prev.filter((a) => a.id !== aircraftId));
+    else alert(t("dispatch.setup.aircraft.deleteError"));
+  }
+
   async function addPilot() {
     if (!pilotName.trim() || !pilotLicense.trim()) return;
     setSavingPilot(true);
@@ -162,14 +191,26 @@ export function SetupPage() {
             />
           </div>
         </CardContent>
-        <CardFooter>
+        <CardFooter className="gap-3">
           <Button data-testid="save-flightday" disabled={savingDay} onClick={() => void saveFlightDay()}>
             {t("dispatch.setup.flightDay.save")}
           </Button>
           {flightDay && (
-            <span className="text-muted-foreground ml-3 text-sm" data-testid="flightday-saved">
-              {flightDay.airfieldName} ({flightDay.airfieldIcao}) · {flightDay.date}
-            </span>
+            <>
+              <Button
+                variant={flightDay.status === "active" ? "destructive" : "outline"}
+                data-testid="toggle-day-status"
+                onClick={() => void toggleDayStatus()}
+              >
+                {flightDay.status === "active"
+                  ? t("dispatch.setup.flightDay.end")
+                  : t("dispatch.setup.flightDay.start")}
+              </Button>
+              <span className="text-muted-foreground text-sm" data-testid="flightday-saved">
+                {flightDay.airfieldName} ({flightDay.airfieldIcao}) · {flightDay.date} ·{" "}
+                {t(`dispatch.setup.flightDay.status.${flightDay.status}`)}
+              </span>
+            </>
           )}
         </CardFooter>
       </Card>
@@ -192,8 +233,35 @@ export function SetupPage() {
         <CardContent>
           <ul className="flex flex-col gap-1" data-testid="pilot-list">
             {pilots.map((p) => (
-              <li key={p.id} className="text-sm" data-testid="pilot-row">
-                {p.name} — {p.license}
+              <li
+                key={p.id}
+                className="flex items-center justify-between text-sm"
+                data-testid="pilot-row"
+              >
+                <span>
+                  {p.name} — {p.license}
+                </span>
+                <span className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-testid="toggle-pilot-available"
+                    onClick={() => void togglePilotAvailable(p.id)}
+                  >
+                    {p.available
+                      ? t("dispatch.setup.pilots.available")
+                      : t("dispatch.setup.pilots.unavailable")}
+                  </Button>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    data-testid="delete-pilot"
+                    aria-label={t("dispatch.setup.pilots.delete")}
+                    onClick={() => void deletePilot(p.id)}
+                  >
+                    ✕
+                  </Button>
+                </span>
               </li>
             ))}
             {pilots.length === 0 && (
@@ -250,9 +318,24 @@ export function SetupPage() {
         <CardContent>
           <ul className="flex flex-col gap-1" data-testid="aircraft-list">
             {aircraft.map((a) => (
-              <li key={a.id} className="text-sm" data-testid="aircraft-row">
-                {a.reg} — {a.model} ({a.seats} {t("dispatch.setup.aircraft.seats")},{" "}
-                {a.maxPayloadKg} kg)
+              <li
+                key={a.id}
+                className="flex items-center justify-between text-sm"
+                data-testid="aircraft-row"
+              >
+                <span>
+                  {a.reg} — {a.model} ({a.seats} {t("dispatch.setup.aircraft.seats")},{" "}
+                  {a.maxPayloadKg} kg)
+                </span>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  data-testid="delete-aircraft"
+                  aria-label={t("dispatch.setup.aircraft.delete")}
+                  onClick={() => void deleteAircraft(a.id)}
+                >
+                  ✕
+                </Button>
               </li>
             ))}
             {aircraft.length === 0 && (

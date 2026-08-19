@@ -7,6 +7,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { DEFAULT_FLIGHT_DAY_ID, aircraftCreateRequestSchema, type Aircraft } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
+import { isReferencedByActiveFlight } from "../lib/activeFlightGuard";
 
 export async function createAircraft(
   request: HttpRequest,
@@ -52,6 +53,20 @@ export async function listAircraft(
   return { status: 200, jsonBody: resources };
 }
 
+export async function deleteAircraft(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const aircraftId = request.params.id;
+  if (!aircraftId) return { status: 400, jsonBody: { error: "missing-id" } };
+  if (await isReferencedByActiveFlight("aircraftId", aircraftId)) {
+    return { status: 409, jsonBody: { error: "aircraft-assigned-to-active-flight" } };
+  }
+  const container = await getOperationsContainer();
+  await container.item(aircraftId, DEFAULT_FLIGHT_DAY_ID).delete();
+  return { status: 204 };
+}
+
 app.http("createAircraft", {
   methods: ["POST"],
   route: "aircraft",
@@ -64,4 +79,11 @@ app.http("listAircraft", {
   route: "aircraft",
   authLevel: "anonymous",
   handler: listAircraft,
+});
+
+app.http("deleteAircraft", {
+  methods: ["DELETE"],
+  route: "aircraft/{id}",
+  authLevel: "anonymous",
+  handler: deleteAircraft,
 });

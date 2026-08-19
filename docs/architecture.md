@@ -184,19 +184,37 @@ handler. `/actions/` makes "this is a command, not a sub-resource" visible from 
 URL alone. Applied consistently, including to simple field flips like `mark-paid` —
 one convention, not a case-by-case judgment call about which transitions "count."
 
+Grew beyond the original priorities-1-3 scope once the dispatcher app needed to be
+functionally complete end-to-end (registration → assignment → check-in → tracking →
+reporting), per the manual and `docs/static-html-app/`:
+
 | Method & route | Purpose |
 |---|---|
 | `POST /api/guests` | Register a guest, solo or as a group member |
 | `GET /api/guests` | List today's guests; `?groupId=` filters |
+| `DELETE /api/guests/{id}` | Remove a guest; blocked (409) if assigned to a non-completed flight |
 | `POST /api/guests/{id}/actions/start-group` | Retroactively turn an already-registered guest into the first member of a new group (server generates the `groupId`) |
 | `POST /api/guests/{id}/actions/mark-paid` | Front-desk marks a guest paid |
-| `GET /api/flights` | List today's flights with resolved aircraft + assignment summary |
+| `POST /api/guests/{id}/actions/weigh` | Staff-verified weight (distinct from self-reported `declaredWeightKg`) |
+| `POST /api/guests/{id}/actions/check-in` / `.../undo-check-in` | Boarding |
+| `POST /api/guests/{id}/actions/no-show` | Marks no-show and immediately frees the seat on its flight, if any |
+| `POST /api/guests/{id}/actions/unassign` | Removes a guest from its flight (correction path) |
+| `POST /api/pilots`, `GET /api/pilots` | Create/list pilots |
+| `POST /api/pilots/{id}/actions/toggle-available`, `DELETE /api/pilots/{id}` | Availability toggle; delete blocked (409) if on a non-completed flight |
+| `POST /api/aircraft`, `GET /api/aircraft` | Create/list aircraft |
+| `DELETE /api/aircraft/{id}` | Blocked (409) if on a non-completed flight |
+| `POST /api/flightday`, `GET /api/flightday` | Upsert/read the one flight day's settings (date/airfield) — status untouched |
+| `POST /api/flightday/actions/start`, `.../end` | Flight day status transitions |
+| `POST /api/flights`, `GET /api/flights` | Create/list flights |
 | `POST /api/flights/{id}/actions/assign` | Assign a guest or a whole group, enforcing hard seat/weight limits, greedy partial-fit for groups; returns `{assigned, rejected: [{guestId, reason}]}` |
+| `POST /api/flights/{id}/actions/set-ready`, `.../unready` | Ready requires guests > 0 and weight within payload (server-checked) |
+| `POST /api/flights/{id}/actions/start`, `.../land` | Start requires ready + all assigned guests checked in; landing marks the flight completed and every guest flown |
 
-Flight/Aircraft/Pilot CRUD beyond what assignment needs is intentionally not built —
-see [tech-stack.md § Known cross-cutting risks](./tech-stack.md#known-cross-cutting-risks)
-for the accepted technical debt this scope currently carries (non-atomic `code`
-generation, non-transactional assignment writes).
+No `PUT`/edit on any entity (only create, list, delete, and the specific action
+endpoints above) — not needed yet, and not the same gap as the accepted technical
+debt in [tech-stack.md § Known cross-cutting risks](./tech-stack.md#known-cross-cutting-risks)
+(non-atomic `code` generation, non-transactional assignment writes), which is about
+robustness under concurrency, not missing functionality.
 
 ## Open decisions
 

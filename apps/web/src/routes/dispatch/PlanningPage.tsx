@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Guest, Aircraft, Pilot, Flight, AssignResult } from "shared";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardAction,
   CardContent,
+  CardFooter,
 } from "@/components/ui/card";
 import {
   Dialog,
@@ -101,6 +103,12 @@ export function PlanningPage() {
     : [];
   const usedWeightKg = assignedGuests.reduce((sum, g) => sum + (g.weightKg ?? 0), 0);
   const usedSeats = assignedGuests.length;
+  const locked = selectedFlight?.status === "airborne" || selectedFlight?.status === "completed";
+  const canSetReady =
+    !!selectedFlight &&
+    !!selectedAircraft &&
+    usedSeats > 0 &&
+    usedWeightKg <= selectedAircraft.maxPayloadKg;
 
   async function createFlight() {
     if (!newFlightAircraftId) return;
@@ -147,6 +155,30 @@ export function PlanningPage() {
         return next;
       });
     }
+  }
+
+  async function unassign(guestId: string) {
+    setAssigning((prev) => new Set(prev).add(guestId));
+    try {
+      const response = await fetch(`/api/guests/${guestId}/actions/unassign`, {
+        method: "POST",
+      });
+      if (response.ok) await reload();
+    } finally {
+      setAssigning((prev) => {
+        const next = new Set(prev);
+        next.delete(guestId);
+        return next;
+      });
+    }
+  }
+
+  async function setFlightStatus(action: "set-ready" | "unready") {
+    if (!selectedFlightId) return;
+    const response = await fetch(`/api/flights/${selectedFlightId}/actions/${action}`, {
+      method: "POST",
+    });
+    if (response.ok) await reload();
   }
 
   return (
@@ -267,7 +299,7 @@ export function PlanningPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!selectedFlightId || assigning.has(groupId)}
+                  disabled={!selectedFlightId || locked || assigning.has(groupId)}
                   onClick={() =>
                     void assign(
                       groupId,
@@ -291,7 +323,7 @@ export function PlanningPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!selectedFlightId || assigning.has(g.id)}
+                  disabled={!selectedFlightId || locked || assigning.has(g.id)}
                   onClick={() => void assign(g.id, [g.id])}
                 >
                   {t("dispatch.planning.pool.assign")}
@@ -306,37 +338,87 @@ export function PlanningPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>
-              {selectedFlight && selectedAircraft
-                ? `${selectedFlight.code} — ${selectedAircraft.reg}`
-                : t("dispatch.planning.builder.none")}
+            <CardTitle className="flex items-center gap-2">
+              {selectedFlight && selectedAircraft ? (
+                <>
+                  {selectedFlight.code} — {selectedAircraft.reg}
+                  <Badge variant="outline" data-testid="flight-status">
+                    {t(`dispatch.planning.status.${selectedFlight.status}`)}
+                  </Badge>
+                </>
+              ) : (
+                t("dispatch.planning.builder.none")
+              )}
             </CardTitle>
           </CardHeader>
           {selectedFlight && selectedAircraft && (
-            <CardContent className="flex flex-col gap-3">
-              <p className="text-sm" data-testid="flight-gauge">
-                {t("dispatch.planning.builder.seats")}: {usedSeats}/{selectedAircraft.seats} ·{" "}
-                {t("dispatch.planning.builder.weight")}: {usedWeightKg}/
-                {selectedAircraft.maxPayloadKg} kg
-              </p>
-              <ul className="flex flex-col gap-1">
-                {assignedGuests.map((g) => (
-                  <li key={g.id} className="text-sm" data-testid="assigned-guest">
-                    {g.name} — {g.weightKg} kg
-                  </li>
-                ))}
-                {assignedGuests.length === 0 && (
-                  <li className="text-muted-foreground text-sm">
-                    {t("dispatch.planning.builder.empty")}
-                  </li>
-                )}
-              </ul>
-              {lastResult && lastResult.rejected.length > 0 && (
-                <p className="text-destructive text-sm" data-testid="assign-warning">
-                  {t("dispatch.planning.builder.rejected", { count: lastResult.rejected.length })}
+            <>
+              <CardContent className="flex flex-col gap-3">
+                <p className="text-sm" data-testid="flight-gauge">
+                  {t("dispatch.planning.builder.seats")}: {usedSeats}/{selectedAircraft.seats} ·{" "}
+                  {t("dispatch.planning.builder.weight")}: {usedWeightKg}/
+                  {selectedAircraft.maxPayloadKg} kg
                 </p>
+                <ul className="flex flex-col gap-1">
+                  {assignedGuests.map((g) => (
+                    <li
+                      key={g.id}
+                      className="flex items-center justify-between text-sm"
+                      data-testid="assigned-guest"
+                    >
+                      <span>
+                        {g.name} — {g.weightKg} kg
+                      </span>
+                      {!locked && (
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          data-testid="unassign-button"
+                          disabled={assigning.has(g.id)}
+                          onClick={() => void unassign(g.id)}
+                          aria-label={t("dispatch.planning.builder.unassign")}
+                        >
+                          ✕
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                  {assignedGuests.length === 0 && (
+                    <li className="text-muted-foreground text-sm">
+                      {t("dispatch.planning.builder.empty")}
+                    </li>
+                  )}
+                </ul>
+                {lastResult && lastResult.rejected.length > 0 && (
+                  <p className="text-destructive text-sm" data-testid="assign-warning">
+                    {t("dispatch.planning.builder.rejected", {
+                      count: lastResult.rejected.length,
+                    })}
+                  </p>
+                )}
+              </CardContent>
+              {!locked && (
+                <CardFooter>
+                  {selectedFlight.status === "ready" ? (
+                    <Button
+                      variant="outline"
+                      data-testid="unready-flight"
+                      onClick={() => void setFlightStatus("unready")}
+                    >
+                      {t("dispatch.planning.builder.unready")}
+                    </Button>
+                  ) : (
+                    <Button
+                      data-testid="set-ready-flight"
+                      disabled={!canSetReady}
+                      onClick={() => void setFlightStatus("set-ready")}
+                    >
+                      {t("dispatch.planning.builder.setReady")}
+                    </Button>
+                  )}
+                </CardFooter>
               )}
-            </CardContent>
+            </>
           )}
         </Card>
       </div>

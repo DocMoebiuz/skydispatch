@@ -189,6 +189,128 @@ export async function assignToFlight(
   return { status: 200, jsonBody: result };
 }
 
+// Ready requires guests > 0 and total weight within payload — checked server-side
+// too, not just disabled-button UI (nfr.md § Reliability & safety).
+export async function setFlightReady(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const flightId = request.params.id;
+  if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
+
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: flight } = await container.item(flightId, flightDayId).read<Flight>();
+  if (!flight) return { status: 404, jsonBody: { error: "not-found" } };
+  const { resource: aircraft } = await container
+    .item(flight.aircraftId, flightDayId)
+    .read<Aircraft>();
+  if (!aircraft) return { status: 400, jsonBody: { error: "aircraft-not-found" } };
+
+  const guests = await Promise.all(
+    flight.guestIds.map((id) =>
+      container
+        .item(id, flightDayId)
+        .read<Guest>()
+        .then((r) => r.resource),
+    ),
+  );
+  const weightKg = guests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
+  if (flight.guestIds.length === 0 || weightKg > aircraft.maxPayloadKg) {
+    return { status: 409, jsonBody: { error: "not-ready" } };
+  }
+
+  const updated: Flight = { ...flight, status: "ready", updatedAt: new Date().toISOString() };
+  await container.item(flightId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
+export async function unreadyFlight(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const flightId = request.params.id;
+  if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: flight } = await container.item(flightId, flightDayId).read<Flight>();
+  if (!flight) return { status: 404, jsonBody: { error: "not-found" } };
+  const updated: Flight = { ...flight, status: "planned", updatedAt: new Date().toISOString() };
+  await container.item(flightId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
+// Start requires ready + every assigned guest checked in — matches the prototype's
+// canStart() and the manual's boarding-before-takeoff flow.
+export async function startFlight(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const flightId = request.params.id;
+  if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: flight } = await container.item(flightId, flightDayId).read<Flight>();
+  if (!flight) return { status: 404, jsonBody: { error: "not-found" } };
+
+  const guests = await Promise.all(
+    flight.guestIds.map((id) =>
+      container
+        .item(id, flightDayId)
+        .read<Guest>()
+        .then((r) => r.resource),
+    ),
+  );
+  const allCheckedIn = guests.every((g) => g?.checkedIn);
+  if (flight.status !== "ready" || flight.guestIds.length === 0 || !allCheckedIn) {
+    return { status: 409, jsonBody: { error: "not-startable" } };
+  }
+
+  const updated: Flight = {
+    ...flight,
+    status: "airborne",
+    offBlock: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await container.item(flightId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
+// Landing marks the flight completed and every one of its guests flown — the last
+// step of the guest journey (registriert -> ... -> geflogen).
+export async function landFlight(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const flightId = request.params.id;
+  if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: flight } = await container.item(flightId, flightDayId).read<Flight>();
+  if (!flight) return { status: 404, jsonBody: { error: "not-found" } };
+  if (flight.status !== "airborne") {
+    return { status: 409, jsonBody: { error: "not-airborne" } };
+  }
+
+  const updated: Flight = {
+    ...flight,
+    status: "completed",
+    onBlock: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await container.item(flightId, flightDayId).replace(updated);
+
+  for (const guestId of flight.guestIds) {
+    const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+    if (guest) {
+      const updatedGuest: Guest = { ...guest, flown: true, updatedAt: new Date().toISOString() };
+      await container.item(guestId, flightDayId).replace(updatedGuest);
+    }
+  }
+
+  return { status: 200, jsonBody: updated };
+}
+
 app.http("createFlight", {
   methods: ["POST"],
   route: "flights",
@@ -208,4 +330,32 @@ app.http("assignToFlight", {
   route: "flights/{id}/actions/assign",
   authLevel: "anonymous",
   handler: assignToFlight,
+});
+
+app.http("setFlightReady", {
+  methods: ["POST"],
+  route: "flights/{id}/actions/set-ready",
+  authLevel: "anonymous",
+  handler: setFlightReady,
+});
+
+app.http("unreadyFlight", {
+  methods: ["POST"],
+  route: "flights/{id}/actions/unready",
+  authLevel: "anonymous",
+  handler: unreadyFlight,
+});
+
+app.http("startFlight", {
+  methods: ["POST"],
+  route: "flights/{id}/actions/start",
+  authLevel: "anonymous",
+  handler: startFlight,
+});
+
+app.http("landFlight", {
+  methods: ["POST"],
+  route: "flights/{id}/actions/land",
+  authLevel: "anonymous",
+  handler: landFlight,
 });
