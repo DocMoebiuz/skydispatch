@@ -31,7 +31,12 @@ jobs:
 
       - run: pnpm -r lint
 
-      # API unit tests mock the Cosmos SDK client — no live Cosmos account needed in CI.
       - run: pnpm -r test
 
+      - run: pnpm azurite &
+
       - run: pnpm test:e2e
+        env:
+          FUNCTIONS_WORKER_RUNTIME: node
+          AzureWebJobsStorage: UseDevelopmentStorage=true
+          COSMOS_CONNECTION_STRING: ${{ secrets.COSMOS_CONNECTION_STRING }}
