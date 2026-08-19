@@ -15,8 +15,13 @@ test("registration writes through the API into Cosmos and appears on /dispatch",
     await page.getByLabel("Vor- und Nachname").fill("E2E Test Guest");
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();
+    await page.getByLabel("Geburtsdatum").fill("1990-05-14");
+    await page.getByLabel("Straße und Hausnummer").fill("Musterstraße 1");
+    await page.getByLabel("PLZ").fill("71522");
+    await page.getByLabel("Ort").fill("Backnang");
+    await page.getByRole("button", { name: "Weiter" }).click();
     await page.getByLabel("Ihr Gewicht (kg)").fill("75");
-    await page.getByLabel(/personenbezogenen Daten/).check();
+    await page.getByLabel(/gelesen und stimme zu/).check();
     await page.getByRole("button", { name: "Anmelden" }).click();
 
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();

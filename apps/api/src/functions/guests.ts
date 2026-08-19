@@ -131,6 +131,8 @@ export async function createGuest(
     phone: parsed.data.phone ?? null,
     declaredWeightKg: parsed.data.declaredWeightKg,
     weightKg: null,
+    dateOfBirth: parsed.data.dateOfBirth,
+    address: parsed.data.address,
     paid: false, // no payment at registration — see docs/nfr.md § Security & Privacy
     consent: parsed.data.consent,
     newsletter: parsed.data.newsletter,

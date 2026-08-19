@@ -15,12 +15,36 @@ test("group registration: first 'add another' asks for a group name, applies to 
   const email3 = `e2e-group-3-${stamp}@example.test`;
   const groupName = `E2E Gruppe ${stamp}`;
 
-  async function fillAndSubmit(name: string, email: string, weight: string) {
+  // addressMode exercises all three states the address step can be in: "full" (no
+  // group yet, or reuse declined) fills a fresh address; "reuse" accepts the
+  // default-checked "same address as first group member" option; "new" unchecks it
+  // and fills a different address. See docs/architecture.md § Group registration.
+  async function fillAndSubmit(
+    name: string,
+    email: string,
+    weight: string,
+    addressMode: "full" | "reuse" | "new" = "full",
+  ) {
     await page.getByLabel("Vor- und Nachname").fill(name);
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();
+
+    await page.getByLabel("Geburtsdatum").fill("1990-05-14");
+    if (addressMode === "reuse") {
+      await expect(page.getByLabel(/Gleiche Adresse/)).toBeChecked();
+      await expect(page.getByTestId("reused-address")).toBeVisible();
+    } else {
+      if (addressMode === "new") {
+        await page.getByLabel(/Gleiche Adresse/).uncheck();
+      }
+      await page.getByLabel("Straße und Hausnummer").fill("Musterstraße 1");
+      await page.getByLabel("PLZ").fill("71522");
+      await page.getByLabel("Ort").fill("Backnang");
+    }
+    await page.getByRole("button", { name: "Weiter" }).click();
+
     await page.getByLabel("Ihr Gewicht (kg)").fill(weight);
-    await page.getByLabel(/personenbezogenen Daten/).check();
+    await page.getByLabel(/gelesen und stimme zu/).check();
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
     return page.getByTestId("guest-code").innerText();
@@ -42,19 +66,21 @@ test("group registration: first 'add another' asks for a group name, applies to 
     await page.getByLabel("Gruppenname").fill(groupName);
     await page.getByRole("button", { name: "Weiter" }).click();
 
-    // Back on step 1, ready for member 2.
+    // Back on step 1, ready for member 2 — address step defaults to reusing member
+    // 1's address (see RegisterPage's canReuseAddress).
     await expect(page.getByLabel("Vor- und Nachname")).toBeVisible();
-    const code2 = await fillAndSubmit("E2E Group Member Two", email2, "65");
+    const code2 = await fillAndSubmit("E2E Group Member Two", email2, "65", "reuse");
     expect(code2).toMatch(/^[A-Z0-9]{4}$/);
     await expect(page.getByText(`Gruppe: ${groupName}`)).toBeVisible();
     const summary = page.getByTestId("session-guest");
     await expect(summary).toHaveCount(2);
 
-    // Second "add another" — group already known, must NOT ask again.
+    // Second "add another" — group already known, must NOT ask again. Member 3
+    // declines the reuse offer and enters their own address instead.
     await page.getByRole("button", { name: "Weitere Person anmelden" }).click();
     await expect(page.getByText(/fassen wir alle gemeinsam/)).not.toBeVisible();
     await expect(page.getByLabel("Vor- und Nachname")).toBeVisible();
-    await fillAndSubmit("E2E Group Member Three", email3, "80");
+    await fillAndSubmit("E2E Group Member Three", email3, "80", "new");
     await expect(page.getByText(`Gruppe: ${groupName}`)).toBeVisible();
     await expect(page.getByTestId("session-guest")).toHaveCount(3);
 

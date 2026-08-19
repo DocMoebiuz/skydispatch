@@ -19,6 +19,21 @@ export const guestCreateRequestSchema = z.object({
   // apps/web RegisterPage's submit payload, apps/api guests.ts's `?? null`).
   phone: z.string().trim().optional(),
   declaredWeightKg: z.number().min(30).max(200),
+  // "YYYY-MM-DD" — matches the native <input type="date"> value format directly, no
+  // parsing/reformatting needed between form and wire. Must be a real calendar date
+  // and not in the future; no minimum-age rule (not a stated requirement).
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((v): boolean => {
+      const d = new Date(v);
+      return !Number.isNaN(d.getTime()) && d.getTime() <= Date.now();
+    }),
+  address: z.object({
+    street: z.string().trim().min(1),
+    zipCode: z.string().trim().min(1),
+    city: z.string().trim().min(1),
+  }),
   // boolean, not z.literal(true) — keeps the inferred type a plain `boolean` so a
   // controlled checkbox's default value (false) type-checks cleanly; still requires
   // true to pass validation. The explicit `: boolean` return type annotation matters

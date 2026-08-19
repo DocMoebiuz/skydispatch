@@ -31,8 +31,21 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     await page.getByLabel("Vor- und Nachname").fill(name);
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();
+
+    await page.getByLabel("Geburtsdatum").fill("1990-05-14");
+    // Address fields are hidden when the group's default "reuse first member's
+    // address" option is active (see RegisterPage's canReuseAddress) — nothing to
+    // fill in that case, just accept the default.
+    const streetInput = page.getByLabel("Straße und Hausnummer");
+    if (await streetInput.isVisible()) {
+      await streetInput.fill("Musterstraße 1");
+      await page.getByLabel("PLZ").fill("71522");
+      await page.getByLabel("Ort").fill("Backnang");
+    }
+    await page.getByRole("button", { name: "Weiter" }).click();
+
     await page.getByLabel("Ihr Gewicht (kg)").fill(weightKg);
-    await page.getByLabel(/personenbezogenen Daten/).check();
+    await page.getByLabel(/gelesen und stimme zu/).check();
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
     if (addAnother) {

@@ -54,9 +54,14 @@ These are hard product requirements carried over from the manual, not aspiration
 
 ## Security & Privacy
 
-- Guest registration collects PII (name, email, weight) and requires an active
-  liability/consent confirmation including a GDPR notice (per manual §3.2) — this is a
-  real GDPR obligation once Cosmos DB is the backing store, not a UI formality.
+- Guest registration collects PII (name, email, weight, date of birth, address —
+  street/ZIP/city) and requires an active liability/consent confirmation including a
+  GDPR notice (per manual §3.2) — this is a real GDPR obligation once Cosmos DB is the
+  backing store, not a UI formality.
+- Registration also offers a separate, **optional** newsletter opt-in checkbox
+  (`Guest.newsletter`) — distinct from the required liability/GDPR consent above, since
+  marketing consent and operational data processing are different GDPR bases and must
+  not be bundled into one checkbox. Defaults unchecked; not gated behind anything.
 - Payment in the manual's prototype is simulated (PayPal/card/Klarna selection, no real
   charge). Real-money payment processing is **out of scope** until explicitly decided —
   treat any payment integration as a separate, later decision with its own PCI-scope

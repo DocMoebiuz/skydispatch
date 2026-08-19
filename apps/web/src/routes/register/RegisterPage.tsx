@@ -34,14 +34,17 @@ import { cn } from "@/lib/utils";
 // Security & Privacy). Field-level error text is looked up by field name via
 // i18next, never rendered from the Zod schema directly — see the schema's comment.
 
-type FormStep = "contact" | "weight";
+type FormStep = "contact" | "address" | "weight";
 type Phase = "form" | "success" | "group-prompt" | "done";
+type Address = { street: string; zipCode: string; city: string };
 
 const defaultValues: GuestCreateRequest = {
   name: "",
   email: "",
   phone: "",
   declaredWeightKg: undefined as unknown as number,
+  dateOfBirth: "",
+  address: { street: "", zipCode: "", city: "" },
   consent: false,
   newsletter: false,
 };
@@ -63,6 +66,14 @@ export function RegisterPage() {
   const [groupPromptError, setGroupPromptError] = useState(false);
   const [startingGroup, setStartingGroup] = useState(false);
 
+  // The first group member's address, captured once the group exists (see
+  // confirmGroupName), offered to every later member as "reuse" — a UI convenience
+  // only. The API always receives a full address either way; there's no
+  // group-level address concept server-side.
+  const [firstAddress, setFirstAddress] = useState<Address | null>(null);
+  const [reuseAddress, setReuseAddress] = useState(true);
+  const canReuseAddress = !!groupId && !!firstAddress;
+
   // 404 means no flight day configured yet — not an error, just falls back to 0
   // (see apps/api flightday.ts's getFlightDay for why this isn't a 200+null body).
   const [pricePerGuestEur, setPricePerGuestEur] = useState(0);
@@ -81,14 +92,23 @@ export function RegisterPage() {
     control,
     trigger,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<GuestCreateRequest>({
     resolver: zodResolver(guestCreateRequestSchema),
     defaultValues,
   });
 
-  async function goToWeightStep() {
+  async function goToAddressStep() {
     const ok = await trigger(["name", "email", "phone"]);
+    if (ok) setFormStep("address");
+  }
+
+  async function goToWeightStep() {
+    if (canReuseAddress && reuseAddress && firstAddress) {
+      setValue("address", firstAddress, { shouldValidate: false });
+    }
+    const ok = await trigger(["dateOfBirth", "address.street", "address.zipCode", "address.city"]);
     if (ok) setFormStep("weight");
   }
 
@@ -116,6 +136,7 @@ export function RegisterPage() {
   function startNextRegistration() {
     reset(defaultValues);
     setFormStep("contact");
+    setReuseAddress(true);
     setPhase("form");
   }
 
@@ -150,6 +171,7 @@ export function RegisterPage() {
       const updated = (await response.json()) as Guest;
       setGroupId(updated.groupId ?? null);
       setGroupName(updated.groupName ?? null);
+      setFirstAddress(updated.address);
       startNextRegistration();
     } finally {
       setStartingGroup(false);
@@ -329,10 +351,18 @@ export function RegisterPage() {
             <span
               className={cn(
                 "font-medium",
+                formStep === "address" ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              2. {t("register.steps.address")}
+            </span>
+            <span
+              className={cn(
+                "font-medium",
                 formStep === "weight" ? "text-primary" : "text-muted-foreground",
               )}
             >
-              2. {t("register.steps.weight")}
+              3. {t("register.steps.weight")}
             </span>
           </div>
         </CardHeader>
@@ -381,6 +411,92 @@ export function RegisterPage() {
               </>
             )}
 
+            {formStep === "address" && (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="dateOfBirth">{t("register.form.dateOfBirth")}</Label>
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    {...register("dateOfBirth")}
+                    aria-invalid={!!errors.dateOfBirth}
+                  />
+                  {errors.dateOfBirth && (
+                    <p className="text-destructive text-sm">
+                      {t("register.errors.dateOfBirth")}
+                    </p>
+                  )}
+                </div>
+
+                {canReuseAddress && (
+                  <div className="flex flex-col gap-2 rounded-md border p-3">
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="reuseAddress"
+                        checked={reuseAddress}
+                        onCheckedChange={(checked) => setReuseAddress(checked === true)}
+                      />
+                      <Label htmlFor="reuseAddress" className="font-normal">
+                        {t("register.form.reuseAddress")}
+                      </Label>
+                    </div>
+                    {reuseAddress && firstAddress && (
+                      <p className="text-muted-foreground text-sm" data-testid="reused-address">
+                        {firstAddress.street}, {firstAddress.zipCode} {firstAddress.city}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {!(canReuseAddress && reuseAddress) && (
+                  <>
+                    <div className="grid gap-2">
+                      <Label htmlFor="street">{t("register.form.street")}</Label>
+                      <Input
+                        id="street"
+                        {...register("address.street")}
+                        aria-invalid={!!errors.address?.street}
+                      />
+                      {errors.address?.street && (
+                        <p className="text-destructive text-sm">
+                          {t("register.errors.street")}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="zipCode">{t("register.form.zipCode")}</Label>
+                        <Input
+                          id="zipCode"
+                          {...register("address.zipCode")}
+                          aria-invalid={!!errors.address?.zipCode}
+                        />
+                        {errors.address?.zipCode && (
+                          <p className="text-destructive text-sm">
+                            {t("register.errors.zipCode")}
+                          </p>
+                        )}
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="city">{t("register.form.city")}</Label>
+                        <Input
+                          id="city"
+                          {...register("address.city")}
+                          aria-invalid={!!errors.address?.city}
+                        />
+                        {errors.address?.city && (
+                          <p className="text-destructive text-sm">
+                            {t("register.errors.city")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
             {formStep === "weight" && (
               <>
                 <div className="grid gap-2">
@@ -401,6 +517,16 @@ export function RegisterPage() {
                       {t("register.errors.declaredWeightKg")}
                     </p>
                   )}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-semibold">{t("register.form.waiverTitle")}</p>
+                  <div
+                    data-testid="waiver-text"
+                    className="text-muted-foreground max-h-32 overflow-y-auto rounded-md border p-3 text-xs leading-relaxed"
+                  >
+                    {t("register.form.waiverText")}
+                  </div>
                 </div>
 
                 <div className="flex items-start gap-2">
@@ -456,17 +582,31 @@ export function RegisterPage() {
               <Button
                 type="button"
                 className="w-full"
-                onClick={() => void goToWeightStep()}
+                onClick={() => void goToAddressStep()}
               >
                 {t("register.form.next")}
               </Button>
+            )}
+            {formStep === "address" && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFormStep("contact")}
+                >
+                  {t("register.form.back")}
+                </Button>
+                <Button type="button" className="flex-1" onClick={() => void goToWeightStep()}>
+                  {t("register.form.next")}
+                </Button>
+              </>
             )}
             {formStep === "weight" && (
               <>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setFormStep("contact")}
+                  onClick={() => setFormStep("address")}
                 >
                   {t("register.form.back")}
                 </Button>

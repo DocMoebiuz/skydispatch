@@ -176,6 +176,7 @@
     "lead": "Sichern Sie sich Ihren Platz für einen Rundflug. Bezahlt wird vor Ort am Check-in.",
     "steps": {
       "contact": "Kontaktdaten",
+      "address": "Adresse",
       "weight": "Gewicht & Einverständnis"
     },
     "form": {
@@ -184,9 +185,16 @@
       "phone": "Telefon (optional)",
       "next": "Weiter",
       "back": "Zurück",
+      "dateOfBirth": "Geburtsdatum",
+      "street": "Straße und Hausnummer",
+      "zipCode": "PLZ",
+      "city": "Ort",
+      "reuseAddress": "Gleiche Adresse wie erste Person der Gruppe",
       "declaredWeightKg": "Ihr Gewicht (kg)",
       "declaredWeightKgHint": "Selbstauskunft – wird beim Check-in nochmals durch Wiegen geprüft.",
-      "consent": "Ich stimme der Verarbeitung meiner personenbezogenen Daten ausschließlich zum Zweck der Flugorganisation zu.",
+      "waiverTitle": "Einverständnis- und Haftungserklärung",
+      "waiverText": "Ich melde mich freiwillig zur Teilnahme an einem Rundflug an und nehme auf eigenes Risiko teil. Mir ist bekannt, dass die Durchführung von Wetter, Auslastung und Sicherheitsentscheidungen der Flugleitung abhängt. Ich versichere, dass meine Angaben – insbesondere mein Gewicht – zutreffend sind, und bin damit einverstanden, dass mein Gewicht am Flugplatz überprüft wird. Ich stimme der Verarbeitung meiner personenbezogenen Daten ausschließlich zum Zweck der Flugorganisation gemäß DSGVO zu.",
+      "consent": "Ich habe die Einverständnis- und Haftungserklärung gelesen und stimme zu.",
       "newsletter": "Ich möchte den Newsletter mit Neuigkeiten und Angeboten erhalten (optional).",
       "submit": "Anmelden"
     },
@@ -194,6 +202,10 @@
       "name": "Bitte Namen eingeben.",
       "email": "Bitte eine gültige E-Mail-Adresse angeben.",
       "declaredWeightKg": "Bitte ein gültiges Gewicht zwischen 30 und 200 kg angeben.",
+      "dateOfBirth": "Bitte ein gültiges Geburtsdatum angeben (nicht in der Zukunft).",
+      "street": "Bitte eine Straße angeben.",
+      "zipCode": "Bitte eine Postleitzahl angeben.",
+      "city": "Bitte einen Ort angeben.",
       "consent": "Bitte stimmen Sie der Erklärung zu.",
       "submit": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
     },

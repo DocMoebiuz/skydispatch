@@ -124,8 +124,12 @@ interface Guest {
   phone?: string | null;
   declaredWeightKg: number;      // self-reported at registration
   weightKg: number | null;       // staff-verified at check-in
+  dateOfBirth: string;           // "YYYY-MM-DD"
+  address: { street: string; zipCode: string; city: string };
   paid: boolean;                 // false at creation; only a staff action sets true
-  consent: boolean;
+  consent: boolean;              // required — liability/GDPR consent, see nfr.md
+  newsletter: boolean;           // optional opt-in, asked alongside consent — see
+                                  // nfr.md § Security & Privacy
   groupId?: string | null;
   groupName?: string | null;
   checkedIn: boolean;
@@ -174,6 +178,12 @@ member's submission generates a `groupId` server-side; subsequent members submit
 that `groupId` (and a server-validated matching `groupName`) rather than re-entering
 group info from scratch. `GET /api/guests?groupId=` powers an in-progress "who's
 registered so far" summary during the loop.
+
+The address form step additionally offers "reuse the first group member's address"
+for member 2 onward — a **client-side convenience only**: the web form copies the
+first member's address values into its own submission before `POST`. There's no
+group-level address concept server-side; every guest document always carries its own
+full `address`, reused or not.
 
 ### API surface (current scope only — not full CRUD)
 

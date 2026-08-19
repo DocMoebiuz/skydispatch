@@ -49,8 +49,13 @@ test("finishing registration shows the correct total fee and a board link", asyn
     await page.getByLabel("Vor- und Nachname").fill("E2E Finish One");
     await page.getByLabel("E-Mail-Adresse").fill(email1);
     await page.getByRole("button", { name: "Weiter" }).click();
+    await page.getByLabel("Geburtsdatum").fill("1990-05-14");
+    await page.getByLabel("Straße und Hausnummer").fill("Musterstraße 1");
+    await page.getByLabel("PLZ").fill("71522");
+    await page.getByLabel("Ort").fill("Backnang");
+    await page.getByRole("button", { name: "Weiter" }).click();
     await page.getByLabel("Ihr Gewicht (kg)").fill("70");
-    await page.getByLabel(/personenbezogenen Daten/).check();
+    await page.getByLabel(/gelesen und stimme zu/).check();
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
 
@@ -61,8 +66,12 @@ test("finishing registration shows the correct total fee and a board link", asyn
     await page.getByLabel("Vor- und Nachname").fill("E2E Finish Two");
     await page.getByLabel("E-Mail-Adresse").fill(email2);
     await page.getByRole("button", { name: "Weiter" }).click();
+    // Group's default "reuse first member's address" is accepted — address fields
+    // stay hidden, see register-group.spec.ts for the reuse/decline paths.
+    await page.getByLabel("Geburtsdatum").fill("1988-11-02");
+    await page.getByRole("button", { name: "Weiter" }).click();
     await page.getByLabel("Ihr Gewicht (kg)").fill("65");
-    await page.getByLabel(/personenbezogenen Daten/).check();
+    await page.getByLabel(/gelesen und stimme zu/).check();
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
 
