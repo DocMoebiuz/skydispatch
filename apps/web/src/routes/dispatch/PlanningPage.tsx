@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   deriveFlightStage,
@@ -631,7 +632,15 @@ export function PlanningPage() {
                 );
               })}
               {poolUnits.length === 0 && (
-                <p className="text-muted-foreground text-sm">{t("dispatch.planning.pool.empty")}</p>
+                <EmptyState
+                  data-testid="pool-empty"
+                  message={t("dispatch.planning.pool.empty")}
+                  action={
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/dispatch/guests">{t("dispatch.common.goToGuests")}</Link>
+                    </Button>
+                  }
+                />
               )}
             </div>
           </div>

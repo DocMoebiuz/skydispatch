@@ -114,8 +114,9 @@ inherently individual, unlike assignment) below its `FlightCard` flight picker.
 
 **`Flight.status` is `created → assigned → ready → airborne → completed`.**
 `assigned` and `ready` are both "roster locked" (set/cleared by the dispatcher
-via `lockFlight`/`unlockFlight`, the API handlers behind Planning's "Sperren"/
-"Entsperren" buttons) — the difference between them is **not** a dispatcher
+via `lockFlight`/`unlockFlight` — internal engineering names only; the actual
+buttons read "Fertigstellen"/"Wieder öffnen", "lock" was never user-facing
+copy) — the difference between them is **not** a dispatcher
 action, it's mechanical: `ready` means every assigned guest is checked in,
 kept in sync by `apps/api/src/lib/flightBoardingStatus.ts`'s
 `recomputeBoardingStatus()`, called after check-in/undo-check-in/no-show/
@@ -136,7 +137,7 @@ status needs right now, not chronological order** — screen space is a scarce
 resource and should go to what's actually actionable:
 - **"In Planung"** (`created`) — the real work (build/fill a flight). Full-size
   `FlightCard`s, the most columns, the most screen space.
-- **"Gesperrt"** (`assigned` or `ready` — Planning only cares whether the
+- **"Fertig"** (`assigned` or `ready` — Planning only cares whether the
   roster is locked, not boarding progress; each card's own badge shows the
   finer stage) — occasionally needs a trip back to `created` via `unlockFlight`
   (a no-show frees a seat, the flight may no longer be full). Same

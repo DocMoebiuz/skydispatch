@@ -4,7 +4,7 @@ import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
 // Planning is organized into three lanes by how much attention each status
 // needs right now, not just chronological order: "In Planung" (the actual
-// work — full detail, most screen space), "Gesperrt" (locked — "assigned" or
+// work — full detail, most screen space), "Fertig" (locked — "assigned" or
 // "ready" — occasionally needs a trip back to "created" via unlock — compact
 // cards), "Erledigt" (airborne + completed — zero planning actions left,
 // collapsed by default, on demand only). See docs/architecture.md § Shared

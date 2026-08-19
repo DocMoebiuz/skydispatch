@@ -17,7 +17,8 @@
       "reporting": "Reporting"
     },
     "common": {
-      "goToPlanning": "Zur Flugplanung"
+      "goToPlanning": "Zur Flugplanung",
+      "goToGuests": "Zu den Gästen"
     },
     "stage": {
       "new": "Neu",
@@ -91,7 +92,7 @@
       "dragHint": "Gruppe oder Einzelperson auf einen Flug ziehen, um sie zuzuweisen — oder einen Flug anklicken, um passende Gäste zu sehen und per ✚ zuzuweisen.",
       "lanes": {
         "planning": "In Planung",
-        "ready": "Gesperrt",
+        "ready": "Fertig",
         "finished": "Erledigt"
       },
       "flights": {
@@ -118,9 +119,9 @@
         "empty": "Noch niemand zugewiesen.",
         "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen.",
         "unassign": "Entfernen",
-        "setReady": "Sperren",
-        "unready": "Entsperren",
-        "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Sperren nicht möglich."
+        "setReady": "Fertigstellen",
+        "unready": "Wieder öffnen",
+        "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Fertigstellen nicht möglich."
       },
       "status": {
         "created": "geplant",
