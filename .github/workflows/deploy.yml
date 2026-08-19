@@ -30,13 +30,15 @@ jobs:
       - name: Vendor the shared package for Oryx's npm install
         run: |
           mkdir -p api-deploy/vendor
-          cp -r api-deploy/node_modules/shared api-deploy/vendor/shared
+          (cd packages/shared && npm pack --silent --pack-destination ../../api-deploy/vendor)
           rm -rf api-deploy/node_modules/shared
+          TARBALL=$(basename api-deploy/vendor/*.tgz)
           node -e "
             const fs = require('fs');
             const p = 'api-deploy/package.json';
             const pkg = JSON.parse(fs.readFileSync(p));
-            pkg.dependencies.shared = 'file:vendor/shared';
+            pkg.dependencies.shared = 'file:vendor/$TARBALL';
+            delete pkg.scripts.build;
             fs.writeFileSync(p, JSON.stringify(pkg, null, 2));
           "
 
