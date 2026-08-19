@@ -238,7 +238,8 @@
       "notFound": "ID nicht gefunden.",
       "flown": "{{name}} – Ihr Rundflug ist abgeschlossen.",
       "assigned": "{{name}} – Flug {{flight}} ({{status}}).",
-      "waiting": "{{name}} – noch keinem Flug zugewiesen."
+      "waiting": "{{name}} – noch keinem Flug zugewiesen.",
+      "groupHeading": "Gruppe {{group}} – Status Ihrer Mitreisenden:"
     }
   }
 }

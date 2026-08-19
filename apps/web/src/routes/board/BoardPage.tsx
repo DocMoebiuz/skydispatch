@@ -25,9 +25,11 @@ function fmtTime(iso: string | null): string {
 // behavior. Polls every 15s — a public kiosk display, not worth websockets for a
 // single-airfield low-concurrency event (see docs/architecture.md § Open decisions).
 //
-// Registration links here with ?code=G-001 (see RegisterPage's success screen) so a
-// guest can check their own boarding status without retyping their ID — looked up
-// automatically, once, the first time flight/guest data has loaded.
+// Registration links here with ?code=<4-char code> (see RegisterPage's "done"
+// screen) so a guest can check their own boarding status without retyping their ID
+// — looked up automatically, once, the first time flight/guest data has loaded. If
+// the looked-up guest is part of a group, every group member's status is shown, not
+// just the one guest whose code was entered.
 export function BoardPage() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
@@ -70,10 +72,25 @@ export function BoardPage() {
   }, []);
 
   const sorted = [...flights].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
-  const lookupFlight =
+
+  const groupMembers =
     lookupResult && lookupResult !== "not-found"
-      ? (flights.find((f) => f.guestIds.includes(lookupResult.id)) ?? null)
-      : null;
+      ? lookupResult.groupId
+        ? guests.filter((g) => g.groupId === lookupResult.groupId)
+        : [lookupResult]
+      : [];
+
+  function statusLine(g: Guest): string {
+    if (g.flown) return t("board.lookup.flown", { name: g.name });
+    const flight = flights.find((f) => f.guestIds.includes(g.id));
+    return flight
+      ? t("board.lookup.assigned", {
+          name: g.name,
+          flight: flight.code,
+          status: t(`dispatch.planning.status.${flight.status}`),
+        })
+      : t("board.lookup.waiting", { name: g.name });
+  }
 
   return (
     <main className="flex flex-col gap-6 p-8">
@@ -118,7 +135,7 @@ export function BoardPage() {
         <div className="flex items-center gap-2">
           <Input
             className="max-w-40"
-            placeholder="G-001"
+            placeholder="z. B. 7K3Q"
             data-testid="board-lookup-input"
             value={lookupCode}
             onChange={(e) => setLookupCode(e.target.value)}
@@ -137,17 +154,18 @@ export function BoardPage() {
           </p>
         )}
         {lookupResult && lookupResult !== "not-found" && (
-          <p className="text-sm" data-testid="board-lookup-result">
-            {lookupResult.flown
-              ? t("board.lookup.flown", { name: lookupResult.name })
-              : lookupFlight
-                ? t("board.lookup.assigned", {
-                    name: lookupResult.name,
-                    flight: lookupFlight.code,
-                    status: t(`dispatch.planning.status.${lookupFlight.status}`),
-                  })
-                : t("board.lookup.waiting", { name: lookupResult.name })}
-          </p>
+          <div className="flex flex-col gap-1" data-testid="board-lookup-result">
+            {lookupResult.groupName && groupMembers.length > 1 && (
+              <p className="text-sm font-medium">
+                {t("board.lookup.groupHeading", { group: lookupResult.groupName })}
+              </p>
+            )}
+            {groupMembers.map((g) => (
+              <p key={g.id} className="text-sm" data-testid="board-lookup-member">
+                {statusLine(g)}
+              </p>
+            ))}
+          </div>
         )}
       </div>
     </main>

@@ -21,7 +21,7 @@ test("registration writes through the API into Cosmos and appears on /dispatch",
 
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
     const code = await page.getByTestId("guest-code").innerText();
-    expect(code).toMatch(/^G-\d{3,}$/);
+    expect(code).toMatch(/^[A-Z0-9]{4}$/);
 
     await page.goto("/dispatch/guests");
     const row = page.getByTestId("guest-row").filter({ hasText: "E2E Test Guest" });

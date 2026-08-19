@@ -70,10 +70,19 @@ test("finishing registration shows the correct total fee and a board link", asyn
     await page.getByTestId("finish-registration-button").click();
     await expect(page.getByText(`${(price * 2).toFixed(2).replace(".", ",")} €`)).toBeVisible();
     await expect(page.getByTestId("session-guest")).toHaveCount(2);
-    await expect(page.getByRole("link", { name: /Abflugtafel/ })).toHaveAttribute(
-      "href",
-      "/board",
-    );
+
+    // Board link carries the (last-registered) guest's own code — a random 4-char
+    // code, not the old sequential "G-00N" (privacy: sequential codes let anyone
+    // enumerate every guest). See apps/api guests.ts.
+    const boardHref = await page.getByRole("link", { name: /Abflugtafel/ }).getAttribute("href");
+    expect(boardHref).toMatch(/^\/board\?code=[A-Z0-9]{4}$/);
+
+    // That one code's lookup shows both group members, not just the one looked up.
+    await page.goto(boardHref!);
+    await expect(page.getByTestId("board-lookup-result")).toBeVisible();
+    const memberLines = await page.getByTestId("board-lookup-member").allTextContents();
+    expect(memberLines.some((l) => l.includes("E2E Finish One"))).toBe(true);
+    expect(memberLines.some((l) => l.includes("E2E Finish Two"))).toBe(true);
   } finally {
     await Promise.all([deleteGuestByEmail(email1), deleteGuestByEmail(email2)]);
     if (original) {

@@ -5,7 +5,7 @@ export interface Guest {
   id: string;
   type: "Guest";
   flightDayId: string; // partition key
-  code: string; // e.g. "G-001" — manual check-in entry
+  code: string; // e.g. "7K3Q" — random 4-char A-Z0-9, deliberately not sequential (privacy, see apps/api guests.ts)
   name: string;
   email: string;
   phone?: string | null;

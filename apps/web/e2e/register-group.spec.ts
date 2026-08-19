@@ -31,7 +31,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
 
     // Member 1 — registered solo, no group question shown yet.
     const code1 = await fillAndSubmit("E2E Group Member One", email1, "70");
-    expect(code1).toMatch(/^G-\d{3,}$/);
+    expect(code1).toMatch(/^[A-Z0-9]{4}$/);
     await expect(page.getByText("Gruppe", { exact: false })).not.toBeVisible();
 
     // First "add another" — this is the moment the group name gets asked for.
@@ -45,7 +45,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
     // Back on step 1, ready for member 2.
     await expect(page.getByLabel("Vor- und Nachname")).toBeVisible();
     const code2 = await fillAndSubmit("E2E Group Member Two", email2, "65");
-    expect(code2).toMatch(/^G-\d{3,}$/);
+    expect(code2).toMatch(/^[A-Z0-9]{4}$/);
     await expect(page.getByText(`Gruppe: ${groupName}`)).toBeVisible();
     const summary = page.getByTestId("session-guest");
     await expect(summary).toHaveCount(2);

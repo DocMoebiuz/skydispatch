@@ -4,7 +4,7 @@ import {
   HttpResponseInit,
   InvocationContext,
 } from "@azure/functions";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import {
   DEFAULT_FLIGHT_DAY_ID,
   guestCreateRequestSchema,
@@ -30,20 +30,41 @@ async function updateGuest(
   return updated;
 }
 
-// Not atomic under concurrent writes — accepted technical debt for a
-// single-airfield, low-concurrency event. See docs/tech-stack.md § Known
-// cross-cutting risks.
+// Deliberately NOT sequential (was "G-001", "G-002", ...) — this code is the guest's
+// public lookup key on the departure board (/board), which returns name + flight
+// status to anyone who types it in. A sequential code lets a stranger enumerate
+// every guest just by counting; a random one doesn't. 4 chars from a 36-symbol
+// alphabet (~1.68M combinations) is plenty for a single flight day's headcount —
+// collision-checked with a retry, not just assumed unique.
+const CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const CODE_LENGTH = 4;
+const MAX_CODE_ATTEMPTS = 10;
+
+function randomCode(): string {
+  let code = "";
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
 async function nextGuestCode(flightDayId: string): Promise<string> {
   const container = await getOperationsContainer();
-  const { resources } = await container.items
-    .query<number>({
-      query:
-        "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'Guest' AND c.flightDayId = @flightDayId",
-      parameters: [{ name: "@flightDayId", value: flightDayId }],
-    })
-    .fetchAll();
-  const count = resources[0] ?? 0;
-  return `G-${String(count + 1).padStart(3, "0")}`;
+  for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+    const code = randomCode();
+    const { resources } = await container.items
+      .query<number>({
+        query:
+          "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'Guest' AND c.flightDayId = @flightDayId AND c.code = @code",
+        parameters: [
+          { name: "@flightDayId", value: flightDayId },
+          { name: "@code", value: code },
+        ],
+      })
+      .fetchAll();
+    if ((resources[0] ?? 0) === 0) return code;
+  }
+  throw new Error(`Could not generate a unique guest code after ${MAX_CODE_ATTEMPTS} attempts`);
 }
 
 // A groupId a client sends must actually exist and its canonical name must match —

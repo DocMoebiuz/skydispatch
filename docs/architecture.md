@@ -118,7 +118,7 @@ interface Guest {
   id: string;                    // crypto.randomUUID()
   type: "Guest";
   flightDayId: string;           // partition key
-  code: string;                  // e.g. "G-001" — manual check-in entry
+  code: string;                  // e.g. "7K3Q" — random 4-char A-Z0-9, not sequential (privacy)
   name: string;
   email: string;
   phone?: string | null;

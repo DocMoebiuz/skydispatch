@@ -255,7 +255,7 @@ export function RegisterPage() {
     );
   }
 
-  if (phase === "done") {
+  if (phase === "done" && guest) {
     const total = pricePerGuestEur * sessionGuests.length;
     return (
       <main className="mx-auto max-w-md p-8">
@@ -290,8 +290,15 @@ export function RegisterPage() {
             </div>
           </CardContent>
           <CardFooter>
+            {/* guest.code (the last person registered this session) — the board
+                looks up the whole group from any one member's code, see
+                BoardPage's group-aware lookup. */}
             <Button asChild className="w-full">
-              <Link to="/board" target="_blank" rel="noopener noreferrer">
+              <Link
+                to={`/board?code=${encodeURIComponent(guest.code)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 {t("register.done.boardLink")}
               </Link>
             </Button>
