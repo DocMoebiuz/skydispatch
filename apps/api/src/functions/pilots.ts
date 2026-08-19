@@ -5,7 +5,12 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { randomUUID } from "node:crypto";
-import { DEFAULT_FLIGHT_DAY_ID, pilotCreateRequestSchema, type Pilot } from "shared";
+import {
+  DEFAULT_FLIGHT_DAY_ID,
+  pilotCreateRequestSchema,
+  pilotWeightRequestSchema,
+  type Pilot,
+} from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
 import { isReferencedByActiveFlight } from "../lib/activeFlightGuard";
 
@@ -67,6 +72,35 @@ export async function togglePilotAvailability(
   return { status: 200, jsonBody: updated };
 }
 
+// Lets an existing pilot's weight be corrected/backfilled after creation — real
+// pilot records created before the weightKg field existed had no way to get one
+// short of delete+recreate. See flights.ts's pilotWeightKgFor for why a missing
+// weight is treated as a hard block, not a silent 0, on assign/set-ready.
+export async function setPilotWeight(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const pilotId = request.params.id;
+  if (!pilotId) return { status: 400, jsonBody: { error: "missing-id" } };
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { status: 400, jsonBody: { error: "invalid-json" } };
+  }
+  const parsed = pilotWeightRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
+  }
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: pilot } = await container.item(pilotId, flightDayId).read<Pilot>();
+  if (!pilot) return { status: 404, jsonBody: { error: "not-found" } };
+  const updated: Pilot = { ...pilot, weightKg: parsed.data.weightKg };
+  await container.item(pilotId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 export async function deletePilot(
   request: HttpRequest,
   _context: InvocationContext,
@@ -100,6 +134,13 @@ app.http("togglePilotAvailability", {
   route: "pilots/{id}/actions/toggle-available",
   authLevel: "anonymous",
   handler: togglePilotAvailability,
+});
+
+app.http("setPilotWeight", {
+  methods: ["POST"],
+  route: "pilots/{id}/actions/set-weight",
+  authLevel: "anonymous",
+  handler: setPilotWeight,
 });
 
 app.http("deletePilot", {

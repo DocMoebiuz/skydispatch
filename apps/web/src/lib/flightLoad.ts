@@ -7,6 +7,11 @@ export interface FlightLoad {
   maxPayloadKg: number;
   pct: number; // weight used as % of payload, unclamped (can exceed 100)
   over: boolean;
+  // A pilot IS assigned but has no weight on file (real pilot records created
+  // before the weightKg field existed) — usedWeightKg is an undercount, and the
+  // API refuses assign/set-ready in this state (see apps/api flights.ts's
+  // pilotWeightKgFor) rather than silently treating it as 0kg.
+  pilotWeightUnknown: boolean;
 }
 
 // Aggregate seats/weight for one flight — pilot weight counts toward payload
@@ -19,6 +24,7 @@ export function computeFlightLoad(
   pilot: Pilot | undefined,
   flightGuests: Guest[],
 ): FlightLoad {
+  const pilotWeightUnknown = !!flight.pilotId && !pilot?.weightKg;
   const usedSeats = flightGuests.length;
   const totalSeats = aircraft?.seats ?? 0;
   const usedWeightKg =
@@ -26,5 +32,5 @@ export function computeFlightLoad(
   const maxPayloadKg = aircraft?.maxPayloadKg ?? 0;
   const pct = maxPayloadKg > 0 ? Math.round((usedWeightKg / maxPayloadKg) * 100) : 0;
   const over = maxPayloadKg > 0 && usedWeightKg > maxPayloadKg;
-  return { usedSeats, totalSeats, usedWeightKg, maxPayloadKg, pct, over };
+  return { usedSeats, totalSeats, usedWeightKg, maxPayloadKg, pct, over, pilotWeightUnknown };
 }

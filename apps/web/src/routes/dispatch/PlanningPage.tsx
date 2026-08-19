@@ -19,6 +19,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
+import { computeFlightLoad } from "@/lib/flightLoad";
 
 // Increment 3 — the heart of the app: assign guests/groups to flights, hard
 // seat/weight limits enforced server-side (checked before allowing, never
@@ -102,20 +103,26 @@ export function PlanningPage() {
     ? selectedFlight.guestIds.map((id) => guestById.get(id)).filter((g): g is Guest => !!g)
     : [];
   const selectedPilot = selectedFlight
-    ? (pilots.find((p) => p.id === selectedFlight.pilotId) ?? null)
+    ? (pilots.find((p) => p.id === selectedFlight.pilotId) ?? undefined)
+    : undefined;
+  // Shared with Dashboard/Tracking — see apps/web/src/lib/flightLoad.ts. Pilot
+  // weight counts toward payload too, and an assigned pilot with no weight on
+  // file blocks assign/set-ready entirely (nfr.md § Reliability & safety;
+  // mirrors apps/api flights.ts's pilotWeightKgFor).
+  const load = selectedFlight
+    ? computeFlightLoad(selectedFlight, selectedAircraft ?? undefined, selectedPilot, assignedGuests)
     : null;
-  // Pilot weight counts toward the aircraft's payload limit too — mirrors the
-  // server-side check in apps/api flights.ts (pilotWeightKgFor). See nfr.md §
-  // Reliability & safety.
-  const usedWeightKg =
-    (selectedPilot?.weightKg ?? 0) + assignedGuests.reduce((sum, g) => sum + (g.weightKg ?? 0), 0);
+  const usedWeightKg = load?.usedWeightKg ?? 0;
   const usedSeats = assignedGuests.length;
   const locked = selectedFlight?.status === "airborne" || selectedFlight?.status === "completed";
   const canSetReady =
     !!selectedFlight &&
     !!selectedAircraft &&
+    !!load &&
+    !load.pilotWeightUnknown &&
     usedSeats > 0 &&
     usedWeightKg <= selectedAircraft.maxPayloadKg;
+  const assignBlocked = !!load?.pilotWeightUnknown;
 
   async function createFlight() {
     if (!newFlightAircraftId) return;
@@ -306,7 +313,7 @@ export function PlanningPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!selectedFlightId || locked || assigning.has(groupId)}
+                  disabled={!selectedFlightId || locked || assignBlocked || assigning.has(groupId)}
                   onClick={() =>
                     void assign(
                       groupId,
@@ -330,7 +337,7 @@ export function PlanningPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!selectedFlightId || locked || assigning.has(g.id)}
+                  disabled={!selectedFlightId || locked || assignBlocked || assigning.has(g.id)}
                   onClick={() => void assign(g.id, [g.id])}
                 >
                   {t("dispatch.planning.pool.assign")}
@@ -366,6 +373,14 @@ export function PlanningPage() {
                   {t("dispatch.planning.builder.weight")}: {usedWeightKg}/
                   {selectedAircraft.maxPayloadKg} kg
                 </p>
+                {assignBlocked && (
+                  <p
+                    className="text-amber-600 text-sm dark:text-amber-500"
+                    data-testid="pilot-weight-unknown-warning"
+                  >
+                    {t("dispatch.planning.builder.pilotWeightUnknown")}
+                  </p>
+                )}
                 <ul className="flex flex-col gap-1">
                   {assignedGuests.map((g) => (
                     <li

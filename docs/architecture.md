@@ -239,6 +239,7 @@ reporting), per the manual and `docs/static-html-app/`:
 | `POST /api/guests/{id}/actions/unassign` | Removes a guest from its flight (correction path) |
 | `POST /api/pilots`, `GET /api/pilots` | Create/list pilots |
 | `POST /api/pilots/{id}/actions/toggle-available`, `DELETE /api/pilots/{id}` | Availability toggle; delete blocked (409) if on a non-completed flight |
+| `POST /api/pilots/{id}/actions/set-weight` | Backfill/correct a pilot's weight after creation — real records created before `weightKg` existed had no other way to get one. `assign`/`set-ready` both refuse (409 `pilot-weight-unknown`) while a pilot with no weight on file is assigned to the flight, rather than silently treating it as 0kg |
 | `POST /api/aircraft`, `GET /api/aircraft` | Create/list aircraft |
 | `DELETE /api/aircraft/{id}` | Blocked (409) if on a non-completed flight |
 | `POST /api/flightday`, `GET /api/flightday` | Upsert/read the one flight day's settings (date/airfield) — status untouched |
@@ -284,6 +285,12 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
    multiple flight days without a redesign, but no FlightDay-setup UI or
    day-switching logic exists yet — a hardcoded `DEFAULT_FLIGHT_DAY_ID` stands in for
    now.
+5. **Fuel tracking.** Not modeled at all yet — no fuel field on `Aircraft` or
+   `Flight`, no fuel weight/quantity counted toward payload, no per-flight fuel
+   state. Flagged by the user, no requirements gathered yet (per-flight fuel
+   burn? a fixed reserve subtracted from payload? refuel-between-flights
+   tracking for turnaround planning?). Revisit once the shape of the
+   requirement is clearer — don't guess a schema for it now.
 
 ## Domain-model naming
 

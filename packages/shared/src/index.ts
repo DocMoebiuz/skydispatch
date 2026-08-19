@@ -16,6 +16,8 @@ export { weighRequestSchema } from "./schemas/weighRequest";
 
 export type { PilotCreateRequest } from "./schemas/pilotCreateRequest";
 export { pilotCreateRequestSchema } from "./schemas/pilotCreateRequest";
+export type { PilotWeightRequest } from "./schemas/pilotWeightRequest";
+export { pilotWeightRequestSchema } from "./schemas/pilotWeightRequest";
 export type { AircraftCreateRequest } from "./schemas/aircraftCreateRequest";
 export { aircraftCreateRequestSchema } from "./schemas/aircraftCreateRequest";
 export type { FlightDayUpsertRequest } from "./schemas/flightDayUpsertRequest";

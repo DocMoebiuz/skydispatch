@@ -1,0 +1,134 @@
+import { test, expect } from "@playwright/test";
+import { DEFAULT_FLIGHT_DAY_ID } from "shared";
+import { getTestContainer, deleteGuestByEmail, deleteById } from "./helpers/cosmos";
+
+// Regression test for a real bug: real pilot records created before the weightKg
+// field existed have no weight on file, and apps/api's pilotWeightKgFor used to
+// silently treat that as 0kg — undercounting payload and letting assign/set-ready
+// through a hard-limit check they should have failed (nfr.md § Reliability &
+// safety). Fixed by treating "pilot assigned but no weight on file" as a hard
+// block, surfaced in the UI, and fixable in place via Setup's click-to-edit
+// weight cell (apps/api pilots.ts's actions/set-weight).
+//
+// Pilot creation now always requires a weight (schema-enforced), so the only way
+// to reproduce the legacy state is to insert the Cosmos document directly,
+// bypassing the API — exactly what a pre-existing real record looks like.
+
+test("a pilot with no weight on file blocks assign/set-ready until fixed", async ({ page }) => {
+  const stamp = Date.now();
+  const pilotName = `E2E No-Weight Pilot ${stamp}`;
+  const reg = `E2E-NW-${stamp}`;
+  const email = `e2e-noweight-${stamp}@example.test`;
+
+  const pilotId = `e2e-pilot-${stamp}`;
+  let aircraftId: string | undefined;
+  let flightId: string | undefined;
+  let guestId: string | undefined;
+
+  try {
+    const container = await getTestContainer();
+    await container.items.create({
+      id: pilotId,
+      type: "Pilot",
+      flightDayId: DEFAULT_FLIGHT_DAY_ID,
+      name: pilotName,
+      license: "PPL",
+      available: true,
+      // no weightKg — simulates a real pre-existing record from before that field
+    });
+
+    const aircraft = await fetch("http://localhost:4280/api/aircraft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reg, model: "Cessna 172", seats: 4, maxPayloadKg: 300 }),
+    }).then((r) => r.json());
+    aircraftId = aircraft.id;
+
+    const guest = await fetch("http://localhost:4280/api/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "E2E No-Weight Guest",
+        email,
+        declaredWeightKg: 75,
+        dateOfBirth: "1990-05-14",
+        address: { street: "Musterstraße 1", zipCode: "71522", city: "Backnang" },
+        consent: true,
+        newsletter: false,
+      }),
+    }).then((r) => r.json());
+    guestId = guest.id;
+    await fetch(`http://localhost:4280/api/guests/${guestId}/actions/mark-paid`, {
+      method: "POST",
+    });
+    await fetch(`http://localhost:4280/api/guests/${guestId}/actions/weigh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weightKg: 75 }),
+    });
+
+    const flight = await fetch("http://localhost:4280/api/flights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aircraftId, pilotId }),
+    }).then((r) => r.json());
+    flightId = flight.id;
+
+    // --- API-level: assign and set-ready both refuse, not silently undercount ---
+    const assignResponse = await fetch(
+      `http://localhost:4280/api/flights/${flightId}/actions/assign`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guestIds: [guestId] }),
+      },
+    );
+    expect(assignResponse.status).toBe(409);
+    expect((await assignResponse.json()).error).toBe("pilot-weight-unknown");
+
+    const readyResponse = await fetch(
+      `http://localhost:4280/api/flights/${flightId}/actions/set-ready`,
+      { method: "POST" },
+    );
+    expect(readyResponse.status).toBe(409);
+    expect((await readyResponse.json()).error).toBe("pilot-weight-unknown");
+
+    // --- UI: Setup surfaces the missing weight ---
+    await page.goto("/dispatch/setup");
+    const pilotRow = page.getByTestId("pilot-row").filter({ hasText: pilotName });
+    await expect(pilotRow.getByTestId("pilot-weight-cell")).toContainText("Gewicht fehlt");
+
+    // --- UI: Planning disables assignment and shows the warning ---
+    await page.goto("/dispatch/planning");
+    await page.getByTestId("flight-tab").filter({ hasText: flight.code }).click();
+    await expect(page.getByTestId("pilot-weight-unknown-warning")).toBeVisible();
+    await expect(
+      page.getByTestId("pool-guest").filter({ hasText: "E2E No-Weight Guest" }).getByRole("button", {
+        name: "Zuweisen",
+      }),
+    ).toBeDisabled();
+
+    // --- Fix in place: Setup's click-to-edit weight cell ---
+    await page.goto("/dispatch/setup");
+    await pilotRow.getByTestId("pilot-weight-cell").click();
+    await pilotRow.getByTestId("pilot-weight-input").fill("85");
+    await pilotRow.getByTestId("pilot-weight-save").click();
+    await expect(pilotRow.getByTestId("pilot-weight-cell")).toContainText("85 kg");
+
+    // --- Now assignment works and the gauge includes the pilot's weight ---
+    await page.goto("/dispatch/planning");
+    await page.getByTestId("flight-tab").filter({ hasText: flight.code }).click();
+    await expect(page.getByTestId("pilot-weight-unknown-warning")).not.toBeVisible();
+    await page
+      .getByTestId("pool-guest")
+      .filter({ hasText: "E2E No-Weight Guest" })
+      .getByRole("button", { name: "Zuweisen" })
+      .click();
+    await expect(page.getByTestId("flight-gauge")).toContainText("160/300"); // 85 pilot + 75 guest
+  } finally {
+    await deleteGuestByEmail(email);
+    if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);
+    if (aircraftId) await deleteById(aircraftId, DEFAULT_FLIGHT_DAY_ID);
+    await deleteById(pilotId, DEFAULT_FLIGHT_DAY_ID);
+  }
+});

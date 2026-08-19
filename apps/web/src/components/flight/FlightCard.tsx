@@ -51,6 +51,11 @@ export function FlightCard({ flight, aircraft, pilot, load, actions, className }
             style={{ width: `${Math.min(load.pct, 100)}%` }}
           />
         </div>
+        {load.pilotWeightUnknown && (
+          <p className="text-amber-600 dark:text-amber-500" data-testid="pilot-weight-unknown-warning">
+            {t("dispatch.planning.builder.pilotWeightUnknown")}
+          </p>
+        )}
       </CardContent>
       {actions && <CardFooter className="gap-2">{actions}</CardFooter>}
     </Card>

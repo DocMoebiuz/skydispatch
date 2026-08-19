@@ -42,6 +42,9 @@ export function SetupPage() {
   const [pilotLicense, setPilotLicense] = useState("");
   const [pilotWeightKg, setPilotWeightKg] = useState("");
   const [savingPilot, setSavingPilot] = useState(false);
+  const [editingWeightPilotId, setEditingWeightPilotId] = useState<string | null>(null);
+  const [weightEditValue, setWeightEditValue] = useState("");
+  const [savingWeight, setSavingWeight] = useState(false);
 
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
   const [aircraftDialogOpen, setAircraftDialogOpen] = useState(false);
@@ -114,6 +117,31 @@ export function SetupPage() {
     if (response.ok) {
       const updated = (await response.json()) as Pilot;
       setPilots((prev) => prev.map((p) => (p.id === pilotId ? updated : p)));
+    }
+  }
+
+  function startEditWeight(pilot: Pilot) {
+    setEditingWeightPilotId(pilot.id);
+    setWeightEditValue(pilot.weightKg != null ? String(pilot.weightKg) : "");
+  }
+
+  async function saveWeight(pilotId: string) {
+    const weightNum = Number(weightEditValue);
+    if (!Number.isFinite(weightNum) || weightNum < 30 || weightNum > 200) return;
+    setSavingWeight(true);
+    try {
+      const response = await fetch(`/api/pilots/${pilotId}/actions/set-weight`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weightKg: weightNum }),
+      });
+      if (response.ok) {
+        const updated = (await response.json()) as Pilot;
+        setPilots((prev) => prev.map((p) => (p.id === pilotId ? updated : p)));
+        setEditingWeightPilotId(null);
+      }
+    } finally {
+      setSavingWeight(false);
     }
   }
 
@@ -263,8 +291,45 @@ export function SetupPage() {
                 className="flex items-center justify-between text-sm"
                 data-testid="pilot-row"
               >
-                <span>
-                  {p.name} — {p.license} — {p.weightKg ?? "?"} kg
+                <span className="flex items-center gap-1">
+                  {p.name} — {p.license} —{" "}
+                  {editingWeightPilotId === p.id ? (
+                    <span className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        className="h-7 w-16"
+                        data-testid="pilot-weight-input"
+                        value={weightEditValue}
+                        onChange={(e) => setWeightEditValue(e.target.value)}
+                        autoFocus
+                      />
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        data-testid="pilot-weight-save"
+                        disabled={savingWeight}
+                        aria-label={t("dispatch.setup.pilots.saveWeight")}
+                        onClick={() => void saveWeight(p.id)}
+                      >
+                        ✓
+                      </Button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={
+                        p.weightKg != null
+                          ? "underline decoration-dotted underline-offset-2"
+                          : "text-amber-600 underline decoration-dotted underline-offset-2 dark:text-amber-500"
+                      }
+                      data-testid="pilot-weight-cell"
+                      onClick={() => startEditWeight(p)}
+                    >
+                      {p.weightKg != null
+                        ? `${p.weightKg} kg`
+                        : t("dispatch.setup.pilots.weightUnknown")}
+                    </button>
+                  )}
                 </span>
                 <span className="flex items-center gap-2">
                   <Button

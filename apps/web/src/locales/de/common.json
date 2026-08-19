@@ -58,6 +58,8 @@
         "name": "Name",
         "license": "Lizenzen",
         "weightKg": "Gewicht (kg)",
+        "weightUnknown": "Gewicht fehlt – antippen zum Eintragen",
+        "saveWeight": "Gewicht speichern",
         "add": "Pilot hinzufügen",
         "empty": "Noch keine Piloten.",
         "available": "frei",
@@ -101,7 +103,8 @@
         "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen.",
         "unassign": "Entfernen",
         "setReady": "Auf READY setzen",
-        "unready": "READY zurücksetzen"
+        "unready": "READY zurücksetzen",
+        "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/READY gesperrt."
       },
       "status": {
         "planned": "geplant",

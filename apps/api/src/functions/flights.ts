@@ -18,31 +18,55 @@ import {
 } from "shared";
 import type { Container } from "@azure/cosmos";
 import { getOperationsContainer } from "../lib/cosmos";
+import { randomCode } from "../lib/randomCode";
+
+const FLIGHT_CODE_LENGTH = 3;
+const MAX_CODE_ATTEMPTS = 10;
 
 // The pilot's own weight counts toward the aircraft's payload limit just like any
 // guest's — a real, previously-missing part of the hard-limit check (nfr.md §
 // Reliability & safety). 0 if no pilot is assigned yet, not an error — a flight can
 // exist pilotless before Setup assigns one.
+//
+// null means "a pilot IS assigned but has no weight on file" — distinct from "no
+// pilot assigned" (0). Some real pilot records predate the weightKg field and were
+// never edited afterward; treating that as 0 would silently undercount payload and
+// let an over-limit flight through the hard-limit check unnoticed (exactly what
+// nfr.md § Reliability & safety exists to prevent). Callers must treat null as a
+// block, not a number to add.
 async function pilotWeightKgFor(
   container: Container,
   flight: Flight,
   flightDayId: string,
-): Promise<number> {
+): Promise<number | null> {
   if (!flight.pilotId) return 0;
   const { resource: pilot } = await container.item(flight.pilotId, flightDayId).read<Pilot>();
-  return pilot?.weightKg ?? 0;
+  return pilot?.weightKg ?? null;
 }
 
+// Random 3-char suffix + collision retry, not a count-then-format counter — the
+// counter version let two near-simultaneous creates read the same "current count"
+// and produce the same code (reproduced reliably once enough e2e specs created
+// flights in parallel). Same fix shape as nextGuestCode below. Existing flights
+// keep their sequential-looking FL-00N codes; only newly-created ones look like
+// FL-8K3 — a cosmetic inconsistency, not a functional one.
 async function nextFlightCode(flightDayId: string): Promise<string> {
   const container = await getOperationsContainer();
-  const { resources } = await container.items
-    .query<number>({
-      query:
-        "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'Flight' AND c.flightDayId = @flightDayId",
-      parameters: [{ name: "@flightDayId", value: flightDayId }],
-    })
-    .fetchAll();
-  return `FL-${String((resources[0] ?? 0) + 1).padStart(3, "0")}`;
+  for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+    const code = `FL-${randomCode(FLIGHT_CODE_LENGTH)}`;
+    const { resources } = await container.items
+      .query<number>({
+        query:
+          "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'Flight' AND c.flightDayId = @flightDayId AND c.code = @code",
+        parameters: [
+          { name: "@flightDayId", value: flightDayId },
+          { name: "@code", value: code },
+        ],
+      })
+      .fetchAll();
+    if ((resources[0] ?? 0) === 0) return code;
+  }
+  throw new Error(`Could not generate a unique flight code after ${MAX_CODE_ATTEMPTS} attempts`);
 }
 
 export async function createFlight(
@@ -137,6 +161,14 @@ export async function assignToFlight(
     return { status: 400, jsonBody: { error: "aircraft-not-found" } };
   }
 
+  const pilotWeightKg = await pilotWeightKgFor(container, flight, flightDayId);
+  if (pilotWeightKg === null) {
+    // Pilot assigned but no weight on file — payload can't be verified, so refuse
+    // the whole assignment rather than silently undercounting it (nfr.md §
+    // Reliability & safety). Whole-flight-level, not a per-guest rejection reason.
+    return { status: 409, jsonBody: { error: "pilot-weight-unknown" } };
+  }
+
   const currentGuests = await Promise.all(
     flight.guestIds.map((id) =>
       container
@@ -147,8 +179,7 @@ export async function assignToFlight(
   );
   let usedSeats = flight.guestIds.length;
   let usedWeightKg =
-    (await pilotWeightKgFor(container, flight, flightDayId)) +
-    currentGuests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
+    pilotWeightKg + currentGuests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
 
   const requested = await Promise.all(
     parsed.data.guestIds.map((id) =>
@@ -225,6 +256,14 @@ export async function setFlightReady(
     .read<Aircraft>();
   if (!aircraft) return { status: 400, jsonBody: { error: "aircraft-not-found" } };
 
+  const pilotWeightKg = await pilotWeightKgFor(container, flight, flightDayId);
+  if (pilotWeightKg === null) {
+    // Same rule as assignToFlight — an assigned pilot with no weight on file means
+    // payload can't be verified, so READY (the "confirmed fit to fly" gate) must
+    // refuse rather than silently pass on an undercounted total.
+    return { status: 409, jsonBody: { error: "pilot-weight-unknown" } };
+  }
+
   const guests = await Promise.all(
     flight.guestIds.map((id) =>
       container
@@ -233,9 +272,7 @@ export async function setFlightReady(
         .then((r) => r.resource),
     ),
   );
-  const weightKg =
-    (await pilotWeightKgFor(container, flight, flightDayId)) +
-    guests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
+  const weightKg = pilotWeightKg + guests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
   if (flight.guestIds.length === 0 || weightKg > aircraft.maxPayloadKg) {
     return { status: 409, jsonBody: { error: "not-ready" } };
   }

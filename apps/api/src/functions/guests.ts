@@ -4,7 +4,7 @@ import {
   HttpResponseInit,
   InvocationContext,
 } from "@azure/functions";
-import { randomUUID, randomInt } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   DEFAULT_FLIGHT_DAY_ID,
   guestCreateRequestSchema,
@@ -14,6 +14,7 @@ import {
   type Flight,
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
+import { randomCode } from "../lib/randomCode";
 
 // Shared shape for the many "flip one boolean on a guest" actions below (checkin,
 // undo-checkin — mark-paid/weigh predate this helper and aren't worth churning).
@@ -35,23 +36,16 @@ async function updateGuest(
 // status to anyone who types it in. A sequential code lets a stranger enumerate
 // every guest just by counting; a random one doesn't. 4 chars from a 36-symbol
 // alphabet (~1.68M combinations) is plenty for a single flight day's headcount —
-// collision-checked with a retry, not just assumed unique.
-const CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+// collision-checked with a retry, not just assumed unique. See ../lib/randomCode.ts
+// — flights.ts's nextFlightCode uses the same helper/pattern for the same reason
+// (there it's about fixing a real concurrency bug, not privacy).
 const CODE_LENGTH = 4;
 const MAX_CODE_ATTEMPTS = 10;
-
-function randomCode(): string {
-  let code = "";
-  for (let i = 0; i < CODE_LENGTH; i++) {
-    code += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
-  }
-  return code;
-}
 
 async function nextGuestCode(flightDayId: string): Promise<string> {
   const container = await getOperationsContainer();
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
-    const code = randomCode();
+    const code = randomCode(CODE_LENGTH);
     const { resources } = await container.items
       .query<number>({
         query:

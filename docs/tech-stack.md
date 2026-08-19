@@ -149,10 +149,14 @@ enough surface area to make manual bumps tedious.
 - `func start` needs Azurite already running (`pnpm azurite`) or Functions-host
   storage operations fail — it's a manual second-terminal step, not auto-started, so
   it's easy to forget after a restart.
-- Guest `code` generation (`POST /api/guests`) is a count-then-assign, not atomic
-  under concurrent writes — acceptable for a single-airfield, low-concurrency event;
-  revisit with a counter document or a Cosmos transactional batch if collisions ever
-  actually occur.
+- Guest `code` (`POST /api/guests`) and flight `code` (`POST /api/flights`)
+  generation both use a random-suffix + collision-check-and-retry scheme
+  (`apps/api/src/lib/randomCode.ts`), not a count-then-assign counter — a counter
+  version of flight codes genuinely collided under concurrent writes (a handful of
+  Playwright specs creating flights in parallel was enough to hit it reliably, not
+  just a theoretical risk). Not a true atomicity guarantee, just a large-enough
+  keyspace that collision odds are negligible at this volume; revisit with a
+  counter document or a Cosmos transactional batch if that ever stops being true.
 - `POST /api/flights/{id}/actions/assign`'s multi-document writes (flight + each accepted
   guest) are sequential, not one Cosmos transactional batch — available later without
   a redesign since every document in an assignment shares `flightDayId`, but not done
