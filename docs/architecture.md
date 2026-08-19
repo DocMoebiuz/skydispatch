@@ -75,7 +75,9 @@ shell for a flight instead of each page inventing its own card markup:
   quick start/land; Planning: ready/unready toggle) — the card itself has no
   opinion on which actions exist for a given status, and knows nothing about
   drag-and-drop (Planning wraps it in its own droppable rather than that being
-  baked in here).
+  baked in here). `size="compact"` trims padding/typography and drops the
+  progress bar for sections that need less attention than the primary work
+  area — same shell and data, not a different component.
 - `apps/web/src/lib/assignableUnits.ts` — `groupIntoUnits()`, grouping a guest
   list into assignable units (a `groupId`'s members together, everyone else as
   their own solo unit).
@@ -90,6 +92,20 @@ group-of-one), not per-seat — seating itself is the pilot's discretion at
 boarding, not something the app tracks. Check-in's `PassengerRow` (per-person,
 since boarding confirmation is inherently individual, unlike assignment) is
 still to come.
+
+**Planning is organized into three lanes by how much attention each flight
+status needs right now, not chronological order** — screen space is a scarce
+resource and should go to what's actually actionable:
+- **"In Planung"** (`planned`) — the real work (build/fill a flight). Full-size
+  `FlightCard`s, the most columns, the most screen space.
+- **"Ready" (`ready`)** — occasionally needs a trip back to `planned` via
+  `unready` (a no-show frees a seat, the flight may no longer be full). Same
+  `FlightCard`, `size="compact"`, more columns since each card needs less room.
+- **"Erledigt"** (`airborne` + `completed`) — zero planning actions available;
+  Tracking owns `airborne`→`completed`, Reporting owns the historical record.
+  Collapsed behind a toggle by default, rendered as plain stacked rows (not
+  cards) when expanded — this data doesn't need Planning's attention at all,
+  only its presence acknowledged.
 
 **Deferred, tracked as future work, not a regression:** deep cross-page
 navigation — clicking a flight on one view jumping to its full context on

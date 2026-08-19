@@ -18,10 +18,22 @@ import {
 } from "shared";
 import type { Container } from "@azure/cosmos";
 import { getOperationsContainer } from "../lib/cosmos";
-import { randomCode } from "../lib/randomCode";
 
-const FLIGHT_CODE_LENGTH = 3;
-const MAX_CODE_ATTEMPTS = 10;
+const MAX_COUNTER_ATTEMPTS = 10;
+
+interface FlightCodeCounter {
+  id: string;
+  type: "FlightCodeCounter";
+  flightDayId: string;
+  value: number;
+  _etag?: string;
+}
+
+function cosmosStatus(err: unknown): number | undefined {
+  return typeof err === "object" && err !== null && "code" in err
+    ? (err as { code: unknown }).code as number
+    : undefined;
+}
 
 // The pilot's own weight counts toward the aircraft's payload limit just like any
 // guest's — a real, previously-missing part of the hard-limit check (nfr.md §
@@ -44,29 +56,62 @@ async function pilotWeightKgFor(
   return pilot?.weightKg ?? null;
 }
 
-// Random 3-char suffix + collision retry, not a count-then-format counter — the
-// counter version let two near-simultaneous creates read the same "current count"
-// and produce the same code (reproduced reliably once enough e2e specs created
-// flights in parallel). Same fix shape as nextGuestCode below. Existing flights
-// keep their sequential-looking FL-00N codes; only newly-created ones look like
-// FL-8K3 — a cosmetic inconsistency, not a functional one.
+// Sequential FL-001/FL-002/... via a dedicated counter document with optimistic
+// concurrency (Cosmos ETag + IfMatch), not count-then-format — a plain "count
+// existing flights, format count+1" counter let two near-simultaneous creates
+// read the same current count and produce the same code (reproduced reliably
+// once enough e2e specs created flights in parallel; see git history). The
+// counter document's ETag-guarded replace is what actually makes this atomic:
+// a losing concurrent writer gets HTTP 412 and retries against the winner's new
+// value, rather than both silently computing the same "next" number.
 async function nextFlightCode(flightDayId: string): Promise<string> {
   const container = await getOperationsContainer();
-  for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
-    const code = `FL-${randomCode(FLIGHT_CODE_LENGTH)}`;
-    const { resources } = await container.items
-      .query<number>({
-        query:
-          "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'Flight' AND c.flightDayId = @flightDayId AND c.code = @code",
-        parameters: [
-          { name: "@flightDayId", value: flightDayId },
-          { name: "@code", value: code },
-        ],
-      })
-      .fetchAll();
-    if ((resources[0] ?? 0) === 0) return code;
+  const counterId = `flight-code-counter:${flightDayId}`;
+  for (let attempt = 0; attempt < MAX_COUNTER_ATTEMPTS; attempt++) {
+    const { resource: existing } = await container
+      .item(counterId, flightDayId)
+      .read<FlightCodeCounter>();
+
+    if (!existing) {
+      // First allocation for this flight day — seed the counter from however
+      // many Flight documents already exist (covers flights created before
+      // this counter document existed at all), not a blind 0.
+      const { resources } = await container.items
+        .query<number>({
+          query:
+            "SELECT VALUE COUNT(1) FROM c WHERE c.type = 'Flight' AND c.flightDayId = @flightDayId",
+          parameters: [{ name: "@flightDayId", value: flightDayId }],
+        })
+        .fetchAll();
+      const value = (resources[0] ?? 0) + 1;
+      const fresh: FlightCodeCounter = {
+        id: counterId,
+        type: "FlightCodeCounter",
+        flightDayId,
+        value,
+      };
+      try {
+        await container.items.create(fresh);
+        return `FL-${String(value).padStart(3, "0")}`;
+      } catch (err) {
+        if (cosmosStatus(err) === 409) continue; // someone else created it first — retry, read it next
+        throw err;
+      }
+    }
+
+    const value = existing.value + 1;
+    const updated: FlightCodeCounter = { ...existing, value };
+    try {
+      await container
+        .item(counterId, flightDayId)
+        .replace(updated, { accessCondition: { type: "IfMatch", condition: existing._etag! } });
+      return `FL-${String(value).padStart(3, "0")}`;
+    } catch (err) {
+      if (cosmosStatus(err) === 412) continue; // lost the race — retry against the new value
+      throw err;
+    }
   }
-  throw new Error(`Could not generate a unique flight code after ${MAX_CODE_ATTEMPTS} attempts`);
+  throw new Error(`Could not allocate a unique flight code after ${MAX_COUNTER_ATTEMPTS} attempts`);
 }
 
 export async function createFlight(

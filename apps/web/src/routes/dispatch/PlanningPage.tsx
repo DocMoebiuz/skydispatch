@@ -12,6 +12,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -20,7 +21,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { AssignableUnitCard } from "@/components/flight/AssignableUnitCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
@@ -73,6 +74,11 @@ export function PlanningPage() {
     null,
   );
   const [activeUnit, setActiveUnit] = useState<AssignableUnit | null>(null);
+  // "Finished" (airborne + completed) flights have zero planning actions
+  // available — collapsed by default, on demand only, so screen space goes to
+  // what's actually actionable right now. See docs/architecture.md § Shared
+  // flight components.
+  const [showFinished, setShowFinished] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -140,6 +146,16 @@ export function PlanningPage() {
     (f) =>
       (f.status === "planned" || f.status === "ready") &&
       !flightLoads.get(f.id)?.pilotWeightUnknown,
+  );
+  // Three lanes by how much planning attention each status needs right now —
+  // not just chronological order. Planned: the actual work (build/fill a
+  // flight). Ready: occasionally needs a trip back to "planned" (a no-show
+  // frees a seat). Airborne/completed: nothing left to do here — Tracking
+  // owns that, this page just keeps them out of the way by default.
+  const plannedFlights = sortedFlights.filter((f) => f.status === "planned");
+  const readyFlights = sortedFlights.filter((f) => f.status === "ready");
+  const finishedFlights = sortedFlights.filter(
+    (f) => f.status === "airborne" || f.status === "completed",
   );
 
   function markPending(key: string, on: boolean) {
@@ -223,6 +239,99 @@ export function PlanningPage() {
     const unit = poolUnits.find((u) => `pool:${u.key}` === active.id);
     if (!unit) return;
     void assignUnit(unit, String(over.id).replace(/^flight:/, ""));
+  }
+
+  // Shared by the "In Planung" (default size, full assigned-unit list — the
+  // no-show correction path via unready still needs individual visibility)
+  // and "Ready" (compact, summary only — occasionally actioned, not the main
+  // work) lanes. Airborne/completed flights are locked and never call this;
+  // they render as plain rows instead, see the finished-flights section below.
+  function renderFlightCard(f: Flight, size: "default" | "compact") {
+    const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+    const pilot = pilots.find((p) => p.id === f.pilotId);
+    const flightGuests = f.guestIds
+      .map((id) => guests.find((g) => g.id === id))
+      .filter((g): g is Guest => !!g);
+    const load = flightLoads.get(f.id)!;
+    const assignedUnits = groupIntoUnits(flightGuests);
+    const canSetReady = !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
+    const dropDisabled = load.pilotWeightUnknown;
+
+    const actions =
+      f.status === "ready" ? (
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid="unready-flight"
+          onClick={() => void setFlightStatus(f.id, "unready")}
+        >
+          {t("dispatch.planning.builder.unready")}
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          data-testid="set-ready-flight"
+          disabled={!canSetReady}
+          onClick={() => void setFlightStatus(f.id, "set-ready")}
+        >
+          {t("dispatch.planning.builder.setReady")}
+        </Button>
+      );
+
+    return (
+      <DroppableFlightCard key={f.id} flightId={f.id} disabled={dropDisabled}>
+        {(isOver) => (
+          <FlightCard
+            flight={f}
+            aircraft={aircraft}
+            pilot={pilot}
+            load={load}
+            actions={actions}
+            size={size}
+            className={cn(isOver && "ring-primary ring-2 ring-offset-2")}
+          >
+            {size === "compact" ? (
+              assignedUnits.length > 0 && (
+                <p className="text-muted-foreground truncate" data-testid="flight-assigned-units">
+                  {assignedUnits.map((u) => u.label).join(", ")}
+                </p>
+              )
+            ) : (
+              <div className="flex flex-col gap-1" data-testid="flight-assigned-units">
+                {assignedUnits.map((unit) => (
+                  <AssignableUnitCard
+                    key={unit.key}
+                    unit={unit}
+                    dataTestId="assigned-unit"
+                    actions={
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={t("dispatch.planning.builder.unassign")}
+                        disabled={pending.has(`assigned:${f.id}:${unit.key}`)}
+                        onClick={() => void unassignUnit(unit, f.id)}
+                      >
+                        ✕
+                      </Button>
+                    }
+                  />
+                ))}
+                {assignedUnits.length === 0 && (
+                  <p className="text-muted-foreground text-xs">
+                    {t("dispatch.planning.builder.empty")}
+                  </p>
+                )}
+              </div>
+            )}
+            {lastResult?.flightId === f.id && lastResult.result.rejected.length > 0 && (
+              <p className="text-destructive text-sm" data-testid="assign-warning">
+                {t("dispatch.planning.builder.rejected", { count: lastResult.result.rejected.length })}
+              </p>
+            )}
+          </FlightCard>
+        )}
+      </DroppableFlightCard>
+    );
   }
 
   return (
@@ -335,106 +444,84 @@ export function PlanningPage() {
             </CardContent>
           </Card>
 
-          <div className="flex flex-col gap-4">
-            {sortedFlights.length === 0 && (
-              <p className="text-muted-foreground text-sm">{t("dispatch.planning.flights.empty")}</p>
-            )}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {sortedFlights.map((f) => {
-                const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
-                const pilot = pilots.find((p) => p.id === f.pilotId);
-                const flightGuests = f.guestIds
-                  .map((id) => guests.find((g) => g.id === id))
-                  .filter((g): g is Guest => !!g);
-                const load = flightLoads.get(f.id)!;
-                const assignedUnits = groupIntoUnits(flightGuests);
-                const locked = f.status === "airborne" || f.status === "completed";
-                const canSetReady =
-                  !locked && !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
-                const dropDisabled = locked || load.pilotWeightUnknown;
-
-                let actions;
-                if (locked) {
-                  actions = (
-                    <span className="text-muted-foreground text-sm">
-                      {t(`dispatch.planning.status.${f.status}`)}
-                    </span>
-                  );
-                } else if (f.status === "ready") {
-                  actions = (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="unready-flight"
-                      onClick={() => void setFlightStatus(f.id, "unready")}
-                    >
-                      {t("dispatch.planning.builder.unready")}
-                    </Button>
-                  );
-                } else {
-                  actions = (
-                    <Button
-                      size="sm"
-                      data-testid="set-ready-flight"
-                      disabled={!canSetReady}
-                      onClick={() => void setFlightStatus(f.id, "set-ready")}
-                    >
-                      {t("dispatch.planning.builder.setReady")}
-                    </Button>
-                  );
-                }
-
-                return (
-                  <DroppableFlightCard key={f.id} flightId={f.id} disabled={dropDisabled}>
-                    {(isOver) => (
-                      <FlightCard
-                        flight={f}
-                        aircraft={aircraft}
-                        pilot={pilot}
-                        load={load}
-                        actions={actions}
-                        className={cn(isOver && "ring-primary ring-2 ring-offset-2")}
-                      >
-                        <div className="flex flex-col gap-1" data-testid="flight-assigned-units">
-                          {assignedUnits.map((unit) => (
-                            <AssignableUnitCard
-                              key={unit.key}
-                              unit={unit}
-                              dataTestId="assigned-unit"
-                              actions={
-                                !locked && (
-                                  <Button
-                                    size="icon-sm"
-                                    variant="ghost"
-                                    aria-label={t("dispatch.planning.builder.unassign")}
-                                    disabled={pending.has(`assigned:${f.id}:${unit.key}`)}
-                                    onClick={() => void unassignUnit(unit, f.id)}
-                                  >
-                                    ✕
-                                  </Button>
-                                )
-                              }
-                            />
-                          ))}
-                          {assignedUnits.length === 0 && (
-                            <p className="text-muted-foreground text-xs">
-                              {t("dispatch.planning.builder.empty")}
-                            </p>
-                          )}
-                        </div>
-                        {lastResult?.flightId === f.id && lastResult.result.rejected.length > 0 && (
-                          <p className="text-destructive text-sm" data-testid="assign-warning">
-                            {t("dispatch.planning.builder.rejected", {
-                              count: lastResult.result.rejected.length,
-                            })}
-                          </p>
-                        )}
-                      </FlightCard>
-                    )}
-                  </DroppableFlightCard>
-                );
-              })}
+          <div className="flex flex-col gap-8">
+            {/* Primary lane — the actual planning work. Most space, most cards
+                per row, full detail (see docs/architecture.md § Shared flight
+                components). */}
+            <div className="flex flex-col gap-3">
+              <h2 className="text-lg font-medium" data-testid="lane-planning-heading">
+                {t("dispatch.planning.lanes.planning")} ({plannedFlights.length})
+              </h2>
+              {plannedFlights.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  {t("dispatch.planning.flights.empty")}
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {plannedFlights.map((f) => renderFlightCard(f, "default"))}
+                </div>
+              )}
             </div>
+
+            {/* Secondary lane — occasionally actioned (a no-show sends a
+                flight back to "planned" via unready), otherwise just needs to
+                be glanceable. Compact cards, more per row, less visual weight
+                than the primary lane. */}
+            {readyFlights.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <h2 className="text-muted-foreground text-sm font-medium">
+                  {t("dispatch.planning.lanes.ready")} ({readyFlights.length})
+                </h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                  {readyFlights.map((f) => renderFlightCard(f, "compact"))}
+                </div>
+              </div>
+            )}
+
+            {/* Nothing left to do here (Tracking owns airborne/landing,
+                Reporting owns the historical record) — collapsed by default,
+                on demand only, plain stacked rows rather than cards. */}
+            {finishedFlights.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  className="text-muted-foreground flex w-fit items-center gap-1 text-sm"
+                  data-testid="toggle-finished-flights"
+                  onClick={() => setShowFinished((v) => !v)}
+                >
+                  {showFinished ? (
+                    <ChevronDown className="size-4" />
+                  ) : (
+                    <ChevronRight className="size-4" />
+                  )}
+                  {t("dispatch.planning.lanes.finished")} ({finishedFlights.length})
+                </button>
+                {showFinished && (
+                  <div className="flex flex-col gap-1" data-testid="finished-flight-list">
+                    {finishedFlights.map((f) => {
+                      const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+                      const load = flightLoads.get(f.id)!;
+                      return (
+                        <div
+                          key={f.id}
+                          className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm"
+                          data-testid="finished-flight-row"
+                        >
+                          <span className="font-medium">{f.code}</span>
+                          <span className="text-muted-foreground">{aircraft?.reg ?? "—"}</span>
+                          <span className="text-muted-foreground">
+                            {load.usedSeats}/{load.totalSeats} · {load.usedWeightKg} kg
+                          </span>
+                          <Badge variant="outline">
+                            {t(`dispatch.planning.status.${f.status}`)}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

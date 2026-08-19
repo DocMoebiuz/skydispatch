@@ -30,7 +30,10 @@ for (const { path, heading } of routes) {
   test(`${path} renders without console errors`, async ({ page }) => {
     const errors = collectConsoleErrors(page);
     await page.goto(path);
-    await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+    // level: 1 — the page's own <h1> title, not any h2/h3 sub-heading that
+    // happens to contain the same substring (e.g. Planning's "In Planung"
+    // lane heading vs. this page's own "Planung" <h1>).
+    await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
     expect(errors).toEqual([]);
   });
 }

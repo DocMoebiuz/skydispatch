@@ -81,6 +81,11 @@
     },
     "planning": {
       "dragHint": "Gruppe oder Einzelperson auf einen Flug ziehen, um sie zuzuweisen — oder rechts einen Flug aus der Liste wählen.",
+      "lanes": {
+        "planning": "In Planung",
+        "ready": "Bereit (READY)",
+        "finished": "Erledigt"
+      },
       "flights": {
         "title": "Flüge",
         "empty": "Noch keine Flüge angelegt."
