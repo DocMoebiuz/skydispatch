@@ -32,12 +32,13 @@ jobs:
           mkdir -p api-deploy/vendor
           (cd packages/shared && npm pack --silent --pack-destination ../../api-deploy/vendor)
           rm -rf api-deploy/node_modules/shared
+          ABS_DIR=$(cd api-deploy && pwd)
           TARBALL=$(basename api-deploy/vendor/*.tgz)
           node -e "
             const fs = require('fs');
             const p = 'api-deploy/package.json';
             const pkg = JSON.parse(fs.readFileSync(p));
-            pkg.dependencies.shared = 'file:vendor/$TARBALL';
+            pkg.dependencies.shared = 'file:$ABS_DIR/vendor/$TARBALL';
             delete pkg.scripts.build;
             fs.writeFileSync(p, JSON.stringify(pkg, null, 2));
           "
