@@ -44,6 +44,10 @@ These are hard product requirements carried over from the manual, not aspiration
   buttons/blocked drops), e.g. a drag-and-drop assignment that would exceed weight or
   seat limits is rejected outright, not warned-and-allowed.
 - Hard limits: aircraft max payload and seat count are never exceeded by the UI.
+- The assigned pilot's own weight counts toward the aircraft's max payload, the same
+  as any guest's — payload checks are never guest-weight-only. Every pilot has a
+  required `weightKg` (Setup); flight assignment and the ready-status gate both sum
+  pilot + assigned-guest weight against `aircraft.maxPayloadKg` server-side.
 - Critical, hard-to-undo actions require explicit confirmation: recording takeoff/
   landing, marking a guest No-Show, ending the flight day.
 - Only guests who are both paid and weighed can be assigned to a flight.

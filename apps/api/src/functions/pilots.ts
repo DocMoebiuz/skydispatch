@@ -30,6 +30,7 @@ export async function createPilot(
     flightDayId: DEFAULT_FLIGHT_DAY_ID,
     name: parsed.data.name,
     license: parsed.data.license,
+    weightKg: parsed.data.weightKg,
     available: true,
   };
   const container = await getOperationsContainer();

@@ -155,7 +155,10 @@ interface Aircraft {
 
 interface Pilot {
   id: string; type: "Pilot"; flightDayId: string;
-  name: string; license: string; available: boolean;
+  name: string; license: string;
+  weightKg: number;            // counts toward the aircraft's max payload, same as
+                                // guest weight — see nfr.md § Reliability & safety
+  available: boolean;
 }
 
 interface FlightDay {

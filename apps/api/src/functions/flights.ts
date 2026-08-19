@@ -12,10 +12,26 @@ import {
   type Flight,
   type Aircraft,
   type Guest,
+  type Pilot,
   type AssignResult,
   type AssignRejectReason,
 } from "shared";
+import type { Container } from "@azure/cosmos";
 import { getOperationsContainer } from "../lib/cosmos";
+
+// The pilot's own weight counts toward the aircraft's payload limit just like any
+// guest's — a real, previously-missing part of the hard-limit check (nfr.md §
+// Reliability & safety). 0 if no pilot is assigned yet, not an error — a flight can
+// exist pilotless before Setup assigns one.
+async function pilotWeightKgFor(
+  container: Container,
+  flight: Flight,
+  flightDayId: string,
+): Promise<number> {
+  if (!flight.pilotId) return 0;
+  const { resource: pilot } = await container.item(flight.pilotId, flightDayId).read<Pilot>();
+  return pilot?.weightKg ?? 0;
+}
 
 async function nextFlightCode(flightDayId: string): Promise<string> {
   const container = await getOperationsContainer();
@@ -130,7 +146,9 @@ export async function assignToFlight(
     ),
   );
   let usedSeats = flight.guestIds.length;
-  let usedWeightKg = currentGuests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
+  let usedWeightKg =
+    (await pilotWeightKgFor(container, flight, flightDayId)) +
+    currentGuests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
 
   const requested = await Promise.all(
     parsed.data.guestIds.map((id) =>
@@ -215,7 +233,9 @@ export async function setFlightReady(
         .then((r) => r.resource),
     ),
   );
-  const weightKg = guests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
+  const weightKg =
+    (await pilotWeightKgFor(container, flight, flightDayId)) +
+    guests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
   if (flight.guestIds.length === 0 || weightKg > aircraft.maxPayloadKg) {
     return { status: 409, jsonBody: { error: "not-ready" } };
   }

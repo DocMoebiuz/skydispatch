@@ -4,5 +4,6 @@ export interface Pilot {
   flightDayId: string;
   name: string;
   license: string;
+  weightKg: number; // counts toward the aircraft's payload limit — see nfr.md § Reliability & safety
   available: boolean;
 }

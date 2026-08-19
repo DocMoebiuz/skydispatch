@@ -24,6 +24,7 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     await page.getByTestId("open-add-pilot").click();
     await page.getByLabel("Name", { exact: true }).fill(pilotName);
     await page.getByLabel("Lizenzen").fill("PPL");
+    await page.getByLabel("Gewicht (kg)").fill("85");
     await page.getByTestId("add-pilot").click();
     await expect(page.getByTestId("pilot-list")).toContainText(pilotName);
     pilotId = await fetch("http://localhost:4280/api/pilots")

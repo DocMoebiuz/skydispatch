@@ -101,7 +101,14 @@ export function PlanningPage() {
   const assignedGuests = selectedFlight
     ? selectedFlight.guestIds.map((id) => guestById.get(id)).filter((g): g is Guest => !!g)
     : [];
-  const usedWeightKg = assignedGuests.reduce((sum, g) => sum + (g.weightKg ?? 0), 0);
+  const selectedPilot = selectedFlight
+    ? (pilots.find((p) => p.id === selectedFlight.pilotId) ?? null)
+    : null;
+  // Pilot weight counts toward the aircraft's payload limit too — mirrors the
+  // server-side check in apps/api flights.ts (pilotWeightKgFor). See nfr.md §
+  // Reliability & safety.
+  const usedWeightKg =
+    (selectedPilot?.weightKg ?? 0) + assignedGuests.reduce((sum, g) => sum + (g.weightKg ?? 0), 0);
   const usedSeats = assignedGuests.length;
   const locked = selectedFlight?.status === "airborne" || selectedFlight?.status === "completed";
   const canSetReady =

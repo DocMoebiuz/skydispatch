@@ -40,6 +40,7 @@ export function SetupPage() {
   const [pilotDialogOpen, setPilotDialogOpen] = useState(false);
   const [pilotName, setPilotName] = useState("");
   const [pilotLicense, setPilotLicense] = useState("");
+  const [pilotWeightKg, setPilotWeightKg] = useState("");
   const [savingPilot, setSavingPilot] = useState(false);
 
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
@@ -129,19 +130,21 @@ export function SetupPage() {
   }
 
   async function addPilot() {
-    if (!pilotName.trim() || !pilotLicense.trim()) return;
+    const weightNum = Number(pilotWeightKg);
+    if (!pilotName.trim() || !pilotLicense.trim() || !weightNum) return;
     setSavingPilot(true);
     try {
       const response = await fetch("/api/pilots", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: pilotName, license: pilotLicense }),
+        body: JSON.stringify({ name: pilotName, license: pilotLicense, weightKg: weightNum }),
       });
       if (response.ok) {
         const created = (await response.json()) as Pilot;
         setPilots((prev) => [...prev, created]);
         setPilotName("");
         setPilotLicense("");
+        setPilotWeightKg("");
         setPilotDialogOpen(false);
       }
     } finally {
@@ -261,7 +264,7 @@ export function SetupPage() {
                 data-testid="pilot-row"
               >
                 <span>
-                  {p.name} — {p.license}
+                  {p.name} — {p.license} — {p.weightKg ?? "?"} kg
                 </span>
                 <span className="flex items-center gap-2">
                   <Button
@@ -311,6 +314,15 @@ export function SetupPage() {
                 id="pilot-license"
                 value={pilotLicense}
                 onChange={(e) => setPilotLicense(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pilot-weight">{t("dispatch.setup.pilots.weightKg")}</Label>
+              <Input
+                id="pilot-weight"
+                type="number"
+                value={pilotWeightKg}
+                onChange={(e) => setPilotWeightKg(e.target.value)}
               />
             </div>
           </div>

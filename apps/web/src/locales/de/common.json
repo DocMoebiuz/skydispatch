@@ -45,6 +45,7 @@
         "title": "Piloten",
         "name": "Name",
         "license": "Lizenzen",
+        "weightKg": "Gewicht (kg)",
         "add": "Pilot hinzufügen",
         "empty": "Noch keine Piloten.",
         "available": "frei",

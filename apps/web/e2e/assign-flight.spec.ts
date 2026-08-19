@@ -57,6 +57,10 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     // "Flugplatz – Name" label on the page behind the dialog.
     await page.getByLabel("Name", { exact: true }).fill(pilotName);
     await page.getByLabel("Lizenzen").fill("PPL");
+    // Pilot weight counts toward the aircraft's payload limit too — see
+    // nfr.md § Reliability & safety. Aircraft payload below is sized to account
+    // for it (see comment there).
+    await page.getByLabel("Gewicht (kg)").fill("80");
     await page.getByTestId("add-pilot").click();
     await expect(page.getByTestId("pilot-list")).toContainText(pilotName);
     // Captured immediately, not deferred to later — so a failure further into the
@@ -70,7 +74,10 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     await page.getByLabel("Kennzeichen").fill(reg);
     await page.getByLabel("Typ").fill("Cessna 172");
     await page.getByLabel("Sitze").fill("2");
-    await page.getByLabel("Max. Zuladung (kg)").fill("150");
+    // 230 = pilot (80) + solo guest (70) + group member G One (80), exactly at the
+    // limit once the group's first member is assigned — matches the narrative below
+    // where G Two (90kg) is rejected by the 2-seat cap regardless of weight headroom.
+    await page.getByLabel("Max. Zuladung (kg)").fill("230");
     await page.getByTestId("add-aircraft").click();
     await expect(page.getByTestId("aircraft-list")).toContainText(reg);
     aircraftId = await fetch("http://localhost:4280/api/aircraft")
@@ -111,14 +118,14 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     flightId = flightsAfter.find((f) => f.aircraftId === aircraftId)?.id;
     expect(flightId).toBeTruthy();
 
-    // --- Assign solo guest — fits (70/150 kg, 1/2 seats) ---
+    // --- Assign solo guest — fits (150/230 kg incl. pilot's 80kg, 1/2 seats) ---
     await page
       .getByTestId("pool-guest")
       .filter({ hasText: "E2E Assign Solo" })
       .getByRole("button", { name: "Zuweisen" })
       .click();
     await expect(page.getByTestId("flight-gauge")).toContainText("1/2");
-    await expect(page.getByTestId("flight-gauge")).toContainText("70/150");
+    await expect(page.getByTestId("flight-gauge")).toContainText("150/230");
     await expect(page.getByTestId("assigned-guest")).toContainText("E2E Assign Solo");
 
     // --- Assign the group — only one more fits (2 seats max); the other must be
