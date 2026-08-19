@@ -1,7 +1,7 @@
 import { CosmosClient, type Container } from "@azure/cosmos";
 
 const DATABASE_ID = process.env.COSMOS_DATABASE_ID ?? "skydispatch";
-const CONTAINER_ID = "operations";
+const CONTAINER_ID = process.env.COSMOS_CONTAINER_ID ?? "operations";
 
 let containerPromise: Promise<Container> | null = null;
 

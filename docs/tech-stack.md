@@ -58,12 +58,17 @@ re-justifying simplicity per decision.
   Registration) — see [nfr.md](./nfr.md#offline--local-first-behavior) for why, and
   [architecture.md](./architecture.md#open-decisions) for the (not yet solved) sync
   strategy.
-- **One Cosmos database (`skydispatch`), one container (`operations`)**, holding
-  guests/flights/aircraft/pilots/flight-days as distinct document `type`s in the same
-  partition rather than split across containers, partitioned by `/flightDayId`. No
-  custom indexing policy for MVP (default indexing is fine at this scale — one flight
-  day, low hundreds of guests). Full schema and reasoning:
+- **One Cosmos database (`skydispatch`), one container (`operations`)** by default,
+  holding guests/flights/aircraft/pilots/flight-days as distinct document `type`s in
+  the same partition rather than split across containers, partitioned by
+  `/flightDayId`. No custom indexing policy for MVP (default indexing is fine at
+  this scale — one flight day, low hundreds of guests). Full schema and reasoning:
   [architecture.md § Data model & persistence](./architecture.md#data-model--persistence).
+  Database/container names are overridable via `COSMOS_DATABASE_ID`/
+  `COSMOS_CONTAINER_ID` (both optional, same account either way) — e2e sets
+  `COSMOS_DATABASE_ID=skydispatch.test` (see § Testing), and the deployed Azure
+  app can point at its own dedicated database/container the same way once it
+  needs one separate from local dev's.
 
 ## Testing
 
