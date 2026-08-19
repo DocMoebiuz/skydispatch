@@ -17,6 +17,9 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
   const emailG1 = `e2e-assign-g1-${stamp}@example.test`;
   const emailG2 = `e2e-assign-g2-${stamp}@example.test`;
   const groupName = `E2E Assign Gruppe ${stamp}`;
+  const nameSolo = `E2E Assign Solo ${stamp}`;
+  const nameG1 = `E2E Assign G One ${stamp}`;
+  const nameG2 = `E2E Assign G Two ${stamp}`;
 
   let aircraftId: string | undefined;
   let pilotId: string | undefined;
@@ -100,19 +103,19 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
 
     // --- Register: one solo guest (70kg), one group of two (80kg + 90kg) ---
     await page.goto("/register");
-    await registerAndFinish("E2E Assign Solo", emailSolo, "70", { addAnother: false });
+    await registerAndFinish(nameSolo, emailSolo, "70", { addAnother: false });
 
     await page.goto("/register");
-    await registerAndFinish("E2E Assign G One", emailG1, "80", { addAnother: true });
+    await registerAndFinish(nameG1, emailG1, "80", { addAnother: true });
     await page.getByLabel("Gruppenname").fill(groupName);
     await page.getByRole("button", { name: "Weiter" }).click();
-    await registerAndFinish("E2E Assign G Two", emailG2, "90", { addAnother: false });
+    await registerAndFinish(nameG2, emailG2, "90", { addAnother: false });
 
     // --- Pay + weigh all three (staff-verified weight, matches declared here) ---
     await page.goto("/dispatch/guests");
-    await payAndWeigh("E2E Assign Solo", "70");
-    await payAndWeigh("E2E Assign G One", "80");
-    await payAndWeigh("E2E Assign G Two", "90");
+    await payAndWeigh(nameSolo, "70");
+    await payAndWeigh(nameG1, "80");
+    await payAndWeigh(nameG2, "90");
 
     // --- Planning: create the flight ---
     await page.goto("/dispatch/planning");
@@ -126,31 +129,36 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     await expect(page.getByTestId("create-flight")).not.toBeVisible();
 
     const flightsAfter = await fetch("http://localhost:4280/api/flights").then(
-      (r) => r.json() as Promise<{ id: string; aircraftId: string }[]>,
+      (r) => r.json() as Promise<{ id: string; aircraftId: string; code: string }[]>,
     );
-    flightId = flightsAfter.find((f) => f.aircraftId === aircraftId)?.id;
+    const createdFlight = flightsAfter.find((f) => f.aircraftId === aircraftId);
+    flightId = createdFlight?.id;
     expect(flightId).toBeTruthy();
+    const flightCode = createdFlight!.code;
+    const flightCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
 
-    // --- Assign solo guest — fits (150/230 kg incl. pilot's 80kg, 1/2 seats) ---
+    // --- Assign solo guest via the pool card's flight-picker (the click/keyboard
+    // fallback for drag — see docs/architecture.md § Shared flight components) —
+    // fits (150/230 kg incl. pilot's 80kg, 1/2 seats) ---
     await page
-      .getByTestId("pool-guest")
-      .filter({ hasText: "E2E Assign Solo" })
-      .getByRole("button", { name: "Zuweisen" })
-      .click();
-    await expect(page.getByTestId("flight-gauge")).toContainText("1/2");
-    await expect(page.getByTestId("flight-gauge")).toContainText("150/230");
-    await expect(page.getByTestId("assigned-guest")).toContainText("E2E Assign Solo");
+      .getByTestId("pool-unit")
+      .filter({ hasText: nameSolo })
+      .getByTestId("pool-unit-assign-select")
+      .selectOption({ label: flightCode });
+    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("1/2");
+    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("150/230");
+    await expect(flightCard.getByTestId("assigned-unit")).toContainText(nameSolo);
 
     // --- Assign the group — only one more fits (2 seats max); the other must be
     // rejected, never silently dropped or over-capacity-allowed ---
     await page
-      .getByTestId("pool-group")
+      .getByTestId("pool-unit")
       .filter({ hasText: groupName })
-      .getByRole("button", { name: "Zuweisen" })
-      .click();
-    await expect(page.getByTestId("flight-gauge")).toContainText("2/2");
-    await expect(page.getByTestId("assign-warning")).toBeVisible();
-    await expect(page.getByTestId("assigned-guest")).toHaveCount(2);
+      .getByTestId("pool-unit-assign-select")
+      .selectOption({ label: flightCode });
+    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("2/2");
+    await expect(flightCard.getByTestId("assign-warning")).toBeVisible();
+    await expect(flightCard.getByTestId("assigned-unit")).toHaveCount(2);
   } finally {
     await Promise.all([
       deleteGuestByEmail(emailSolo),

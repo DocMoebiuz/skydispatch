@@ -14,6 +14,8 @@ test("finishing registration shows the correct total fee and a board link", asyn
   const email1 = `e2e-finish-1-${stamp}@example.test`;
   const email2 = `e2e-finish-2-${stamp}@example.test`;
   const groupName = `E2E Finish Gruppe ${stamp}`;
+  const name1 = `E2E Finish One ${stamp}`;
+  const name2 = `E2E Finish Two ${stamp}`;
 
   // This flight day's settings are a shared singleton (see docs/architecture.md §
   // Data model & persistence) — capture whatever's there so it can be restored, not
@@ -46,7 +48,7 @@ test("finishing registration shows the correct total fee and a board link", asyn
     await expect(page.getByTestId("flightday-saved")).toBeVisible();
 
     await page.goto("/register");
-    await page.getByLabel("Vor- und Nachname").fill("E2E Finish One");
+    await page.getByLabel("Vor- und Nachname").fill(name1);
     await page.getByLabel("E-Mail-Adresse").fill(email1);
     await page.getByRole("button", { name: "Weiter" }).click();
     await page.getByLabel("Geburtsdatum").fill("1990-05-14");
@@ -63,7 +65,7 @@ test("finishing registration shows the correct total fee and a board link", asyn
     await page.getByLabel("Gruppenname").fill(groupName);
     await page.getByRole("button", { name: "Weiter" }).click();
 
-    await page.getByLabel("Vor- und Nachname").fill("E2E Finish Two");
+    await page.getByLabel("Vor- und Nachname").fill(name2);
     await page.getByLabel("E-Mail-Adresse").fill(email2);
     await page.getByRole("button", { name: "Weiter" }).click();
     // Group's default "reuse first member's address" is accepted — address fields
@@ -90,8 +92,8 @@ test("finishing registration shows the correct total fee and a board link", asyn
     await page.goto(boardHref!);
     await expect(page.getByTestId("board-lookup-result")).toBeVisible();
     const memberLines = await page.getByTestId("board-lookup-member").allTextContents();
-    expect(memberLines.some((l) => l.includes("E2E Finish One"))).toBe(true);
-    expect(memberLines.some((l) => l.includes("E2E Finish Two"))).toBe(true);
+    expect(memberLines.some((l) => l.includes(name1))).toBe(true);
+    expect(memberLines.some((l) => l.includes(name2))).toBe(true);
   } finally {
     await Promise.all([deleteGuestByEmail(email1), deleteGuestByEmail(email2)]);
     if (original) {

@@ -72,3 +72,43 @@ export async function deleteById(id: string, flightDayId: string): Promise<void>
   const container = await getTestContainer();
   await container.item(id, flightDayId).delete().catch(() => undefined);
 }
+
+// Self-healing cleanup for a real gap: `Flight` documents have no name/email/reg
+// field, so a spec that gets hard-killed mid-run (a Playwright test timeout, or —
+// repeatedly observed this session — the devcontainer itself dying) can leave a
+// Flight behind whose aircraft/pilot WAS deleted by that same run's (otherwise-
+// completed) cleanup. Such an orphan is invisible to any "does the name/email/reg
+// contain E2E" query and just accumulates, cluttering every later Planning-page
+// test's flight grid — confirmed to actually break planning-drag.spec.ts's
+// bounding-box-based drag simulation once enough orphans piled up. Call this
+// before/after a run touching Planning if you suspect stale data, or periodically
+// during manual cleanup; safe no-op when nothing is orphaned. Never touches a
+// flight whose aircraft AND pilot (if any) still resolve — real flights are safe.
+export async function deleteOrphanedFlights(): Promise<number> {
+  const container = await getTestContainer();
+  const [flights, aircraft, pilots] = await Promise.all([
+    container.items
+      .query<{ id: string; aircraftId: string; pilotId: string | null; flightDayId: string }>({
+        query: "SELECT c.id, c.aircraftId, c.pilotId, c.flightDayId FROM c WHERE c.type = 'Flight'",
+      })
+      .fetchAll()
+      .then((r) => r.resources),
+    container.items
+      .query<{ id: string }>({ query: "SELECT c.id FROM c WHERE c.type = 'Aircraft'" })
+      .fetchAll()
+      .then((r) => r.resources),
+    container.items
+      .query<{ id: string }>({ query: "SELECT c.id FROM c WHERE c.type = 'Pilot'" })
+      .fetchAll()
+      .then((r) => r.resources),
+  ]);
+  const aircraftIds = new Set(aircraft.map((a) => a.id));
+  const pilotIds = new Set(pilots.map((p) => p.id));
+  const orphaned = flights.filter(
+    (f) => !aircraftIds.has(f.aircraftId) || (!!f.pilotId && !pilotIds.has(f.pilotId)),
+  );
+  await Promise.all(
+    orphaned.map((f) => container.item(f.id, f.flightDayId).delete().catch(() => undefined)),
+  );
+  return orphaned.length;
+}

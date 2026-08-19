@@ -14,6 +14,9 @@ test("group registration: first 'add another' asks for a group name, applies to 
   const email2 = `e2e-group-2-${stamp}@example.test`;
   const email3 = `e2e-group-3-${stamp}@example.test`;
   const groupName = `E2E Gruppe ${stamp}`;
+  const name1 = `E2E Group Member One ${stamp}`;
+  const name2 = `E2E Group Member Two ${stamp}`;
+  const name3 = `E2E Group Member Three ${stamp}`;
 
   // addressMode exercises all three states the address step can be in: "full" (no
   // group yet, or reuse declined) fills a fresh address; "reuse" accepts the
@@ -54,7 +57,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
     await page.goto("/register");
 
     // Member 1 — registered solo, no group question shown yet.
-    const code1 = await fillAndSubmit("E2E Group Member One", email1, "70");
+    const code1 = await fillAndSubmit(name1, email1, "70");
     expect(code1).toMatch(/^[A-Z0-9]{4}$/);
     await expect(page.getByText("Gruppe", { exact: false })).not.toBeVisible();
 
@@ -69,7 +72,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
     // Back on step 1, ready for member 2 — address step defaults to reusing member
     // 1's address (see RegisterPage's canReuseAddress).
     await expect(page.getByLabel("Vor- und Nachname")).toBeVisible();
-    const code2 = await fillAndSubmit("E2E Group Member Two", email2, "65", "reuse");
+    const code2 = await fillAndSubmit(name2, email2, "65", "reuse");
     expect(code2).toMatch(/^[A-Z0-9]{4}$/);
     await expect(page.getByText(`Gruppe: ${groupName}`)).toBeVisible();
     const summary = page.getByTestId("session-guest");
@@ -80,15 +83,14 @@ test("group registration: first 'add another' asks for a group name, applies to 
     await page.getByRole("button", { name: "Weitere Person anmelden" }).click();
     await expect(page.getByText(/fassen wir alle gemeinsam/)).not.toBeVisible();
     await expect(page.getByLabel("Vor- und Nachname")).toBeVisible();
-    await fillAndSubmit("E2E Group Member Three", email3, "80", "new");
+    await fillAndSubmit(name3, email3, "80", "new");
     await expect(page.getByText(`Gruppe: ${groupName}`)).toBeVisible();
     await expect(page.getByTestId("session-guest")).toHaveCount(3);
 
-    // All three share one group on the dispatcher side. Matched by group name and
-    // by name text, not by `code` — guest codes are a shared, non-atomic per-day
-    // counter (see docs/tech-stack.md § Known cross-cutting risks), so two tests'
-    // guests can legitimately land on the same code when the suite runs in
-    // parallel against the same dev Cosmos account; that's not a product bug.
+    // All three share one group on the dispatcher side. Matched by group name/
+    // stamped member name, not by `code` — codes are random 4-char (see apps/api
+    // guests.ts), so two tests' guests could in principle land on the same one;
+    // avoiding that match entirely is simpler than reasoning about the odds.
     await page.goto("/dispatch/guests");
     const rows = page.getByTestId("guest-row").filter({ hasText: groupName });
     await expect(rows).toHaveCount(3);
@@ -97,7 +99,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
     );
     expect(new Set(groupIds).size).toBe(1);
     expect(groupIds[0]).not.toBe("");
-    for (const name of ["E2E Group Member One", "E2E Group Member Two"]) {
+    for (const name of [name1, name2]) {
       await expect(
         page.getByTestId("guest-row").filter({ hasText: name }),
       ).toContainText(groupName);

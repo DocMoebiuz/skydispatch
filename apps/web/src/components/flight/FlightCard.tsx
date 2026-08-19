@@ -13,6 +13,12 @@ interface FlightCardProps {
   load: FlightLoad;
   actions?: ReactNode;
   className?: string;
+  // Extra page-specific body content (e.g. Planning's assigned-units list) —
+  // rendered after the gauge/warning, before the actions slot. FlightCard stays
+  // agnostic of what's in it (and of drag-and-drop entirely — Planning wraps it
+  // in its own droppable, not baked in here, so Dashboard/Tracking don't need to
+  // know dnd-kit exists).
+  children?: ReactNode;
 }
 
 // One shared visual shell for a flight, reused across Dashboard/Planning/
@@ -20,7 +26,15 @@ interface FlightCardProps {
 // has no opinion on what actions exist for a given status; callers pass their
 // own `actions` slot, since what's relevant differs by page (Dashboard wants
 // quick start/land, Planning wants the ready/unready toggle).
-export function FlightCard({ flight, aircraft, pilot, load, actions, className }: FlightCardProps) {
+export function FlightCard({
+  flight,
+  aircraft,
+  pilot,
+  load,
+  actions,
+  className,
+  children,
+}: FlightCardProps) {
   const { t } = useTranslation();
   return (
     <Card className={className} data-testid="flight-card" data-flight-code={flight.code}>
@@ -56,6 +70,7 @@ export function FlightCard({ flight, aircraft, pilot, load, actions, className }
             {t("dispatch.planning.builder.pilotWeightUnknown")}
           </p>
         )}
+        {children}
       </CardContent>
       {actions && <CardFooter className="gap-2">{actions}</CardFooter>}
     </Card>

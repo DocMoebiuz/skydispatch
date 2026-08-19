@@ -8,11 +8,13 @@ import { deleteGuestByEmail } from "./helpers/cosmos";
 test("registration writes through the API into Cosmos and appears on /dispatch", async ({
   page,
 }) => {
-  const email = `e2e-register-${Date.now()}@example.test`;
+  const stamp = Date.now();
+  const guestName = `E2E Test Guest ${stamp}`;
+  const email = `e2e-register-${stamp}@example.test`;
 
   try {
     await page.goto("/register");
-    await page.getByLabel("Vor- und Nachname").fill("E2E Test Guest");
+    await page.getByLabel("Vor- und Nachname").fill(guestName);
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();
     await page.getByLabel("Geburtsdatum").fill("1990-05-14");
@@ -29,7 +31,7 @@ test("registration writes through the API into Cosmos and appears on /dispatch",
     expect(code).toMatch(/^[A-Z0-9]{4}$/);
 
     await page.goto("/dispatch/guests");
-    const row = page.getByTestId("guest-row").filter({ hasText: "E2E Test Guest" });
+    const row = page.getByTestId("guest-row").filter({ hasText: guestName });
     await expect(row).toBeVisible();
     await expect(row).toContainText(code);
     await expect(row).toContainText("75"); // declared weight

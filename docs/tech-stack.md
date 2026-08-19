@@ -31,6 +31,11 @@ re-justifying simplicity per decision.
   translation keys mean a second locale is a resource file, not a rewrite, and they
   give one place (`apps/web/src/locales/`) to audit all UI copy instead of it being
   scattered through components as inline strings.
+- **`@dnd-kit/core`** for Planning's drag-and-drop (drag a guest/group unit onto a
+  flight card to assign it) — chosen over native HTML5 drag-and-drop for built-in
+  pointer/touch sensor support, since the dispatcher app is used on a tablet at the
+  airfield per the manual. Click (a flight-picker on each pool card) stays as a
+  working fallback either way, so this only affects how good the drag itself feels.
 
 ## Backend
 
@@ -113,6 +118,20 @@ re-justifying simplicity per decision.
   entirely through this `docs/` tree and root `CLAUDE.md`, which are identical whether
   you're inside or outside the container (decided explicitly, see git history of this
   file / the planning session that created it).
+- **Vite dev server runs on 5183, not Vite's default 5173** (`apps/web/vite.config.mts`'s
+  `server.port`, `swa-cli.config.json`'s `appDevserverUrl`, and this devcontainer's
+  `forwardPorts`/`portsAttributes` all agree on this) — kept clear of another project
+  on the same machine that already uses 5173.
+- **`vite.config.mts`, not `.ts`.** The Vitest VSCode extension loads this file to
+  discover tests; without an explicit `.mts` extension, `apps/web`'s missing
+  `"type": "module"` makes it try to CJS-`require()` `@tailwindcss/vite`, which is
+  ESM-only, and the extension fails to load any config at all. Vite's own CLI has
+  always loaded `.ts` configs as ESM internally regardless of extension, so this
+  rename is purely for the Vitest extension's benefit. Its `test.exclude` also adds
+  `e2e/**` to Vitest's defaults (spread `configDefaults.exclude`, don't replace it) —
+  Playwright's e2e specs share the `*.spec.ts` naming convention, and without the
+  exclude Vitest tries to load them directly and crashes on the bare `test()` call
+  from `@playwright/test`.
 
 ## CI/CD
 

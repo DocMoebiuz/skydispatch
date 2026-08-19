@@ -70,15 +70,26 @@ shell for a flight instead of each page inventing its own card markup:
   payload too, see [nfr.md § Reliability & safety](./nfr.md#reliability--safety-matches-manual-53-eingebaute-sicherheiten)).
   One definition of "is this flight over its limit," not duplicated per page.
 - `apps/web/src/components/flight/FlightCard.tsx` — code/status/aircraft/pilot
-  header, the load gauge, and an `actions` slot the caller fills in per page
-  (Dashboard: quick start/land; Planning: ready/unready toggle) — the card
-  itself has no opinion on which actions exist for a given status.
+  header, the load gauge, an optional `children` slot for page-specific extra
+  body content, and an `actions` slot the caller fills in per page (Dashboard:
+  quick start/land; Planning: ready/unready toggle) — the card itself has no
+  opinion on which actions exist for a given status, and knows nothing about
+  drag-and-drop (Planning wraps it in its own droppable rather than that being
+  baked in here).
+- `apps/web/src/lib/assignableUnits.ts` — `groupIntoUnits()`, grouping a guest
+  list into assignable units (a `groupId`'s members together, everyone else as
+  their own solo unit).
+- `apps/web/src/components/flight/AssignableUnitCard.tsx` — one card per unit,
+  reused both in Planning's pool (draggable via `@dnd-kit/core`, plus a
+  flight-picker `<select>` as the click/keyboard fallback — there's no single
+  "selected flight" any more for a plain button to target) and inside a
+  flight's own card (not draggable, a plain "Entfernen" button instead).
 
 Assignment is **unit-level** (a group, or a solo guest acting as a
 group-of-one), not per-seat — seating itself is the pilot's discretion at
-boarding, not something the app tracks. Planning's `AssignableUnitCard` and
-Check-in's `PassengerRow` (per-person, since boarding confirmation is
-inherently individual) are still to come.
+boarding, not something the app tracks. Check-in's `PassengerRow` (per-person,
+since boarding confirmation is inherently individual, unlike assignment) is
+still to come.
 
 **Deferred, tracked as future work, not a regression:** deep cross-page
 navigation — clicking a flight on one view jumping to its full context on

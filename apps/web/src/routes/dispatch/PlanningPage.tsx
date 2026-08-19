@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { Guest, Aircraft, Pilot, Flight, AssignResult } from "shared";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardAction,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -19,26 +21,60 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
+import { FlightCard } from "@/components/flight/FlightCard";
+import { AssignableUnitCard } from "@/components/flight/AssignableUnitCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
+import { groupIntoUnits, type AssignableUnit } from "@/lib/assignableUnits";
+import { cn } from "@/lib/utils";
 
-// Increment 3 — the heart of the app: assign guests/groups to flights, hard
-// seat/weight limits enforced server-side (checked before allowing, never
-// warn-and-allow — nfr.md § Reliability & safety). Click-to-assign, not
-// drag-and-drop (prototype's polish, not the rule itself — deferred, see
-// docs/architecture.md § Prototype reference).
+const ORDER: Record<Flight["status"], number> = { airborne: 0, ready: 1, planned: 2, completed: 3 };
+
+// Wraps a FlightCard as a dnd-kit drop target — kept local and separate from
+// FlightCard itself, which stays drag-and-drop-agnostic (Dashboard/Tracking use
+// it too and have no need to know dnd-kit exists).
+function DroppableFlightCard({
+  flightId,
+  disabled,
+  className,
+  children,
+}: {
+  flightId: string;
+  disabled: boolean;
+  className?: string;
+  children: (isOver: boolean) => ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `flight:${flightId}`, disabled });
+  return (
+    <div ref={setNodeRef} className={cn("rounded-lg", className)}>
+      {children(isOver && !disabled)}
+    </div>
+  );
+}
+
+// Planning — flight-centric: create a flight, then fill it by assigning
+// whole units (a group, or a solo guest as a group-of-one) within hard seat/
+// weight limits. Never per-seat — seating is the pilot's discretion at
+// boarding (see docs/architecture.md § Shared flight components). Drag a unit
+// from the pool onto a flight card to assign it; each pool card also has a
+// flight-picker as the click/keyboard fallback (there's no single "selected
+// flight" any more to default a plain button to).
 export function PlanningPage() {
   const { t } = useTranslation();
   const [guests, setGuests] = useState<Guest[]>([]);
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
   const [newFlightDialogOpen, setNewFlightDialogOpen] = useState(false);
   const [newFlightAircraftId, setNewFlightAircraftId] = useState("");
   const [newFlightPilotId, setNewFlightPilotId] = useState("");
   const [creatingFlight, setCreatingFlight] = useState(false);
-  const [assigning, setAssigning] = useState<Set<string>>(new Set());
-  const [lastResult, setLastResult] = useState<AssignResult | null>(null);
+  const [pending, setPending] = useState<Set<string>>(new Set());
+  const [lastResult, setLastResult] = useState<{ flightId: string; result: AssignResult } | null>(
+    null,
+  );
+  const [activeUnit, setActiveUnit] = useState<AssignableUnit | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   function reload(): Promise<void> {
     return Promise.all([
@@ -54,9 +90,8 @@ export function PlanningPage() {
     });
   }
 
-  // Not `reload()` directly — inlined here so the eslint-plugin-react-hooks
-  // set-state-in-effect rule can see this is the "fetch on mount" shape it
-  // accepts; `reload()` itself is only called from event handlers below.
+  // Inlined (not reload()) so the fetch-on-mount effect matches the shape
+  // eslint-plugin-react-hooks's set-state-in-effect rule accepts.
   useEffect(() => {
     Promise.all([
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
@@ -71,8 +106,6 @@ export function PlanningPage() {
     });
   }, []);
 
-  const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
-
   const pool = useMemo(
     () =>
       guests.filter(
@@ -80,49 +113,43 @@ export function PlanningPage() {
       ),
     [guests],
   );
-  const { poolGroups, poolSingles } = useMemo(() => {
-    const map = new Map<string, Guest[]>();
-    const singles: Guest[] = [];
-    for (const g of pool) {
-      if (g.groupId) {
-        const arr = map.get(g.groupId) ?? [];
-        arr.push(g);
-        map.set(g.groupId, arr);
-      } else {
-        singles.push(g);
-      }
+  const poolUnits = useMemo(() => groupIntoUnits(pool), [pool]);
+  const sortedFlights = useMemo(
+    () => [...flights].sort((a, b) => ORDER[a.status] - ORDER[b.status]),
+    [flights],
+  );
+  // One computed load per flight, reused for rendering AND for gating which
+  // flights a pool unit can target — a flight with unknown pilot weight must
+  // refuse assignment the same way whether it's reached by drag or by the
+  // select fallback (nfr.md § Reliability & safety; apps/api flights.ts
+  // refuses it server-side too, this is just not letting the UI offer what the
+  // server will reject).
+  const flightLoads = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof computeFlightLoad>>();
+    for (const f of flights) {
+      const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+      const pilot = pilots.find((p) => p.id === f.pilotId);
+      const flightGuests = f.guestIds
+        .map((id) => guests.find((g) => g.id === id))
+        .filter((g): g is Guest => !!g);
+      map.set(f.id, computeFlightLoad(f, aircraft, pilot, flightGuests));
     }
-    return { poolGroups: map, poolSingles: singles };
-  }, [pool]);
+    return map;
+  }, [flights, aircraftList, pilots, guests]);
+  const assignableFlights = sortedFlights.filter(
+    (f) =>
+      (f.status === "planned" || f.status === "ready") &&
+      !flightLoads.get(f.id)?.pilotWeightUnknown,
+  );
 
-  const selectedFlight = flights.find((f) => f.id === selectedFlightId) ?? null;
-  const selectedAircraft = selectedFlight
-    ? (aircraftList.find((a) => a.id === selectedFlight.aircraftId) ?? null)
-    : null;
-  const assignedGuests = selectedFlight
-    ? selectedFlight.guestIds.map((id) => guestById.get(id)).filter((g): g is Guest => !!g)
-    : [];
-  const selectedPilot = selectedFlight
-    ? (pilots.find((p) => p.id === selectedFlight.pilotId) ?? undefined)
-    : undefined;
-  // Shared with Dashboard/Tracking — see apps/web/src/lib/flightLoad.ts. Pilot
-  // weight counts toward payload too, and an assigned pilot with no weight on
-  // file blocks assign/set-ready entirely (nfr.md § Reliability & safety;
-  // mirrors apps/api flights.ts's pilotWeightKgFor).
-  const load = selectedFlight
-    ? computeFlightLoad(selectedFlight, selectedAircraft ?? undefined, selectedPilot, assignedGuests)
-    : null;
-  const usedWeightKg = load?.usedWeightKg ?? 0;
-  const usedSeats = assignedGuests.length;
-  const locked = selectedFlight?.status === "airborne" || selectedFlight?.status === "completed";
-  const canSetReady =
-    !!selectedFlight &&
-    !!selectedAircraft &&
-    !!load &&
-    !load.pilotWeightUnknown &&
-    usedSeats > 0 &&
-    usedWeightKg <= selectedAircraft.maxPayloadKg;
-  const assignBlocked = !!load?.pilotWeightUnknown;
+  function markPending(key: string, on: boolean) {
+    setPending((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
 
   async function createFlight() {
     if (!newFlightAircraftId) return;
@@ -137,9 +164,7 @@ export function PlanningPage() {
         }),
       });
       if (response.ok) {
-        const flight = (await response.json()) as Flight;
-        setFlights((prev) => [...prev, flight]);
-        setSelectedFlightId(flight.id);
+        await reload();
         setNewFlightAircraftId("");
         setNewFlightPilotId("");
         setNewFlightDialogOpen(false);
@@ -149,301 +174,271 @@ export function PlanningPage() {
     }
   }
 
-  async function assign(key: string, guestIds: string[]) {
-    if (!selectedFlightId) return;
-    setAssigning((prev) => new Set(prev).add(key));
+  async function assignUnit(unit: AssignableUnit, flightId: string) {
+    const key = `pool:${unit.key}`;
+    markPending(key, true);
     try {
-      const response = await fetch(`/api/flights/${selectedFlightId}/actions/assign`, {
+      const response = await fetch(`/api/flights/${flightId}/actions/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guestIds }),
+        body: JSON.stringify({ guestIds: unit.members.map((m) => m.id) }),
       });
       if (response.ok) {
-        setLastResult((await response.json()) as AssignResult);
+        const result = (await response.json()) as AssignResult;
+        setLastResult({ flightId, result });
         await reload();
       }
     } finally {
-      setAssigning((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
+      markPending(key, false);
     }
   }
 
-  async function unassign(guestId: string) {
-    setAssigning((prev) => new Set(prev).add(guestId));
+  async function unassignUnit(unit: AssignableUnit, flightId: string) {
+    const key = `assigned:${flightId}:${unit.key}`;
+    markPending(key, true);
     try {
-      const response = await fetch(`/api/guests/${guestId}/actions/unassign`, {
-        method: "POST",
-      });
-      if (response.ok) await reload();
+      await Promise.all(
+        unit.members.map((m) => fetch(`/api/guests/${m.id}/actions/unassign`, { method: "POST" })),
+      );
+      await reload();
     } finally {
-      setAssigning((prev) => {
-        const next = new Set(prev);
-        next.delete(guestId);
-        return next;
-      });
+      markPending(key, false);
     }
   }
 
-  async function setFlightStatus(action: "set-ready" | "unready") {
-    if (!selectedFlightId) return;
-    const response = await fetch(`/api/flights/${selectedFlightId}/actions/${action}`, {
-      method: "POST",
-    });
+  async function setFlightStatus(flightId: string, action: "set-ready" | "unready") {
+    const response = await fetch(`/api/flights/${flightId}/actions/${action}`, { method: "POST" });
     if (response.ok) await reload();
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    const unit = poolUnits.find((u) => `pool:${u.key}` === event.active.id);
+    setActiveUnit(unit ?? null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveUnit(null);
+    const { active, over } = event;
+    if (!over) return;
+    const unit = poolUnits.find((u) => `pool:${u.key}` === active.id);
+    if (!unit) return;
+    void assignUnit(unit, String(over.id).replace(/^flight:/, ""));
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("dispatch.nav.planning")}</h1>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">{t("dispatch.nav.planning")}</h1>
+          <Button data-testid="open-create-flight" onClick={() => setNewFlightDialogOpen(true)}>
+            <Plus /> {t("dispatch.planning.newFlight.create")}
+          </Button>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("dispatch.planning.flights.title")}</CardTitle>
-          <CardAction>
-            <Button
-              size="icon-sm"
-              variant="outline"
-              data-testid="open-create-flight"
-              onClick={() => setNewFlightDialogOpen(true)}
-              aria-label={t("dispatch.planning.newFlight.create")}
-            >
-              <Plus />
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          {flights.length > 0 ? (
-            <div className="flex flex-wrap gap-2" data-testid="flight-tabs">
-              {flights.map((f) => (
-                <Button
-                  key={f.id}
-                  size="sm"
-                  variant={f.id === selectedFlightId ? "default" : "outline"}
-                  data-testid="flight-tab"
-                  onClick={() => setSelectedFlightId(f.id)}
+        {assignableFlights.length > 0 && poolUnits.length > 0 && (
+          <p className="text-muted-foreground text-sm">{t("dispatch.planning.dragHint")}</p>
+        )}
+
+        <Dialog open={newFlightDialogOpen} onOpenChange={setNewFlightDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t("dispatch.planning.newFlight.title")}</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium" htmlFor="pf-aircraft">
+                  {t("dispatch.planning.newFlight.aircraft")}
+                </label>
+                <select
+                  id="pf-aircraft"
+                  data-testid="new-flight-aircraft"
+                  className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
+                  value={newFlightAircraftId}
+                  onChange={(e) => setNewFlightAircraftId(e.target.value)}
                 >
-                  {f.code}
-                </Button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              {t("dispatch.planning.flights.empty")}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog open={newFlightDialogOpen} onOpenChange={setNewFlightDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("dispatch.planning.newFlight.title")}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="pf-aircraft">
-                {t("dispatch.planning.newFlight.aircraft")}
-              </label>
-              <select
-                id="pf-aircraft"
-                data-testid="new-flight-aircraft"
-                className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
-                value={newFlightAircraftId}
-                onChange={(e) => setNewFlightAircraftId(e.target.value)}
-              >
-                <option value="">—</option>
-                {aircraftList.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.reg} — {a.model}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="pf-pilot">
-                {t("dispatch.planning.newFlight.pilot")}
-              </label>
-              <select
-                id="pf-pilot"
-                data-testid="new-flight-pilot"
-                className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
-                value={newFlightPilotId}
-                onChange={(e) => setNewFlightPilotId(e.target.value)}
-              >
-                <option value="">—</option>
-                {pilots.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              data-testid="create-flight"
-              disabled={!newFlightAircraftId || creatingFlight}
-              onClick={() => void createFlight()}
-            >
-              {t("dispatch.planning.newFlight.create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("dispatch.planning.pool.title")}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {Array.from(poolGroups.entries()).map(([groupId, members]) => (
-              <div
-                key={groupId}
-                className="flex items-center justify-between rounded-md border p-2 text-sm"
-                data-testid="pool-group"
-              >
-                <span>
-                  {members[0]?.groupName} ({members.length}) —{" "}
-                  {members.reduce((s, g) => s + (g.weightKg ?? 0), 0)} kg
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!selectedFlightId || locked || assignBlocked || assigning.has(groupId)}
-                  onClick={() =>
-                    void assign(
-                      groupId,
-                      members.map((m) => m.id),
-                    )
-                  }
-                >
-                  {t("dispatch.planning.pool.assign")}
-                </Button>
-              </div>
-            ))}
-            {poolSingles.map((g) => (
-              <div
-                key={g.id}
-                className="flex items-center justify-between rounded-md border p-2 text-sm"
-                data-testid="pool-guest"
-              >
-                <span>
-                  {g.name} — {g.weightKg} kg
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!selectedFlightId || locked || assignBlocked || assigning.has(g.id)}
-                  onClick={() => void assign(g.id, [g.id])}
-                >
-                  {t("dispatch.planning.pool.assign")}
-                </Button>
-              </div>
-            ))}
-            {pool.length === 0 && (
-              <p className="text-muted-foreground text-sm">{t("dispatch.planning.pool.empty")}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {selectedFlight && selectedAircraft ? (
-                <>
-                  {selectedFlight.code} — {selectedAircraft.reg}
-                  <Badge variant="outline" data-testid="flight-status">
-                    {t(`dispatch.planning.status.${selectedFlight.status}`)}
-                  </Badge>
-                </>
-              ) : (
-                t("dispatch.planning.builder.none")
-              )}
-            </CardTitle>
-          </CardHeader>
-          {selectedFlight && selectedAircraft && (
-            <>
-              <CardContent className="flex flex-col gap-3">
-                <p className="text-sm" data-testid="flight-gauge">
-                  {t("dispatch.planning.builder.seats")}: {usedSeats}/{selectedAircraft.seats} ·{" "}
-                  {t("dispatch.planning.builder.weight")}: {usedWeightKg}/
-                  {selectedAircraft.maxPayloadKg} kg
-                </p>
-                {assignBlocked && (
-                  <p
-                    className="text-amber-600 text-sm dark:text-amber-500"
-                    data-testid="pilot-weight-unknown-warning"
-                  >
-                    {t("dispatch.planning.builder.pilotWeightUnknown")}
-                  </p>
-                )}
-                <ul className="flex flex-col gap-1">
-                  {assignedGuests.map((g) => (
-                    <li
-                      key={g.id}
-                      className="flex items-center justify-between text-sm"
-                      data-testid="assigned-guest"
-                    >
-                      <span>
-                        {g.name} — {g.weightKg} kg
-                      </span>
-                      {!locked && (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          data-testid="unassign-button"
-                          disabled={assigning.has(g.id)}
-                          onClick={() => void unassign(g.id)}
-                          aria-label={t("dispatch.planning.builder.unassign")}
-                        >
-                          ✕
-                        </Button>
-                      )}
-                    </li>
+                  <option value="">—</option>
+                  {aircraftList.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.reg} — {a.model}
+                    </option>
                   ))}
-                  {assignedGuests.length === 0 && (
-                    <li className="text-muted-foreground text-sm">
-                      {t("dispatch.planning.builder.empty")}
-                    </li>
-                  )}
-                </ul>
-                {lastResult && lastResult.rejected.length > 0 && (
-                  <p className="text-destructive text-sm" data-testid="assign-warning">
-                    {t("dispatch.planning.builder.rejected", {
-                      count: lastResult.rejected.length,
-                    })}
-                  </p>
-                )}
-              </CardContent>
-              {!locked && (
-                <CardFooter>
-                  {selectedFlight.status === "ready" ? (
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium" htmlFor="pf-pilot">
+                  {t("dispatch.planning.newFlight.pilot")}
+                </label>
+                <select
+                  id="pf-pilot"
+                  data-testid="new-flight-pilot"
+                  className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
+                  value={newFlightPilotId}
+                  onChange={(e) => setNewFlightPilotId(e.target.value)}
+                >
+                  <option value="">—</option>
+                  {pilots.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                data-testid="create-flight"
+                disabled={!newFlightAircraftId || creatingFlight}
+                onClick={() => void createFlight()}
+              >
+                {t("dispatch.planning.newFlight.create")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle>{t("dispatch.planning.pool.title")}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {poolUnits.map((unit) => (
+                <AssignableUnitCard
+                  key={unit.key}
+                  unit={unit}
+                  draggableId={`pool:${unit.key}`}
+                  dataTestId="pool-unit"
+                  actions={
+                    <select
+                      className="border-input h-8 rounded-md border bg-transparent px-2 text-xs"
+                      data-testid="pool-unit-assign-select"
+                      disabled={pending.has(`pool:${unit.key}`)}
+                      value=""
+                      onChange={(e) => {
+                        const flightId = e.target.value;
+                        if (flightId) void assignUnit(unit, flightId);
+                      }}
+                    >
+                      <option value="">{t("dispatch.planning.pool.assignTo")}</option>
+                      {assignableFlights.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.code}
+                        </option>
+                      ))}
+                    </select>
+                  }
+                />
+              ))}
+              {poolUnits.length === 0 && (
+                <p className="text-muted-foreground text-sm">{t("dispatch.planning.pool.empty")}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="flex flex-col gap-4">
+            {sortedFlights.length === 0 && (
+              <p className="text-muted-foreground text-sm">{t("dispatch.planning.flights.empty")}</p>
+            )}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {sortedFlights.map((f) => {
+                const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+                const pilot = pilots.find((p) => p.id === f.pilotId);
+                const flightGuests = f.guestIds
+                  .map((id) => guests.find((g) => g.id === id))
+                  .filter((g): g is Guest => !!g);
+                const load = flightLoads.get(f.id)!;
+                const assignedUnits = groupIntoUnits(flightGuests);
+                const locked = f.status === "airborne" || f.status === "completed";
+                const canSetReady =
+                  !locked && !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
+                const dropDisabled = locked || load.pilotWeightUnknown;
+
+                let actions;
+                if (locked) {
+                  actions = (
+                    <span className="text-muted-foreground text-sm">
+                      {t(`dispatch.planning.status.${f.status}`)}
+                    </span>
+                  );
+                } else if (f.status === "ready") {
+                  actions = (
                     <Button
                       variant="outline"
+                      size="sm"
                       data-testid="unready-flight"
-                      onClick={() => void setFlightStatus("unready")}
+                      onClick={() => void setFlightStatus(f.id, "unready")}
                     >
                       {t("dispatch.planning.builder.unready")}
                     </Button>
-                  ) : (
+                  );
+                } else {
+                  actions = (
                     <Button
+                      size="sm"
                       data-testid="set-ready-flight"
                       disabled={!canSetReady}
-                      onClick={() => void setFlightStatus("set-ready")}
+                      onClick={() => void setFlightStatus(f.id, "set-ready")}
                     >
                       {t("dispatch.planning.builder.setReady")}
                     </Button>
-                  )}
-                </CardFooter>
-              )}
-            </>
-          )}
-        </Card>
+                  );
+                }
+
+                return (
+                  <DroppableFlightCard key={f.id} flightId={f.id} disabled={dropDisabled}>
+                    {(isOver) => (
+                      <FlightCard
+                        flight={f}
+                        aircraft={aircraft}
+                        pilot={pilot}
+                        load={load}
+                        actions={actions}
+                        className={cn(isOver && "ring-primary ring-2 ring-offset-2")}
+                      >
+                        <div className="flex flex-col gap-1" data-testid="flight-assigned-units">
+                          {assignedUnits.map((unit) => (
+                            <AssignableUnitCard
+                              key={unit.key}
+                              unit={unit}
+                              dataTestId="assigned-unit"
+                              actions={
+                                !locked && (
+                                  <Button
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label={t("dispatch.planning.builder.unassign")}
+                                    disabled={pending.has(`assigned:${f.id}:${unit.key}`)}
+                                    onClick={() => void unassignUnit(unit, f.id)}
+                                  >
+                                    ✕
+                                  </Button>
+                                )
+                              }
+                            />
+                          ))}
+                          {assignedUnits.length === 0 && (
+                            <p className="text-muted-foreground text-xs">
+                              {t("dispatch.planning.builder.empty")}
+                            </p>
+                          )}
+                        </div>
+                        {lastResult?.flightId === f.id && lastResult.result.rejected.length > 0 && (
+                          <p className="text-destructive text-sm" data-testid="assign-warning">
+                            {t("dispatch.planning.builder.rejected", {
+                              count: lastResult.result.rejected.length,
+                            })}
+                          </p>
+                        )}
+                      </FlightCard>
+                    )}
+                  </DroppableFlightCard>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+      <DragOverlay>{activeUnit && <AssignableUnitCard unit={activeUnit} />}</DragOverlay>
+    </DndContext>
   );
 }

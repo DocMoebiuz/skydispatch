@@ -5,6 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
 // what exercises routing/API rewrites the same way they behave in production.
 export default defineConfig({
   testDir: "./apps/web/e2e",
+  globalSetup: "./apps/web/e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

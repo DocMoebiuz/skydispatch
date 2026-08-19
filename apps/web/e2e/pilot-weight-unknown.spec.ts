@@ -17,6 +17,7 @@ import { getTestContainer, deleteGuestByEmail, deleteById } from "./helpers/cosm
 test("a pilot with no weight on file blocks assign/set-ready until fixed", async ({ page }) => {
   const stamp = Date.now();
   const pilotName = `E2E No-Weight Pilot ${stamp}`;
+  const guestName = `E2E No-Weight Guest ${stamp}`;
   const reg = `E2E-NW-${stamp}`;
   const email = `e2e-noweight-${stamp}@example.test`;
 
@@ -48,7 +49,7 @@ test("a pilot with no weight on file blocks assign/set-ready until fixed", async
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "E2E No-Weight Guest",
+        name: guestName,
         email,
         declaredWeightKg: 75,
         dateOfBirth: "1990-05-14",
@@ -98,15 +99,16 @@ test("a pilot with no weight on file blocks assign/set-ready until fixed", async
     const pilotRow = page.getByTestId("pilot-row").filter({ hasText: pilotName });
     await expect(pilotRow.getByTestId("pilot-weight-cell")).toContainText("Gewicht fehlt");
 
-    // --- UI: Planning disables assignment and shows the warning ---
+    // --- UI: Planning shows the warning and won't offer this flight for
+    // assignment at all (neither drag nor the select fallback) ---
     await page.goto("/dispatch/planning");
-    await page.getByTestId("flight-tab").filter({ hasText: flight.code }).click();
-    await expect(page.getByTestId("pilot-weight-unknown-warning")).toBeVisible();
-    await expect(
-      page.getByTestId("pool-guest").filter({ hasText: "E2E No-Weight Guest" }).getByRole("button", {
-        name: "Zuweisen",
-      }),
-    ).toBeDisabled();
+    const flightCard = page.getByTestId("flight-card").filter({ hasText: flight.code });
+    await expect(flightCard.getByTestId("pilot-weight-unknown-warning")).toBeVisible();
+    const poolSelect = page
+      .getByTestId("pool-unit")
+      .filter({ hasText: guestName })
+      .getByTestId("pool-unit-assign-select");
+    await expect(poolSelect.getByRole("option", { name: flight.code })).toHaveCount(0);
 
     // --- Fix in place: Setup's click-to-edit weight cell ---
     await page.goto("/dispatch/setup");
@@ -117,14 +119,13 @@ test("a pilot with no weight on file blocks assign/set-ready until fixed", async
 
     // --- Now assignment works and the gauge includes the pilot's weight ---
     await page.goto("/dispatch/planning");
-    await page.getByTestId("flight-tab").filter({ hasText: flight.code }).click();
-    await expect(page.getByTestId("pilot-weight-unknown-warning")).not.toBeVisible();
+    await expect(flightCard.getByTestId("pilot-weight-unknown-warning")).not.toBeVisible();
     await page
-      .getByTestId("pool-guest")
-      .filter({ hasText: "E2E No-Weight Guest" })
-      .getByRole("button", { name: "Zuweisen" })
-      .click();
-    await expect(page.getByTestId("flight-gauge")).toContainText("160/300"); // 85 pilot + 75 guest
+      .getByTestId("pool-unit")
+      .filter({ hasText: guestName })
+      .getByTestId("pool-unit-assign-select")
+      .selectOption({ label: flight.code });
+    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("160/300"); // 85 pilot + 75 guest
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

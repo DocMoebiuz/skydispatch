@@ -6,11 +6,13 @@ import { deleteGuestByEmail } from "./helpers/cosmos";
 // docs/nfr.md § Security & Privacy.
 
 test("front-desk marks a guest paid on /dispatch", async ({ page }) => {
-  const email = `e2e-mark-paid-${Date.now()}@example.test`;
+  const stamp = Date.now();
+  const guestName = `E2E Mark Paid Guest ${stamp}`;
+  const email = `e2e-mark-paid-${stamp}@example.test`;
 
   try {
     await page.goto("/register");
-    await page.getByLabel("Vor- und Nachname").fill("E2E Mark Paid Guest");
+    await page.getByLabel("Vor- und Nachname").fill(guestName);
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();
     await page.getByLabel("Geburtsdatum").fill("1990-05-14");
@@ -24,7 +26,7 @@ test("front-desk marks a guest paid on /dispatch", async ({ page }) => {
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
 
     await page.goto("/dispatch/guests");
-    const row = page.getByTestId("guest-row").filter({ hasText: "E2E Mark Paid Guest" });
+    const row = page.getByTestId("guest-row").filter({ hasText: guestName });
     await expect(row).toBeVisible();
     await expect(row.getByTestId("guest-status")).toHaveText("registriert");
 

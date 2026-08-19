@@ -43,7 +43,7 @@ test("dashboard shows a flight card and lands an airborne flight via a quick act
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "E2E Dashboard Guest",
+        name: `E2E Dashboard Guest ${stamp}`,
         email,
         declaredWeightKg: 75,
         dateOfBirth: "1990-05-14",

@@ -5,7 +5,7 @@
       "appLocation": "apps/web",
       "outputLocation": "dist",
       "apiLocation": "apps/api",
-      "appDevserverUrl": "http://localhost:5173",
+      "appDevserverUrl": "http://localhost:5183",
       "run": "pnpm --filter web dev"
     }
   }

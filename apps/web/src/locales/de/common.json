@@ -80,6 +80,7 @@
       }
     },
     "planning": {
+      "dragHint": "Gruppe oder Einzelperson auf einen Flug ziehen, um sie zuzuweisen — oder rechts einen Flug aus der Liste wählen.",
       "flights": {
         "title": "Flüge",
         "empty": "Noch keine Flüge angelegt."
@@ -93,13 +94,13 @@
       "pool": {
         "title": "Verfügbare Gäste (bezahlt + gewogen)",
         "assign": "Zuweisen",
+        "assignTo": "Zuweisen zu…",
         "empty": "Kein flugbereiter Gast verfügbar."
       },
       "builder": {
-        "none": "Keinen Flug ausgewählt.",
         "seats": "Sitze",
         "weight": "Gewicht",
-        "empty": "Noch keine Gäste zugewiesen.",
+        "empty": "Noch niemand zugewiesen.",
         "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen.",
         "unassign": "Entfernen",
         "setReady": "Auf READY setzen",
