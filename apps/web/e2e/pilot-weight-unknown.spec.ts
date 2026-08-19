@@ -100,15 +100,17 @@ test("a pilot with no weight on file blocks assign/set-ready until fixed", async
     await expect(pilotRow.getByTestId("pilot-weight-cell")).toContainText("Gewicht fehlt");
 
     // --- UI: Planning shows the warning and won't offer this flight for
-    // assignment at all (neither drag nor the select fallback) ---
+    // assignment at all — selecting it dims + disables every pool unit's
+    // assign button (nothing can fit a flight whose payload can't be
+    // verified; dimmed rather than hidden so the pool's layout doesn't jump),
+    // and drag refuses the drop outright (DroppableFlightCard's disabled prop). ---
     await page.goto("/dispatch/planning");
     const flightCard = page.getByTestId("flight-card").filter({ hasText: flight.code });
     await expect(flightCard.getByTestId("pilot-weight-unknown-warning")).toBeVisible();
-    const poolSelect = page
-      .getByTestId("pool-unit")
-      .filter({ hasText: guestName })
-      .getByTestId("pool-unit-assign-select");
-    await expect(poolSelect.getByRole("option", { name: flight.code })).toHaveCount(0);
+    await flightCard.click();
+    await expect(
+      page.getByTestId("pool-unit").filter({ hasText: guestName }).getByTestId("pool-unit-assign-button"),
+    ).toBeDisabled();
 
     // --- Fix in place: Setup's click-to-edit weight cell ---
     await page.goto("/dispatch/setup");
@@ -120,12 +122,17 @@ test("a pilot with no weight on file blocks assign/set-ready until fixed", async
     // --- Now assignment works and the gauge includes the pilot's weight ---
     await page.goto("/dispatch/planning");
     await expect(flightCard.getByTestId("pilot-weight-unknown-warning")).not.toBeVisible();
+    await flightCard.click();
+    const fixedAssignResponse = page.waitForResponse(
+      (r) => r.url().includes("/actions/assign") && r.request().method() === "POST",
+    );
     await page
       .getByTestId("pool-unit")
       .filter({ hasText: guestName })
-      .getByTestId("pool-unit-assign-select")
-      .selectOption({ label: flight.code });
-    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("160/300"); // 85 pilot + 75 guest
+      .getByTestId("pool-unit-assign-button")
+      .click();
+    await fixedAssignResponse;
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("140 kg frei"); // 300-(85 pilot+75 guest)
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

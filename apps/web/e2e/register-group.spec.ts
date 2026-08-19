@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { deleteGuestByEmail } from "./helpers/cosmos";
+import { fillDateOfBirth } from "./helpers/dob";
 
 // Increment 2 — group registration loop. The group name is asked for exactly once,
 // on the FIRST "add another person" click (not upfront), then applies retroactively
@@ -32,7 +33,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();
 
-    await page.getByLabel("Geburtsdatum").fill("1990-05-14");
+    await fillDateOfBirth(page, "1990-05-14");
     if (addressMode === "reuse") {
       await expect(page.getByLabel(/Gleiche Adresse/)).toBeChecked();
       await expect(page.getByTestId("reused-address")).toBeVisible();

@@ -54,30 +54,42 @@ export function SetupPage() {
   const [maxPayloadKg, setMaxPayloadKg] = useState("");
   const [savingAircraft, setSavingAircraft] = useState(false);
 
+  // `cancelled` guard on each fetch — required, not decorative: React
+  // StrictMode's dev-mode double mount/unmount/remount runs this effect
+  // twice, and a stale wave's .then() can fire after addPilot/addAircraft
+  // already appended a freshly-created entity, silently dropping it again
+  // (reproduced live on Planning's identical pattern, not hypothetical).
   useEffect(() => {
+    let cancelled = false;
     // 404 means no flight day configured yet — not an error, just nothing to
     // prefill (see apps/api flightday.ts's getFlightDay for why this isn't a
     // 200+null body).
     fetch("/api/flightday")
       .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
       .then((d) => {
-        if (d) {
-          setFlightDay(d);
-          setDate(d.date);
-          setAirfieldName(d.airfieldName);
-          setAirfieldIcao(d.airfieldIcao);
-          setPricePerGuestEur(String(d.pricePerGuestEur));
-        }
+        if (cancelled || !d) return;
+        setFlightDay(d);
+        setDate(d.date);
+        setAirfieldName(d.airfieldName);
+        setAirfieldIcao(d.airfieldIcao);
+        setPricePerGuestEur(String(d.pricePerGuestEur));
       })
       .catch(() => undefined);
     fetch("/api/pilots")
       .then((r) => r.json() as Promise<Pilot[]>)
-      .then(setPilots)
+      .then((p) => {
+        if (!cancelled) setPilots(p);
+      })
       .catch(() => undefined);
     fetch("/api/aircraft")
       .then((r) => r.json() as Promise<Aircraft[]>)
-      .then(setAircraft)
+      .then((a) => {
+        if (!cancelled) setAircraft(a);
+      })
       .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function saveFlightDay() {

@@ -28,14 +28,16 @@ import {
 // app's shape is visible even before every area has real persistence behind it.
 // English route segments (code stays English, UI stays German — nfr.md §
 // Localization); German nav labels via i18next like everywhere else.
+// Setup last — it's a rarely-used, one-time-per-day configuration screen, not
+// part of the recurring dispatcher workflow the other views serve.
 const NAV_ITEMS = [
   { to: "/dispatch", icon: LayoutDashboard, key: "dashboard", end: true },
-  { to: "/dispatch/setup", icon: Settings, key: "setup", end: false },
   { to: "/dispatch/guests", icon: Users, key: "guests", end: false },
   { to: "/dispatch/planning", icon: Map, key: "planning", end: false },
   { to: "/dispatch/checkin", icon: ScanLine, key: "checkin", end: false },
   { to: "/dispatch/tracking", icon: Radar, key: "tracking", end: false },
   { to: "/dispatch/reporting", icon: BarChart3, key: "reporting", end: false },
+  { to: "/dispatch/setup", icon: Settings, key: "setup", end: false },
 ] as const;
 
 export function DispatchLayout() {

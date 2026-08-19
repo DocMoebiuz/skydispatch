@@ -112,6 +112,40 @@ navigation — clicking a flight on one view jumping to its full context on
 another (e.g. Dashboard card → Planning pre-filtered to that flight). Each view
 is independently useful today; wiring them together is a later pass.
 
+**Planning's assign/unassign are optimistic**, not the request-then-reload
+pattern every other action still uses: local state updates immediately (before
+the network round trip), reconciled against the server's real per-guest
+accept/reject once the response lands, reverted entirely on failure. Without
+this, dnd-kit's own drag transform resets the instant you drop, so a dropped
+card visually snaps back to the pool and only "arrives" once a follow-up
+reload resolves — the exact complaint that prompted this. A background
+reload() after a successful optimistic update was tried and removed: it raced
+against whatever the caller does next (e.g. immediately setting the flight
+ready) and could silently overwrite newer state with a stale pre-action
+snapshot if it resolved late.
+
+**Every mount-time data-fetching `useEffect` must guard against a stale
+response with a `cancelled` flag**, not just Planning's — this isn't
+optional/decorative. React StrictMode's dev-mode double mount/unmount/remount
+runs the effect twice, and the two fetch waves can resolve out of order; the
+first (stale) wave's `.then()` can otherwise fire *after* a user action (or
+the second wave) already updated state and silently overwrite it with
+pre-action data. This was a real, reproduced bug — an assign's server response
+confirmed success every time, yet the UI intermittently kept showing the
+pre-assign value — not a hypothetical, and it affected every dispatcher page
+before being fixed (`GuestsPage` already had the guard; Dashboard, Planning,
+Tracking, Check-in, Reporting, Setup, Board, and Register did not):
+
+```ts
+useEffect(() => {
+  let cancelled = false;
+  fetch(...).then((data) => {
+    if (!cancelled) setSomething(data);
+  });
+  return () => { cancelled = true; };
+}, []);
+```
+
 ## Data flow
 
 ```

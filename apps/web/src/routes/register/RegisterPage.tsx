@@ -38,6 +38,34 @@ type FormStep = "contact" | "address" | "weight";
 type Phase = "form" | "success" | "group-prompt" | "done";
 type Address = { street: string; zipCode: string; city: string };
 
+// Three separate dropdowns instead of a native <input type="date"> — a date
+// picker/calendar widget is slow and unfamiliar for entering a birth date
+// decades in the past (lots of back-clicking through months); day/month/year
+// selects are the accessible, low-friction convention for this specific input.
+const DOB_MONTHS = [
+  "Januar",
+  "Februar",
+  "März",
+  "April",
+  "Mai",
+  "Juni",
+  "Juli",
+  "August",
+  "September",
+  "Oktober",
+  "November",
+  "Dezember",
+].map((label, i) => ({ value: i + 1, label }));
+const DOB_CURRENT_YEAR = new Date().getFullYear();
+// No stated minimum-age rule (see the schema's comment) — 100 years back is
+// just a sane bound for a birth-year dropdown, not a business rule.
+const DOB_YEARS = Array.from({ length: 100 }, (_, i) => DOB_CURRENT_YEAR - i);
+
+function daysInMonth(month: number | null, year: number | null): number {
+  if (!month) return 31;
+  return new Date(year ?? DOB_CURRENT_YEAR, month, 0).getDate();
+}
+
 const defaultValues: GuestCreateRequest = {
   name: "",
   email: "",
@@ -74,16 +102,29 @@ export function RegisterPage() {
   const [reuseAddress, setReuseAddress] = useState(true);
   const canReuseAddress = !!groupId && !!firstAddress;
 
+  // Day/month/year dropdowns for dateOfBirth — combined into the "YYYY-MM-DD"
+  // string the schema/API expect via setValue below, not registered directly.
+  const [dobDay, setDobDay] = useState<number | null>(null);
+  const [dobMonth, setDobMonth] = useState<number | null>(null);
+  const [dobYear, setDobYear] = useState<number | null>(null);
+
   // 404 means no flight day configured yet — not an error, just falls back to 0
   // (see apps/api flightday.ts's getFlightDay for why this isn't a 200+null body).
   const [pricePerGuestEur, setPricePerGuestEur] = useState(0);
+  // `cancelled` guard — see PlanningPage's identical effect for why this
+  // matters even here (React StrictMode's dev-mode double mount can let a
+  // stale fetch wave resolve after a fresher one).
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/flightday")
       .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
       .then((d) => {
-        if (d) setPricePerGuestEur(d.pricePerGuestEur);
+        if (!cancelled && d) setPricePerGuestEur(d.pricePerGuestEur);
       })
       .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const {
@@ -98,6 +139,37 @@ export function RegisterPage() {
     resolver: zodResolver(guestCreateRequestSchema),
     defaultValues,
   });
+
+  // Combine the three dropdowns into the "YYYY-MM-DD" string the form/API
+  // expect — syncing into react-hook-form's own (external) store, not React
+  // state, so belongs in an effect. Only writes a real value once all three
+  // are picked, so trigger(["dateOfBirth", ...]) below still fails validation
+  // on a partial selection instead of silently accepting one.
+  useEffect(() => {
+    if (dobDay && dobMonth && dobYear) {
+      const mm = String(dobMonth).padStart(2, "0");
+      const dd = String(dobDay).padStart(2, "0");
+      setValue("dateOfBirth", `${dobYear}-${mm}-${dd}`, { shouldValidate: false });
+    } else {
+      setValue("dateOfBirth", "", { shouldValidate: false });
+    }
+  }, [dobDay, dobMonth, dobYear, setValue]);
+
+  // Clamp the day when a month/year change makes the current selection
+  // invalid (e.g. 31 → February) — done in the change handlers themselves,
+  // not as a side effect of the combine effect above, per the
+  // react-hooks/set-state-in-effect rule (own-state updates belong in the
+  // event handler that caused them, not in an effect body).
+  function handleDobMonthChange(month: number | null) {
+    setDobMonth(month);
+    const maxDay = daysInMonth(month, dobYear);
+    if (dobDay && dobDay > maxDay) setDobDay(maxDay);
+  }
+  function handleDobYearChange(year: number | null) {
+    setDobYear(year);
+    const maxDay = daysInMonth(dobMonth, year);
+    if (dobDay && dobDay > maxDay) setDobDay(maxDay);
+  }
 
   async function goToAddressStep() {
     const ok = await trigger(["name", "email", "phone"]);
@@ -135,6 +207,9 @@ export function RegisterPage() {
 
   function startNextRegistration() {
     reset(defaultValues);
+    setDobDay(null);
+    setDobMonth(null);
+    setDobYear(null);
     setFormStep("contact");
     setReuseAddress(true);
     setPhase("form");
@@ -414,13 +489,70 @@ export function RegisterPage() {
             {formStep === "address" && (
               <>
                 <div className="grid gap-2">
-                  <Label htmlFor="dateOfBirth">{t("register.form.dateOfBirth")}</Label>
-                  <Input
-                    id="dateOfBirth"
-                    type="date"
-                    {...register("dateOfBirth")}
-                    aria-invalid={!!errors.dateOfBirth}
-                  />
+                  <Label htmlFor="dateOfBirthDay">{t("register.form.dateOfBirth")}</Label>
+                  <div className="flex gap-2">
+                    <select
+                      id="dateOfBirthDay"
+                      data-testid="dob-day"
+                      className={cn(
+                        "h-9 rounded-md border border-input bg-transparent px-2 text-base shadow-xs outline-none md:text-sm dark:bg-input/30",
+                        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        !!errors.dateOfBirth && "border-destructive",
+                      )}
+                      aria-invalid={!!errors.dateOfBirth}
+                      value={dobDay ?? ""}
+                      onChange={(e) => setDobDay(e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">{t("register.form.dobDay")}</option>
+                      {Array.from({ length: daysInMonth(dobMonth, dobYear) }, (_, i) => i + 1).map(
+                        (day) => (
+                          <option key={day} value={day}>
+                            {day}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                    <select
+                      data-testid="dob-month"
+                      className={cn(
+                        "h-9 flex-1 rounded-md border border-input bg-transparent px-2 text-base shadow-xs outline-none md:text-sm dark:bg-input/30",
+                        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        !!errors.dateOfBirth && "border-destructive",
+                      )}
+                      aria-invalid={!!errors.dateOfBirth}
+                      value={dobMonth ?? ""}
+                      onChange={(e) =>
+                        handleDobMonthChange(e.target.value ? Number(e.target.value) : null)
+                      }
+                    >
+                      <option value="">{t("register.form.dobMonth")}</option>
+                      {DOB_MONTHS.map(({ value, label }) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      data-testid="dob-year"
+                      className={cn(
+                        "h-9 rounded-md border border-input bg-transparent px-2 text-base shadow-xs outline-none md:text-sm dark:bg-input/30",
+                        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        !!errors.dateOfBirth && "border-destructive",
+                      )}
+                      aria-invalid={!!errors.dateOfBirth}
+                      value={dobYear ?? ""}
+                      onChange={(e) =>
+                        handleDobYearChange(e.target.value ? Number(e.target.value) : null)
+                      }
+                    >
+                      <option value="">{t("register.form.dobYear")}</option>
+                      {DOB_YEARS.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   {errors.dateOfBirth && (
                     <p className="text-destructive text-sm">
                       {t("register.errors.dateOfBirth")}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { Guest, Aircraft, Pilot, Flight } from "shared";
+import type { Guest, Aircraft, Pilot, Flight, FlightDay } from "shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
@@ -19,24 +19,41 @@ export function ReportingPage() {
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
 
+  // `cancelled` guard — see PlanningPage's identical effect for why this
+  // matters even on a read-only page (React StrictMode's dev-mode double
+  // mount can let a stale fetch wave resolve after a fresher one).
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
+      if (cancelled) return;
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
     });
+    // 404 means no flight day configured yet — price falls back to 0.
+    fetch("/api/flightday")
+      .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
+      .then((d) => {
+        if (!cancelled) setFlightDay(d);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const completed = flights.filter((f) => f.status === "completed");
   const flown = guests.filter((g) => g.flown).length;
   const noShows = guests.filter((g) => g.noShow).length;
+  const revenue = flown * (flightDay?.pricePerGuestEur ?? 0);
   const utilization = completed.length
     ? Math.round(
         (completed.reduce((sum, f) => {
@@ -90,7 +107,7 @@ export function ReportingPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.reporting")}</h1>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Card>
           <CardHeader>
             <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
@@ -122,6 +139,16 @@ export function ReportingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-3xl font-bold">{noShows}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
+              {t("dispatch.reporting.kpi.revenue")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold" data-testid="kpi-revenue">
+            {`${revenue.toFixed(2).replace(".", ",")} €`}
+          </CardContent>
         </Card>
       </div>
 

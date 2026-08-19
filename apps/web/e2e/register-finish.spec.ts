@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { deleteGuestByEmail } from "./helpers/cosmos";
+import { fillDateOfBirth } from "./helpers/dob";
 
 // "Anmeldung abschließen" — after registering (solo or as a group), a dedicated
 // finish screen tells the guest what to do next: pay the total fee at the front
@@ -51,7 +52,7 @@ test("finishing registration shows the correct total fee and a board link", asyn
     await page.getByLabel("Vor- und Nachname").fill(name1);
     await page.getByLabel("E-Mail-Adresse").fill(email1);
     await page.getByRole("button", { name: "Weiter" }).click();
-    await page.getByLabel("Geburtsdatum").fill("1990-05-14");
+    await fillDateOfBirth(page, "1990-05-14");
     await page.getByLabel("Straße und Hausnummer").fill("Musterstraße 1");
     await page.getByLabel("PLZ").fill("71522");
     await page.getByLabel("Ort").fill("Backnang");
@@ -70,7 +71,7 @@ test("finishing registration shows the correct total fee and a board link", asyn
     await page.getByRole("button", { name: "Weiter" }).click();
     // Group's default "reuse first member's address" is accepted — address fields
     // stay hidden, see register-group.spec.ts for the reuse/decline paths.
-    await page.getByLabel("Geburtsdatum").fill("1988-11-02");
+    await fillDateOfBirth(page, "1988-11-02");
     await page.getByRole("button", { name: "Weiter" }).click();
     await page.getByLabel("Ihr Gewicht (kg)").fill("65");
     await page.getByLabel(/gelesen und stimme zu/).check();

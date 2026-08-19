@@ -31,18 +31,29 @@ export function TrackingPage() {
     });
   }
 
+  // `cancelled` guard is required, not decorative: React StrictMode's
+  // dev-mode double mount/unmount/remount runs this effect twice, and the two
+  // fetch waves can resolve out of order — without the guard, a stale wave's
+  // .then() can fire after a user action already updated state and silently
+  // overwrite it with pre-action data (reproduced live on Planning's
+  // identical pattern, not hypothetical). Same pattern as GuestsPage.
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
+      if (cancelled) return;
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);

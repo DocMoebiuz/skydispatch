@@ -13,7 +13,6 @@ import {
 } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -21,14 +20,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { AssignableUnitCard } from "@/components/flight/AssignableUnitCard";
-import { computeFlightLoad } from "@/lib/flightLoad";
+import { Skeleton } from "@/components/ui/skeleton";
+import { computeFlightLoad, type FlightLoad } from "@/lib/flightLoad";
 import { groupIntoUnits, type AssignableUnit } from "@/lib/assignableUnits";
 import { cn } from "@/lib/utils";
 
 const ORDER: Record<Flight["status"], number> = { airborne: 0, ready: 1, planned: 2, completed: 3 };
+
+function unitFits(unit: AssignableUnit, aircraft: Aircraft | undefined, load: FlightLoad): boolean {
+  if (!aircraft || load.pilotWeightUnknown) return false;
+  return (
+    load.usedSeats + unit.members.length <= aircraft.seats &&
+    load.usedWeightKg + unit.totalWeightKg <= aircraft.maxPayloadKg
+  );
+}
 
 // Wraps a FlightCard as a dnd-kit drop target — kept local and separate from
 // FlightCard itself, which stays drag-and-drop-agnostic (Dashboard/Tracking use
@@ -36,17 +44,15 @@ const ORDER: Record<Flight["status"], number> = { airborne: 0, ready: 1, planned
 function DroppableFlightCard({
   flightId,
   disabled,
-  className,
   children,
 }: {
   flightId: string;
   disabled: boolean;
-  className?: string;
   children: (isOver: boolean) => ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `flight:${flightId}`, disabled });
   return (
-    <div ref={setNodeRef} className={cn("rounded-lg", className)}>
+    <div ref={setNodeRef} className="flex h-full flex-col rounded-lg">
       {children(isOver && !disabled)}
     </div>
   );
@@ -55,10 +61,10 @@ function DroppableFlightCard({
 // Planning — flight-centric: create a flight, then fill it by assigning
 // whole units (a group, or a solo guest as a group-of-one) within hard seat/
 // weight limits. Never per-seat — seating is the pilot's discretion at
-// boarding (see docs/architecture.md § Shared flight components). Drag a unit
-// from the pool onto a flight card to assign it; each pool card also has a
-// flight-picker as the click/keyboard fallback (there's no single "selected
-// flight" any more to default a plain button to).
+// boarding (see docs/architecture.md § Shared flight components). Click a
+// flight card to select it — the pool filters to units that actually fit its
+// remaining capacity, and each pool row's assign button targets it. Drag
+// works independently of selection (drop onto any flight card directly).
 export function PlanningPage() {
   const { t } = useTranslation();
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -74,11 +80,20 @@ export function PlanningPage() {
     null,
   );
   const [activeUnit, setActiveUnit] = useState<AssignableUnit | null>(null);
+  const [activeWidth, setActiveWidth] = useState<number | null>(null);
+  // Click a flight card to select it — filters the pool to units that fit and
+  // gives the pool's assign button a target. Purely a UI convenience; drag
+  // ignores this and can target any flight directly.
+  const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
   // "Finished" (airborne + completed) flights have zero planning actions
   // available — collapsed by default, on demand only, so screen space goes to
   // what's actually actionable right now. See docs/architecture.md § Shared
   // flight components.
   const [showFinished, setShowFinished] = useState(false);
+  // Only the very first load shows a skeleton — every action after that is
+  // optimistic (see assignUnit/unassignUnit) or a small, button-local spinner,
+  // never a full-page loading state again.
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -97,19 +112,37 @@ export function PlanningPage() {
   }
 
   // Inlined (not reload()) so the fetch-on-mount effect matches the shape
-  // eslint-plugin-react-hooks's set-state-in-effect rule accepts.
+  // eslint-plugin-react-hooks's set-state-in-effect rule accepts. `cancelled`
+  // guard is required, not decorative: React StrictMode's dev-mode double
+  // mount/unmount/remount runs this effect twice, and the two fetch waves can
+  // resolve out of order. Without the guard, the first (stale) wave's
+  // .then() can fire AFTER a user action has already optimistically updated
+  // state (e.g. Planning's assignUnit) and silently overwrite it with
+  // pre-action data — reproduced live, not hypothetical: an assign's server
+  // response confirmed success every time, yet the UI intermittently kept
+  // showing the pre-assign weight. Same pattern already used correctly in
+  // GuestsPage.
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, a, p, f]) => {
-      setGuests(g);
-      setAircraftList(a);
-      setPilots(p);
-      setFlights(f);
-    });
+    ])
+      .then(([g, a, p, f]) => {
+        if (cancelled) return;
+        setGuests(g);
+        setAircraftList(a);
+        setPilots(p);
+        setFlights(f);
+      })
+      .finally(() => {
+        if (!cancelled) setInitialLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const pool = useMemo(
@@ -131,7 +164,7 @@ export function PlanningPage() {
   // refuses it server-side too, this is just not letting the UI offer what the
   // server will reject).
   const flightLoads = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof computeFlightLoad>>();
+    const map = new Map<string, FlightLoad>();
     for (const f of flights) {
       const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
       const pilot = pilots.find((p) => p.id === f.pilotId);
@@ -142,11 +175,6 @@ export function PlanningPage() {
     }
     return map;
   }, [flights, aircraftList, pilots, guests]);
-  const assignableFlights = sortedFlights.filter(
-    (f) =>
-      (f.status === "planned" || f.status === "ready") &&
-      !flightLoads.get(f.id)?.pilotWeightUnknown,
-  );
   // Three lanes by how much planning attention each status needs right now —
   // not just chronological order. Planned: the actual work (build/fill a
   // flight). Ready: occasionally needs a trip back to "planned" (a no-show
@@ -157,6 +185,19 @@ export function PlanningPage() {
   const finishedFlights = sortedFlights.filter(
     (f) => f.status === "airborne" || f.status === "completed",
   );
+
+  const selectedFlight = selectedFlightId ? flights.find((f) => f.id === selectedFlightId) : null;
+  const selectedAircraft = selectedFlight
+    ? aircraftList.find((a) => a.id === selectedFlight.aircraftId)
+    : undefined;
+  const selectedLoad = selectedFlightId ? flightLoads.get(selectedFlightId) : undefined;
+  // Dimmed + disabled, not hidden, when they don't fit the selected flight's
+  // remaining seats/weight — hiding them outright would jump the whole pool's
+  // layout around on every selection change, which is worse than just seeing
+  // (and being able to rule out) who won't fit right now.
+  function poolUnitFits(unit: AssignableUnit): boolean {
+    return !selectedFlight || !selectedLoad || unitFits(unit, selectedAircraft, selectedLoad);
+  }
 
   function markPending(key: string, on: boolean) {
     setPending((prev) => {
@@ -190,50 +231,120 @@ export function PlanningPage() {
     }
   }
 
+  // Optimistic: move the unit from pool to flight immediately, not after the
+  // round trip — without this, dnd-kit's own drag transform resets the
+  // instant you drop (isDragging -> false), so the card visually snaps back
+  // to the pool and only "arrives" at the flight once reload() resolves.
+  // Reconciled against the server's real per-guest accept/reject once the
+  // response lands (hard limits are still enforced server-side regardless of
+  // what the UI assumed — nfr.md § Reliability & safety).
   async function assignUnit(unit: AssignableUnit, flightId: string) {
     const key = `pool:${unit.key}`;
     markPending(key, true);
+    const memberIds = new Set(unit.members.map((m) => m.id));
+    const previousGuests = guests;
+    const previousFlights = flights;
+    setGuests((prev) =>
+      prev.map((g) => (memberIds.has(g.id) ? { ...g, assignedFlightId: flightId } : g)),
+    );
+    setFlights((prev) =>
+      prev.map((f) =>
+        f.id === flightId ? { ...f, guestIds: [...f.guestIds, ...unit.members.map((m) => m.id)] } : f,
+      ),
+    );
     try {
       const response = await fetch(`/api/flights/${flightId}/actions/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guestIds: unit.members.map((m) => m.id) }),
       });
-      if (response.ok) {
-        const result = (await response.json()) as AssignResult;
-        setLastResult({ flightId, result });
-        await reload();
+      if (!response.ok) {
+        setGuests(previousGuests);
+        setFlights(previousFlights);
+        return;
       }
+      const result = (await response.json()) as AssignResult;
+      setLastResult({ flightId, result });
+      if (result.rejected.length > 0) {
+        const rejectedIds = new Set(result.rejected.map((r) => r.guestId));
+        setGuests((prev) =>
+          prev.map((g) => (rejectedIds.has(g.id) ? { ...g, assignedFlightId: null } : g)),
+        );
+        setFlights((prev) =>
+          prev.map((f) =>
+            f.id === flightId
+              ? { ...f, guestIds: f.guestIds.filter((id) => !rejectedIds.has(id)) }
+              : f,
+          ),
+        );
+      }
+      // Not a follow-up reload() — an assign only ever changes the affected
+      // guests' assignedFlightId and this flight's guestIds, both already
+      // fully reconciled above. A background reload() here previously raced
+      // against whatever the caller does next (e.g. immediately setting the
+      // flight ready): if that reload resolved AFTER the ready transition's
+      // own refetch, it could silently overwrite the newer "ready" status
+      // with this stale, pre-transition snapshot — a real bug, reproduced via
+      // e2e, not a hypothetical.
+    } catch {
+      setGuests(previousGuests);
+      setFlights(previousFlights);
     } finally {
       markPending(key, false);
     }
   }
 
+  // Same optimistic-then-reconcile shape as assignUnit above.
   async function unassignUnit(unit: AssignableUnit, flightId: string) {
     const key = `assigned:${flightId}:${unit.key}`;
     markPending(key, true);
+    const memberIds = new Set(unit.members.map((m) => m.id));
+    const previousGuests = guests;
+    const previousFlights = flights;
+    setGuests((prev) => prev.map((g) => (memberIds.has(g.id) ? { ...g, assignedFlightId: null } : g)));
+    setFlights((prev) =>
+      prev.map((f) =>
+        f.id === flightId ? { ...f, guestIds: f.guestIds.filter((id) => !memberIds.has(id)) } : f,
+      ),
+    );
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         unit.members.map((m) => fetch(`/api/guests/${m.id}/actions/unassign`, { method: "POST" })),
       );
-      await reload();
+      if (responses.some((r) => !r.ok)) {
+        setGuests(previousGuests);
+        setFlights(previousFlights);
+        return;
+      }
+      // Same reasoning as assignUnit — no follow-up reload(), see there.
+    } catch {
+      setGuests(previousGuests);
+      setFlights(previousFlights);
     } finally {
       markPending(key, false);
     }
   }
 
   async function setFlightStatus(flightId: string, action: "set-ready" | "unready") {
-    const response = await fetch(`/api/flights/${flightId}/actions/${action}`, { method: "POST" });
-    if (response.ok) await reload();
+    const key = `status:${flightId}`;
+    markPending(key, true);
+    try {
+      const response = await fetch(`/api/flights/${flightId}/actions/${action}`, { method: "POST" });
+      if (response.ok) await reload();
+    } finally {
+      markPending(key, false);
+    }
   }
 
   function handleDragStart(event: DragStartEvent) {
     const unit = poolUnits.find((u) => `pool:${u.key}` === event.active.id);
     setActiveUnit(unit ?? null);
+    setActiveWidth(event.active.rect.current.initial?.width ?? null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
     setActiveUnit(null);
+    setActiveWidth(null);
     const { active, over } = event;
     if (!over) return;
     const unit = poolUnits.find((u) => `pool:${u.key}` === active.id);
@@ -257,23 +368,27 @@ export function PlanningPage() {
     const canSetReady = !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
     const dropDisabled = load.pilotWeightUnknown;
 
+    const statusPending = pending.has(`status:${f.id}`);
     const actions =
       f.status === "ready" ? (
         <Button
           variant="outline"
           size="sm"
           data-testid="unready-flight"
+          disabled={statusPending}
           onClick={() => void setFlightStatus(f.id, "unready")}
         >
+          {statusPending && <Loader2 className="size-3.5 animate-spin" />}
           {t("dispatch.planning.builder.unready")}
         </Button>
       ) : (
         <Button
           size="sm"
           data-testid="set-ready-flight"
-          disabled={!canSetReady}
+          disabled={!canSetReady || statusPending}
           onClick={() => void setFlightStatus(f.id, "set-ready")}
         >
+          {statusPending && <Loader2 className="size-3.5 animate-spin" />}
           {t("dispatch.planning.builder.setReady")}
         </Button>
       );
@@ -288,7 +403,12 @@ export function PlanningPage() {
             load={load}
             actions={actions}
             size={size}
-            className={cn(isOver && "ring-primary ring-2 ring-offset-2")}
+            onClick={() => setSelectedFlightId((prev) => (prev === f.id ? null : f.id))}
+            className={cn(
+              "h-full",
+              isOver && "ring-primary ring-2 ring-offset-2",
+              selectedFlightId === f.id && "border-primary ring-primary/50 ring-1",
+            )}
           >
             {size === "compact" ? (
               assignedUnits.length > 0 && (
@@ -297,25 +417,38 @@ export function PlanningPage() {
                 </p>
               )
             ) : (
-              <div className="flex flex-col gap-1" data-testid="flight-assigned-units">
-                {assignedUnits.map((unit) => (
-                  <AssignableUnitCard
-                    key={unit.key}
-                    unit={unit}
-                    dataTestId="assigned-unit"
-                    actions={
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={t("dispatch.planning.builder.unassign")}
-                        disabled={pending.has(`assigned:${f.id}:${unit.key}`)}
-                        onClick={() => void unassignUnit(unit, f.id)}
-                      >
-                        ✕
-                      </Button>
-                    }
-                  />
-                ))}
+              <div
+                className="flex max-h-28 flex-col overflow-y-auto"
+                data-testid="flight-assigned-units"
+              >
+                {assignedUnits.map((unit) => {
+                  const removing = pending.has(`assigned:${f.id}:${unit.key}`);
+                  return (
+                    <AssignableUnitCard
+                      key={unit.key}
+                      unit={unit}
+                      dataTestId="assigned-unit"
+                      actions={
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={t("dispatch.planning.builder.unassign")}
+                          disabled={removing}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void unassignUnit(unit, f.id);
+                          }}
+                        >
+                          {removing ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <X className="size-3.5" />
+                          )}
+                        </Button>
+                      }
+                    />
+                  );
+                })}
                 {assignedUnits.length === 0 && (
                   <p className="text-muted-foreground text-xs">
                     {t("dispatch.planning.builder.empty")}
@@ -334,6 +467,35 @@ export function PlanningPage() {
     );
   }
 
+  if (initialLoading) {
+    return (
+      <div className="flex flex-col gap-6" data-testid="planning-loading">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">{t("dispatch.nav.planning")}</h1>
+          <Skeleton className="h-9 w-32" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-7 w-40" />
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 4 }, (_, i) => (
+                <Skeleton key={i} className="h-8 w-full" />
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-7 w-32" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+              {Array.from({ length: 3 }, (_, i) => (
+                <Skeleton key={i} className="h-44 w-full" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex flex-col gap-6">
@@ -344,9 +506,7 @@ export function PlanningPage() {
           </Button>
         </div>
 
-        {assignableFlights.length > 0 && poolUnits.length > 0 && (
-          <p className="text-muted-foreground text-sm">{t("dispatch.planning.dragHint")}</p>
-        )}
+        <p className="text-muted-foreground text-sm">{t("dispatch.planning.dragHint")}</p>
 
         <Dialog open={newFlightDialogOpen} onOpenChange={setNewFlightDialogOpen}>
           <DialogContent>
@@ -399,6 +559,7 @@ export function PlanningPage() {
                 disabled={!newFlightAircraftId || creatingFlight}
                 onClick={() => void createFlight()}
               >
+                {creatingFlight && <Loader2 className="size-3.5 animate-spin" />}
                 {t("dispatch.planning.newFlight.create")}
               </Button>
             </DialogFooter>
@@ -406,43 +567,53 @@ export function PlanningPage() {
         </Dialog>
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
-          <Card className="h-fit">
-            <CardHeader>
-              <CardTitle>{t("dispatch.planning.pool.title")}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              {poolUnits.map((unit) => (
-                <AssignableUnitCard
-                  key={unit.key}
-                  unit={unit}
-                  draggableId={`pool:${unit.key}`}
-                  dataTestId="pool-unit"
-                  actions={
-                    <select
-                      className="border-input h-8 rounded-md border bg-transparent px-2 text-xs"
-                      data-testid="pool-unit-assign-select"
-                      disabled={pending.has(`pool:${unit.key}`)}
-                      value=""
-                      onChange={(e) => {
-                        const flightId = e.target.value;
-                        if (flightId) void assignUnit(unit, flightId);
-                      }}
-                    >
-                      <option value="">{t("dispatch.planning.pool.assignTo")}</option>
-                      {assignableFlights.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.code}
-                        </option>
-                      ))}
-                    </select>
-                  }
-                />
-              ))}
+          {/* Pool — same heading size/weight as the primary lane below; a
+              flat list (a hairline divider between rows), not a card nested
+              inside another card. */}
+          <div className="flex h-fit flex-col gap-3">
+            <h2 className="text-lg font-medium">
+              {t("dispatch.planning.pool.title")} ({poolUnits.length})
+            </h2>
+            {selectedFlight && (
+              <p className="text-muted-foreground text-xs" data-testid="pool-filter-note">
+                {t("dispatch.planning.pool.filteredFor", { code: selectedFlight.code })}
+              </p>
+            )}
+            <div className="flex flex-col">
+              {poolUnits.map((unit) => {
+                const fits = poolUnitFits(unit);
+                const assigning = pending.has(`pool:${unit.key}`);
+                return (
+                  <AssignableUnitCard
+                    key={unit.key}
+                    unit={unit}
+                    draggableId={`pool:${unit.key}`}
+                    dataTestId="pool-unit"
+                    className={cn(!fits && "opacity-40")}
+                    actions={
+                      <Button
+                        size="icon-sm"
+                        variant="outline"
+                        data-testid="pool-unit-assign-button"
+                        aria-label={t("dispatch.planning.pool.assign")}
+                        disabled={!selectedFlightId || !fits || assigning}
+                        onClick={() => selectedFlightId && void assignUnit(unit, selectedFlightId)}
+                      >
+                        {assigning ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="size-3.5" />
+                        )}
+                      </Button>
+                    }
+                  />
+                );
+              })}
               {poolUnits.length === 0 && (
                 <p className="text-muted-foreground text-sm">{t("dispatch.planning.pool.empty")}</p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           <div className="flex flex-col gap-8">
             {/* Primary lane — the actual planning work. Most space, most cards
@@ -457,7 +628,7 @@ export function PlanningPage() {
                   {t("dispatch.planning.flights.empty")}
                 </p>
               ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {plannedFlights.map((f) => renderFlightCard(f, "default"))}
                 </div>
               )}
@@ -472,7 +643,7 @@ export function PlanningPage() {
                 <h2 className="text-muted-foreground text-sm font-medium">
                   {t("dispatch.planning.lanes.ready")} ({readyFlights.length})
                 </h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
                   {readyFlights.map((f) => renderFlightCard(f, "compact"))}
                 </div>
               </div>
@@ -525,7 +696,16 @@ export function PlanningPage() {
           </div>
         </div>
       </div>
-      <DragOverlay>{activeUnit && <AssignableUnitCard unit={activeUnit} />}</DragOverlay>
+      <DragOverlay>
+        {activeUnit && (
+          <div style={activeWidth ? { width: activeWidth } : undefined}>
+            <AssignableUnitCard
+              unit={activeUnit}
+              className="bg-card rounded-md border px-3 shadow-lg"
+            />
+          </div>
+        )}
+      </DragOverlay>
     </DndContext>
   );
 }

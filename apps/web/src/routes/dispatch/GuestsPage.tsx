@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { UserPlus } from "lucide-react";
 import { deriveGuestStatus, type Guest, type GuestStatus } from "shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -135,7 +137,15 @@ export function GuestsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("dispatch.guests.heading")}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">{t("dispatch.guests.heading")}</h1>
+        <Button asChild size="sm" variant="outline" data-testid="add-guest-link">
+          <Link to="/register" target="_blank" rel="noopener noreferrer">
+            <UserPlus />
+            {t("dispatch.guests.addGuest")}
+          </Link>
+        </Button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex flex-wrap gap-2">

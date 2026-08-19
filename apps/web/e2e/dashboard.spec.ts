@@ -89,7 +89,7 @@ test("dashboard shows a flight card and lands an airborne flight via a quick act
     const card = page.getByTestId("flight-card").filter({ hasText: flight.code });
     await expect(card).toBeVisible();
     await expect(card.getByTestId("flight-card-status")).toContainText("in der Luft");
-    await expect(card.getByTestId("flight-card-gauge")).toContainText("1/4");
+    await expect(card.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "1");
 
     await card.getByTestId("dashboard-land-button").click();
     // Landed flights aren't "active" any more — the card leaves the dashboard's
@@ -100,6 +100,14 @@ test("dashboard shows a flight card and lands an airborne flight via a quick act
       (r) => r.json() as Promise<{ id: string; status: string }[]>,
     );
     expect(landed.find((f) => f.id === flightId)?.status).toBe("completed");
+
+    // Revenue is a reporting concern, not something to show during live ops —
+    // it moved off the dashboard's KPI row entirely.
+    await expect(page.getByTestId("kpi-revenue")).toHaveCount(0);
+
+    // ...but it's still available on /dispatch/reporting.
+    await page.goto("/dispatch/reporting");
+    await expect(page.getByTestId("kpi-revenue")).toContainText("€");
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

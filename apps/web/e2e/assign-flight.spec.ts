@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { DEFAULT_FLIGHT_DAY_ID } from "shared";
+import { fillDateOfBirth } from "./helpers/dob";
 import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
 // Increment 3 — the heart of the app: create pilot/aircraft/flight (Setup +
@@ -35,7 +36,7 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();
 
-    await page.getByLabel("Geburtsdatum").fill("1990-05-14");
+    await fillDateOfBirth(page, "1990-05-14");
     // Address fields are hidden when the group's default "reuse first member's
     // address" option is active (see RegisterPage's canReuseAddress) — nothing to
     // fill in that case, just accept the default.
@@ -137,26 +138,53 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     const flightCode = createdFlight!.code;
     const flightCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
 
-    // --- Assign solo guest via the pool card's flight-picker (the click/keyboard
-    // fallback for drag — see docs/architecture.md § Shared flight components) —
-    // fits (150/230 kg incl. pilot's 80kg, 1/2 seats) ---
-    await page
-      .getByTestId("pool-unit")
-      .filter({ hasText: nameSolo })
-      .getByTestId("pool-unit-assign-select")
-      .selectOption({ label: flightCode });
-    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("1/2");
-    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("150/230");
+    // --- Assign solo guest: click the flight card to select it (pool filters
+    // to units that fit), then the pool row's assign button — fits (150/230 kg
+    // incl. pilot's 80kg, 1/2 seats). See docs/architecture.md § Shared flight
+    // components. ---
+    await flightCard.click();
+    await expect(page.getByTestId("pool-filter-note")).toContainText(flightCode);
+    const soloPoolUnit = page.getByTestId("pool-unit").filter({ hasText: nameSolo });
+    await expect(soloPoolUnit).toBeVisible();
+    // The UI updates optimistically (instantly, before the network call
+    // resolves — see PlanningPage's assignUnit), so it alone doesn't prove the
+    // server has this locked in yet; the next step (assigning the group) needs
+    // that to be true server-side for its own capacity check to be meaningful.
+    const soloAssignResponse = page.waitForResponse(
+      (r) => r.url().includes("/actions/assign") && r.request().method() === "POST",
+    );
+    await soloPoolUnit.getByTestId("pool-unit-assign-button").click();
+    await soloAssignResponse;
+    await expect(flightCard.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "1");
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("80 kg frei"); // 230-150
     await expect(flightCard.getByTestId("assigned-unit")).toContainText(nameSolo);
 
-    // --- Assign the group — only one more fits (2 seats max); the other must be
-    // rejected, never silently dropped or over-capacity-allowed ---
-    await page
-      .getByTestId("pool-unit")
-      .filter({ hasText: groupName })
-      .getByTestId("pool-unit-assign-select")
-      .selectOption({ label: flightCode });
-    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("2/2");
+    // --- Assign the group via drag — only one more fits (2 seats max), the
+    // other must be rejected, never silently dropped or over-capacity-allowed.
+    // Deliberately drag, not the pool button: the group as a whole no longer
+    // fits (needs 2 seats, only 1 free) — its assign button is disabled (dimmed,
+    // not hidden, so the pool layout doesn't jump around), but drag ignores
+    // that and still reaches the server's real greedy partial-fit/rejection
+    // behavior. ---
+    const groupPoolUnit = page.getByTestId("pool-unit").filter({ hasText: groupName });
+    await expect(groupPoolUnit).toBeVisible();
+    const source = await groupPoolUnit.boundingBox();
+    const target = await flightCard.boundingBox();
+    if (!source || !target) throw new Error("Could not measure drag source/target");
+    const groupAssignResponse = page.waitForResponse(
+      (r) => r.url().includes("/actions/assign") && r.request().method() === "POST",
+    );
+    await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(source.x + source.width / 2 + 20, source.y + source.height / 2 + 20, {
+      steps: 5,
+    });
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await groupAssignResponse;
+
+    await expect(flightCard.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "2");
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("0 kg frei"); // 230-230, exactly at limit
     await expect(flightCard.getByTestId("assign-warning")).toBeVisible();
     await expect(flightCard.getByTestId("assigned-unit")).toHaveCount(2);
   } finally {

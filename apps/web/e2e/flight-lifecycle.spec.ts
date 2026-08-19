@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { DEFAULT_FLIGHT_DAY_ID } from "shared";
+import { fillDateOfBirth } from "./helpers/dob";
 import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
 // Completes the guest journey (registriert -> ... -> geflogen) that assign-flight
@@ -50,7 +51,7 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     await page.getByLabel("Vor- und Nachname").fill(guestName);
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();
-    await page.getByLabel("Geburtsdatum").fill("1990-05-14");
+    await fillDateOfBirth(page, "1990-05-14");
     await page.getByLabel("Straße und Hausnummer").fill("Musterstraße 1");
     await page.getByLabel("PLZ").fill("71522");
     await page.getByLabel("Ort").fill("Backnang");
@@ -83,14 +84,24 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     const flightCode = createdFlight!.code;
     const flightCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
 
-    // Assignment is unit-level (a group, or a solo guest as a group-of-one) via
-    // each pool card's flight-picker — see docs/architecture.md § Shared flight
-    // components. A dedicated spec covers the actual drag gesture.
+    // Assignment is unit-level (a group, or a solo guest as a group-of-one):
+    // click the flight card to select it (the pool filters to units that fit),
+    // then the pool row's assign button — see docs/architecture.md § Shared
+    // flight components. A dedicated spec covers the actual drag gesture.
+    await flightCard.click();
+    // The UI updates optimistically (instantly, before the network call
+    // resolves — see PlanningPage's assignUnit), so it alone doesn't prove the
+    // server has this locked in yet, and the very next step (set-ready) is a
+    // real server-side check that depends on it being true there already.
+    const assignResponse = page.waitForResponse(
+      (r) => r.url().includes("/actions/assign") && r.request().method() === "POST",
+    );
     await page
       .getByTestId("pool-unit")
       .filter({ hasText: guestName })
-      .getByTestId("pool-unit-assign-select")
-      .selectOption({ label: flightCode });
+      .getByTestId("pool-unit-assign-button")
+      .click();
+    await assignResponse;
     await expect(flightCard.getByTestId("assigned-unit")).toContainText(guestName);
 
     await flightCard.getByTestId("set-ready-flight").click();

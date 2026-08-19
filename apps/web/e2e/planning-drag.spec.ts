@@ -89,8 +89,8 @@ test("dragging a pool unit onto a flight card assigns it", async ({ page }) => {
 
     await expect(poolUnit).not.toBeVisible();
     await expect(flightCard.getByTestId("assigned-unit")).toContainText(guestName);
-    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("1/4");
-    await expect(flightCard.getByTestId("flight-card-gauge")).toContainText("155/300"); // 80 pilot + 75 guest
+    await expect(flightCard.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "1");
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("145 kg frei"); // 300-(80 pilot+75 guest)
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

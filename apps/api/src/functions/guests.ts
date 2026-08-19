@@ -316,8 +316,25 @@ export async function markNoShow(
   return { status: 200, jsonBody: updated };
 }
 
+const MAX_FLIGHT_UPDATE_ATTEMPTS = 10;
+
+function cosmosStatus(err: unknown): number | undefined {
+  return typeof err === "object" && err !== null && "code" in err
+    ? ((err as { code: unknown }).code as number)
+    : undefined;
+}
+
 // Removes a guest from its currently assigned flight, freeing the seat — the
 // correction path for a bad assignment. Guest itself stays "flugbereit".
+//
+// Removing a whole group calls this once per member, concurrently (see
+// PlanningPage's unassignUnit) — two calls racing to read-modify-write the SAME
+// flight's guestIds with no concurrency guard let the second writer's stale read
+// silently undo the first's removal (confirmed: both guests' own
+// assignedFlightId ended up correctly null, but the flight's guestIds still
+// listed one of them — a real, reproduced bug, not a UI glitch). Fixed with
+// Cosmos optimistic concurrency (ETag + IfMatch), retrying against the winner's
+// new version on conflict, same pattern as flights.ts's nextFlightCode.
 export async function unassignGuest(
   request: HttpRequest,
   _context: InvocationContext,
@@ -331,16 +348,32 @@ export async function unassignGuest(
   if (!guest) return { status: 404, jsonBody: { error: "not-found" } };
   if (!guest.assignedFlightId) return { status: 200, jsonBody: guest };
 
-  const { resource: flight } = await container
-    .item(guest.assignedFlightId, flightDayId)
-    .read<Flight>();
-  if (flight) {
+  let flightUpdated = false;
+  for (let attempt = 0; attempt < MAX_FLIGHT_UPDATE_ATTEMPTS && !flightUpdated; attempt++) {
+    const { resource: flight } = await container
+      .item(guest.assignedFlightId, flightDayId)
+      .read<Flight & { _etag?: string }>();
+    if (!flight || !flight.guestIds.includes(guestId)) {
+      flightUpdated = true; // gone already (deleted, or a concurrent call beat us to it)
+      break;
+    }
     const updatedFlight: Flight = {
       ...flight,
       guestIds: flight.guestIds.filter((id) => id !== guestId),
       updatedAt: new Date().toISOString(),
     };
-    await container.item(flight.id, flightDayId).replace(updatedFlight);
+    try {
+      await container
+        .item(flight.id, flightDayId)
+        .replace(updatedFlight, { accessCondition: { type: "IfMatch", condition: flight._etag! } });
+      flightUpdated = true;
+    } catch (err) {
+      if (cosmosStatus(err) !== 412) throw err;
+      // lost the race — retry against the winner's new version
+    }
+  }
+  if (!flightUpdated) {
+    return { status: 409, jsonBody: { error: "flight-update-conflict" } };
   }
 
   const updated: Guest = {

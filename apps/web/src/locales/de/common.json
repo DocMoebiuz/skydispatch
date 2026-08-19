@@ -25,9 +25,7 @@
         "waiting": "Wartend",
         "waitingSub": "offen zuzuweisen",
         "utilization": "Auslastung",
-        "utilizationSub": "aktive Flüge",
-        "revenue": "Einnahmen",
-        "revenueSub": "{{count}} geflogen"
+        "utilizationSub": "aktive Flüge"
       },
       "flights": {
         "title": "Live-Flüge",
@@ -80,7 +78,7 @@
       }
     },
     "planning": {
-      "dragHint": "Gruppe oder Einzelperson auf einen Flug ziehen, um sie zuzuweisen — oder rechts einen Flug aus der Liste wählen.",
+      "dragHint": "Gruppe oder Einzelperson auf einen Flug ziehen, um sie zuzuweisen — oder einen Flug anklicken, um passende Gäste zu sehen und per ✚ zuzuweisen.",
       "lanes": {
         "planning": "In Planung",
         "ready": "Bereit (READY)",
@@ -97,14 +95,16 @@
         "create": "Flug anlegen"
       },
       "pool": {
-        "title": "Verfügbare Gäste (bezahlt + gewogen)",
+        "title": "Verfügbare Gäste",
         "assign": "Zuweisen",
-        "assignTo": "Zuweisen zu…",
+        "filteredFor": "Gäste, die noch in {{code}} passen, sind hervorgehoben.",
         "empty": "Kein flugbereiter Gast verfügbar."
       },
       "builder": {
         "seats": "Sitze",
         "weight": "Gewicht",
+        "weightFree": "kg frei",
+        "weightOver": "kg über Limit",
         "empty": "Noch niemand zugewiesen.",
         "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen.",
         "unassign": "Entfernen",
@@ -146,7 +146,8 @@
         "completed": "Flüge abgeschlossen",
         "flown": "Gäste geflogen",
         "utilization": "Ø Auslastung",
-        "noShows": "No-Shows"
+        "noShows": "No-Shows",
+        "revenue": "Einnahmen"
       },
       "exportFlights": "Flüge exportieren (CSV)",
       "exportGuests": "Fluggäste exportieren (CSV)",
@@ -154,6 +155,7 @@
     },
     "guests": {
       "heading": "Fluggäste",
+      "addGuest": "Gast anlegen",
       "loading": "Lädt …",
       "error": "Gästeliste konnte nicht geladen werden.",
       "empty": "Noch keine Gäste registriert.",
@@ -207,6 +209,9 @@
       "next": "Weiter",
       "back": "Zurück",
       "dateOfBirth": "Geburtsdatum",
+      "dobDay": "Tag",
+      "dobMonth": "Monat",
+      "dobYear": "Jahr",
       "street": "Straße und Hausnummer",
       "zipCode": "PLZ",
       "city": "Ort",

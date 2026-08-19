@@ -45,12 +45,13 @@ export function BoardPage() {
     setLookupResult(found ?? "not-found");
   }
 
-  function reload() {
+  function reload(cancelledRef?: { current: boolean }) {
     void Promise.all([
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
     ]).then(([f, a, g]) => {
+      if (cancelledRef?.current) return;
       setFlights(f);
       setAircraftList(a);
       setGuests(g);
@@ -62,9 +63,19 @@ export function BoardPage() {
   }
 
   useEffect(() => {
-    reload();
-    const interval = setInterval(reload, 15_000);
-    return () => clearInterval(interval);
+    // cancelledRef guards only this effect's own initial call — required, not
+    // decorative: React StrictMode's dev-mode double mount/unmount/remount
+    // runs this effect twice, and the two initial fetch waves can resolve out
+    // of order (reproduced live on Planning's identical pattern, not
+    // hypothetical). setInterval's own recurring reload() calls don't need
+    // this — each tick is already sequential/current by the time it fires.
+    const cancelledRef = { current: false };
+    reload(cancelledRef);
+    const interval = setInterval(() => reload(), 15_000);
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(interval);
+    };
     // reload isn't in the deps array deliberately — it closes over state and is
     // re-created every render; depending on it would restart the poll interval on
     // every render instead of running it once on mount.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { Guest, Aircraft, Pilot, Flight, FlightDay } from "shared";
+import type { Guest, Aircraft, Pilot, Flight } from "shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { FlightCard } from "@/components/flight/FlightCard";
@@ -21,7 +21,6 @@ export function DashboardPage() {
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
 
   function reload(): Promise<void> {
@@ -40,24 +39,30 @@ export function DashboardPage() {
 
   // Inlined (not reload()) so the fetch-on-mount effect matches the one shape
   // eslint-plugin-react-hooks's set-state-in-effect rule accepts — reload()
-  // itself is only called from event handlers below.
+  // itself is only called from event handlers below. `cancelled` guard is
+  // required, not decorative: React StrictMode's dev-mode double
+  // mount/unmount/remount runs this effect twice, and the two fetch waves can
+  // resolve out of order — without the guard, a stale wave's .then() can fire
+  // after a user action already updated state and silently overwrite it with
+  // pre-action data (reproduced live on Planning's identical pattern, not
+  // hypothetical). Same pattern already used correctly in GuestsPage.
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
+      if (cancelled) return;
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
     });
-    // 404 means no flight day configured yet — price falls back to 0.
-    fetch("/api/flightday")
-      .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
-      .then((d) => setFlightDay(d))
-      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function start(flightId: string) {
@@ -90,7 +95,6 @@ export function DashboardPage() {
 
   const activeFlights = flights.filter((f) => f.status !== "completed");
   const completedFlights = flights.filter((f) => f.status === "completed");
-  const flownCount = guests.filter((g) => g.flown).length;
   const readyPoolCount = guests.filter(
     (g) => g.paid && g.weightKg != null && !g.assignedFlightId && !g.noShow && !g.flown,
   ).length;
@@ -104,8 +108,6 @@ export function DashboardPage() {
           100,
       )
     : 0;
-  const revenue = flownCount * (flightDay?.pricePerGuestEur ?? 0);
-
   const kpis: { key: string; value: string | number; sub: string }[] = [
     {
       key: "activeFlights",
@@ -119,11 +121,6 @@ export function DashboardPage() {
     },
     { key: "waiting", value: readyPoolCount, sub: t("dispatch.dashboard.kpi.waitingSub") },
     { key: "utilization", value: `${utilization}%`, sub: t("dispatch.dashboard.kpi.utilizationSub") },
-    {
-      key: "revenue",
-      value: `${revenue.toFixed(2).replace(".", ",")} €`,
-      sub: t("dispatch.dashboard.kpi.revenueSub", { count: flownCount }),
-    },
   ];
 
   const sortedActive = [...activeFlights].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
@@ -132,7 +129,7 @@ export function DashboardPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.dashboard")}</h1>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {kpis.map(({ key, value, sub }) => (
           <Card key={key}>
             <CardHeader>
