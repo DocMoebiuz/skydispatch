@@ -27,6 +27,19 @@ jobs:
       - run: pnpm -r build
       - run: pnpm --filter api deploy --prod ./api-deploy
 
+      - name: Vendor the shared package for Oryx's npm install
+        run: |
+          mkdir -p api-deploy/vendor
+          cp -r api-deploy/node_modules/shared api-deploy/vendor/shared
+          rm -rf api-deploy/node_modules/shared
+          node -e "
+            const fs = require('fs');
+            const p = 'api-deploy/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p));
+            pkg.dependencies.shared = 'file:vendor/shared';
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 2));
+          "
+
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
