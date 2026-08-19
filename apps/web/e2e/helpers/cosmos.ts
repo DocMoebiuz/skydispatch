@@ -40,7 +40,7 @@ export function getTestContainer(): Promise<Container> {
     containerPromise = (async () => {
       const client = new CosmosClient(getConnectionString());
       const { database } = await client.databases.createIfNotExists({
-        id: "skydispatch",
+        id: process.env.COSMOS_DATABASE_ID ?? "skydispatch",
       });
       const { container } = await database.containers.createIfNotExists({
         id: "operations",

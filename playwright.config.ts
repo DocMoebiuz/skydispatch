@@ -1,8 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// e2e always runs against the built app through the SWA CLI proxy (:4280), never
-// against Vite's own dev server directly — see docs/tech-stack.md § Testing: this is
-// what exercises routing/API rewrites the same way they behave in production.
+process.env.COSMOS_DATABASE_ID = "skydispatch.test";
+
 export default defineConfig({
   testDir: "./apps/web/e2e",
   globalSetup: "./apps/web/e2e/global-setup.ts",
