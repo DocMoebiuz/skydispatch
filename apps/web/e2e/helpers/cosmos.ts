@@ -2,11 +2,10 @@ import { CosmosClient, type Container } from "@azure/cosmos";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-// e2e runs against the real dev Cosmos account (no emulator — see
-// docs/tech-stack.md § Testing), so tests must clean up what they create. This
-// reads the same connection string apps/api uses locally rather than requiring a
-// second, separately-set env var for tests — one source of truth for the secret.
 function getConnectionString(): string {
+  if (process.env.COSMOS_CONNECTION_STRING) {
+    return process.env.COSMOS_CONNECTION_STRING;
+  }
   // __dirname, not import.meta.dirname — Playwright transpiles test/helper files to
   // CommonJS by default (unlike vite.config.ts, which runs as native ESM), and
   // `import.meta` there triggers an ESM/CJS loader mismatch.

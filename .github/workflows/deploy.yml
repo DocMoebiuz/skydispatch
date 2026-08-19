@@ -37,7 +37,6 @@ jobs:
           output_location: "dist"
           api_location: "api-deploy"
           skip_app_build: true
-          skip_api_build: true
 
   close_preview:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
