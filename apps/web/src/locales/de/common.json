@@ -19,10 +19,22 @@
     "dashboard": {
       "kpi": {
         "activeFlights": "Flüge aktiv",
+        "activeFlightsSub": "{{count}} abgeschlossen",
         "guests": "Gäste",
+        "guestsSub": "{{count}} flugbereit",
         "waiting": "Wartend",
-        "utilization": "Auslastung"
-      }
+        "waitingSub": "offen zuzuweisen",
+        "utilization": "Auslastung",
+        "utilizationSub": "aktive Flüge",
+        "revenue": "Einnahmen",
+        "revenueSub": "{{count}} geflogen"
+      },
+      "flights": {
+        "title": "Live-Flüge",
+        "empty": "Noch keine Flüge geplant.",
+        "goToPlanning": "Zur Flugplanung"
+      },
+      "goToPlanning": "Zur Planung"
     },
     "setup": {
       "flightDay": {

@@ -60,6 +60,31 @@ not ported CSS.
 - Client-side-only validation (email format, weight bounds) — must be re-validated
   server-side; the prototype had no server to do that at all.
 
+## Shared flight components
+
+The dispatcher-view rework (Dashboard/Planning/Tracking) uses one shared visual
+shell for a flight instead of each page inventing its own card markup:
+
+- `apps/web/src/lib/flightLoad.ts` — `computeFlightLoad()`, a pure function
+  aggregating a flight's seats-used/weight-used (pilot weight counts toward
+  payload too, see [nfr.md § Reliability & safety](./nfr.md#reliability--safety-matches-manual-53-eingebaute-sicherheiten)).
+  One definition of "is this flight over its limit," not duplicated per page.
+- `apps/web/src/components/flight/FlightCard.tsx` — code/status/aircraft/pilot
+  header, the load gauge, and an `actions` slot the caller fills in per page
+  (Dashboard: quick start/land; Planning: ready/unready toggle) — the card
+  itself has no opinion on which actions exist for a given status.
+
+Assignment is **unit-level** (a group, or a solo guest acting as a
+group-of-one), not per-seat — seating itself is the pilot's discretion at
+boarding, not something the app tracks. Planning's `AssignableUnitCard` and
+Check-in's `PassengerRow` (per-person, since boarding confirmation is
+inherently individual) are still to come.
+
+**Deferred, tracked as future work, not a regression:** deep cross-page
+navigation — clicking a flight on one view jumping to its full context on
+another (e.g. Dashboard card → Planning pre-filtered to that flight). Each view
+is independently useful today; wiring them together is a later pass.
+
 ## Data flow
 
 ```

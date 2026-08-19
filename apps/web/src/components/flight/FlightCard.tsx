@@ -1,0 +1,58 @@
+import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import type { Aircraft, Flight, Pilot } from "shared";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import type { FlightLoad } from "@/lib/flightLoad";
+
+interface FlightCardProps {
+  flight: Flight;
+  aircraft: Aircraft | undefined;
+  pilot: Pilot | undefined;
+  load: FlightLoad;
+  actions?: ReactNode;
+  className?: string;
+}
+
+// One shared visual shell for a flight, reused across Dashboard/Planning/
+// Tracking — see docs/architecture.md § Shared flight components. Deliberately
+// has no opinion on what actions exist for a given status; callers pass their
+// own `actions` slot, since what's relevant differs by page (Dashboard wants
+// quick start/land, Planning wants the ready/unready toggle).
+export function FlightCard({ flight, aircraft, pilot, load, actions, className }: FlightCardProps) {
+  const { t } = useTranslation();
+  return (
+    <Card className={className} data-testid="flight-card" data-flight-code={flight.code}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {flight.code}
+          <Badge variant="outline" data-testid="flight-card-status">
+            {t(`dispatch.planning.status.${flight.status}`)}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 text-sm">
+        <p className="text-muted-foreground">
+          {aircraft?.reg ?? "—"} {aircraft?.model ?? ""} · {pilot?.name ?? "—"}
+        </p>
+        <p data-testid="flight-card-gauge">
+          {load.usedSeats}/{load.totalSeats} {t("dispatch.planning.builder.seats")} ·{" "}
+          <span className={cn(load.over && "text-destructive font-semibold")}>
+            {load.usedWeightKg}/{load.maxPayloadKg} kg
+          </span>
+        </p>
+        <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+          <div
+            className={cn(
+              "h-full rounded-full",
+              load.over ? "bg-destructive" : load.pct >= 85 ? "bg-amber-500" : "bg-primary",
+            )}
+            style={{ width: `${Math.min(load.pct, 100)}%` }}
+          />
+        </div>
+      </CardContent>
+      {actions && <CardFooter className="gap-2">{actions}</CardFooter>}
+    </Card>
+  );
+}
