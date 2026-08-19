@@ -9,7 +9,7 @@ export interface FlightLoad {
   over: boolean;
   // A pilot IS assigned but has no weight on file (real pilot records created
   // before the weightKg field existed) — usedWeightKg is an undercount, and the
-  // API refuses assign/set-ready in this state (see apps/api flights.ts's
+  // API refuses assign/lock in this state (see apps/api flights.ts's
   // pilotWeightKgFor) rather than silently treating it as 0kg.
   pilotWeightUnknown: boolean;
 }

@@ -75,7 +75,7 @@ export async function togglePilotAvailability(
 // Lets an existing pilot's weight be corrected/backfilled after creation — real
 // pilot records created before the weightKg field existed had no way to get one
 // short of delete+recreate. See flights.ts's pilotWeightKgFor for why a missing
-// weight is treated as a hard block, not a silent 0, on assign/set-ready.
+// weight is treated as a hard block, not a silent 0, on assign/lock.
 export async function setPilotWeight(
   request: HttpRequest,
   _context: InvocationContext,

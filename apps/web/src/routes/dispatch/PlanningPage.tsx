@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { Guest, Aircraft, Pilot, Flight, AssignResult } from "shared";
+import {
+  deriveFlightStage,
+  type Guest,
+  type Aircraft,
+  type Pilot,
+  type Flight,
+  type AssignResult,
+} from "shared";
 import {
   DndContext,
   DragOverlay,
@@ -22,13 +29,20 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, X, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { FlightCard } from "@/components/flight/FlightCard";
+import { EmptyState } from "@/components/ui/empty-state";
 import { AssignableUnitCard } from "@/components/flight/AssignableUnitCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { computeFlightLoad, type FlightLoad } from "@/lib/flightLoad";
 import { groupIntoUnits, type AssignableUnit } from "@/lib/assignableUnits";
 import { cn } from "@/lib/utils";
 
-const ORDER: Record<Flight["status"], number> = { airborne: 0, ready: 1, planned: 2, completed: 3 };
+const ORDER: Record<Flight["status"], number> = {
+  created: 0,
+  assigned: 1,
+  ready: 2,
+  airborne: 3,
+  completed: 4,
+};
 
 function unitFits(unit: AssignableUnit, aircraft: Aircraft | undefined, load: FlightLoad): boolean {
   if (!aircraft || load.pilotWeightUnknown) return false;
@@ -176,12 +190,17 @@ export function PlanningPage() {
     return map;
   }, [flights, aircraftList, pilots, guests]);
   // Three lanes by how much planning attention each status needs right now —
-  // not just chronological order. Planned: the actual work (build/fill a
-  // flight). Ready: occasionally needs a trip back to "planned" (a no-show
-  // frees a seat). Airborne/completed: nothing left to do here — Tracking
-  // owns that, this page just keeps them out of the way by default.
-  const plannedFlights = sortedFlights.filter((f) => f.status === "planned");
-  const readyFlights = sortedFlights.filter((f) => f.status === "ready");
+  // not just chronological order. "In Planung": the actual work (build/fill an
+  // unlocked flight). "Bereit": locked ("assigned" or "ready" — Planning
+  // doesn't care about boarding progress, only whether the roster is locked;
+  // FlightCard's own badge shows the finer-grained stage per card) —
+  // occasionally needs a trip back via unlock (a no-show frees a seat).
+  // Airborne/completed: nothing left to do here — Tracking owns that, this
+  // page just keeps them out of the way by default.
+  const plannedFlights = sortedFlights.filter((f) => f.status === "created");
+  const readyFlights = sortedFlights.filter(
+    (f) => f.status === "assigned" || f.status === "ready",
+  );
   const finishedFlights = sortedFlights.filter(
     (f) => f.status === "airborne" || f.status === "completed",
   );
@@ -325,7 +344,7 @@ export function PlanningPage() {
     }
   }
 
-  async function setFlightStatus(flightId: string, action: "set-ready" | "unready") {
+  async function setFlightStatus(flightId: string, action: "lock" | "unlock") {
     const key = `status:${flightId}`;
     markPending(key, true);
     try {
@@ -353,8 +372,8 @@ export function PlanningPage() {
   }
 
   // Shared by the "In Planung" (default size, full assigned-unit list — the
-  // no-show correction path via unready still needs individual visibility)
-  // and "Ready" (compact, summary only — occasionally actioned, not the main
+  // no-show correction path via unlock still needs individual visibility)
+  // and "Bereit" (compact, summary only — occasionally actioned, not the main
   // work) lanes. Airborne/completed flights are locked and never call this;
   // they render as plain rows instead, see the finished-flights section below.
   function renderFlightCard(f: Flight, size: "default" | "compact") {
@@ -364,40 +383,42 @@ export function PlanningPage() {
       .map((id) => guests.find((g) => g.id === id))
       .filter((g): g is Guest => !!g);
     const load = flightLoads.get(f.id)!;
+    const stage = deriveFlightStage(f, flightGuests);
     const assignedUnits = groupIntoUnits(flightGuests);
-    const canSetReady = !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
+    const canLock = !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
+    const isLocked = f.status === "assigned" || f.status === "ready";
     const dropDisabled = load.pilotWeightUnknown;
 
     const statusPending = pending.has(`status:${f.id}`);
-    const actions =
-      f.status === "ready" ? (
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid="unready-flight"
-          disabled={statusPending}
-          onClick={() => void setFlightStatus(f.id, "unready")}
-        >
-          {statusPending && <Loader2 className="size-3.5 animate-spin" />}
-          {t("dispatch.planning.builder.unready")}
-        </Button>
-      ) : (
-        <Button
-          size="sm"
-          data-testid="set-ready-flight"
-          disabled={!canSetReady || statusPending}
-          onClick={() => void setFlightStatus(f.id, "set-ready")}
-        >
-          {statusPending && <Loader2 className="size-3.5 animate-spin" />}
-          {t("dispatch.planning.builder.setReady")}
-        </Button>
-      );
+    const actions = isLocked ? (
+      <Button
+        variant="outline"
+        size="sm"
+        data-testid="unready-flight"
+        disabled={statusPending}
+        onClick={() => void setFlightStatus(f.id, "unlock")}
+      >
+        {statusPending && <Loader2 className="size-3.5 animate-spin" />}
+        {t("dispatch.planning.builder.unready")}
+      </Button>
+    ) : (
+      <Button
+        size="sm"
+        data-testid="set-ready-flight"
+        disabled={!canLock || statusPending}
+        onClick={() => void setFlightStatus(f.id, "lock")}
+      >
+        {statusPending && <Loader2 className="size-3.5 animate-spin" />}
+        {t("dispatch.planning.builder.setReady")}
+      </Button>
+    );
 
     return (
       <DroppableFlightCard key={f.id} flightId={f.id} disabled={dropDisabled}>
         {(isOver) => (
           <FlightCard
             flight={f}
+            stage={stage}
             aircraft={aircraft}
             pilot={pilot}
             load={load}
@@ -624,9 +645,15 @@ export function PlanningPage() {
                 {t("dispatch.planning.lanes.planning")} ({plannedFlights.length})
               </h2>
               {plannedFlights.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  {t("dispatch.planning.flights.empty")}
-                </p>
+                <EmptyState
+                  data-testid="planning-flights-empty"
+                  message={t("dispatch.planning.flights.empty")}
+                  action={
+                    <Button size="sm" onClick={() => setNewFlightDialogOpen(true)}>
+                      <Plus /> {t("dispatch.planning.newFlight.create")}
+                    </Button>
+                  }
+                />
               ) : (
                 <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {plannedFlights.map((f) => renderFlightCard(f, "default"))}
@@ -635,7 +662,7 @@ export function PlanningPage() {
             </div>
 
             {/* Secondary lane — occasionally actioned (a no-show sends a
-                flight back to "planned" via unready), otherwise just needs to
+                flight back to "created" via unlock), otherwise just needs to
                 be glanceable. Compact cards, more per row, less visual weight
                 than the primary lane. */}
             {readyFlights.length > 0 && (

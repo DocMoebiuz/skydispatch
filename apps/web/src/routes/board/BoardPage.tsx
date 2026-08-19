@@ -14,7 +14,13 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-const ORDER: Record<Flight["status"], number> = { airborne: 0, ready: 1, planned: 2, completed: 3 };
+const ORDER: Record<Flight["status"], number> = {
+  created: 0,
+  assigned: 1,
+  ready: 2,
+  airborne: 3,
+  completed: 4,
+};
 
 function fmtTime(iso: string | null): string {
   return iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—";

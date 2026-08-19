@@ -15,6 +15,7 @@ import {
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
 import { randomCode } from "../lib/randomCode";
+import { recomputeBoardingStatus } from "../lib/flightBoardingStatus";
 
 // Shared shape for the many "flip one boolean on a guest" actions below (checkin,
 // undo-checkin — mark-paid/weigh predate this helper and aren't worth churning).
@@ -262,6 +263,12 @@ export async function checkInGuest(
   if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
   const updated = await updateGuest(guestId, { checkedIn: true });
   if (!updated) return { status: 404, jsonBody: { error: "not-found" } };
+  // Might be the last guest this flight was waiting on — recompute whether it's
+  // now fully boarded ("ready"). See flightBoardingStatus.ts.
+  if (updated.assignedFlightId) {
+    const container = await getOperationsContainer();
+    await recomputeBoardingStatus(container, updated.assignedFlightId);
+  }
   return { status: 200, jsonBody: updated };
 }
 
@@ -273,6 +280,12 @@ export async function undoCheckInGuest(
   if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
   const updated = await updateGuest(guestId, { checkedIn: false });
   if (!updated) return { status: 404, jsonBody: { error: "not-found" } };
+  // A previously fully-boarded ("ready") flight is no longer fully boarded —
+  // recompute drops it back to "assigned". See flightBoardingStatus.ts.
+  if (updated.assignedFlightId) {
+    const container = await getOperationsContainer();
+    await recomputeBoardingStatus(container, updated.assignedFlightId);
+  }
   return { status: 200, jsonBody: updated };
 }
 
@@ -302,6 +315,9 @@ export async function markNoShow(
         updatedAt: new Date().toISOString(),
       };
       await container.item(flight.id, flightDayId).replace(updatedFlight);
+      // Removing a not-yet-checked-in guest can itself complete boarding for
+      // whoever's left — recompute either way. See flightBoardingStatus.ts.
+      await recomputeBoardingStatus(container, flight.id, flightDayId);
     }
   }
 
@@ -375,6 +391,11 @@ export async function unassignGuest(
   if (!flightUpdated) {
     return { status: 409, jsonBody: { error: "flight-update-conflict" } };
   }
+  // Same reasoning as markNoShow — removing a guest can complete boarding for
+  // whoever's left, or (if this guest was already checked in) can't make things
+  // less boarded since they're gone either way, but recompute is cheap and
+  // correct in both directions. See flightBoardingStatus.ts.
+  await recomputeBoardingStatus(container, guest.assignedFlightId, flightDayId);
 
   const updated: Guest = {
     ...guest,

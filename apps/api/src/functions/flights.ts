@@ -18,6 +18,7 @@ import {
 } from "shared";
 import type { Container } from "@azure/cosmos";
 import { getOperationsContainer } from "../lib/cosmos";
+import { recomputeBoardingStatus } from "../lib/flightBoardingStatus";
 
 const MAX_COUNTER_ATTEMPTS = 10;
 
@@ -142,7 +143,7 @@ export async function createFlight(
     aircraftId: parsed.data.aircraftId,
     pilotId: parsed.data.pilotId ?? null,
     guestIds: [],
-    status: "planned",
+    status: "created",
     offBlock: null,
     onBlock: null,
     createdAt: now,
@@ -277,15 +278,26 @@ export async function assignToFlight(
       };
       await container.item(guest.id, flightDayId).replace(updatedGuest);
     }
+
+    // Normally a no-op (assignment happens on unlocked "created" flights) — but
+    // Planning does let a dispatcher assign more guests directly onto an
+    // already-locked flight, and a newly added, not-yet-checked-in guest means
+    // a "ready" (fully boarded) flight is no longer fully boarded.
+    await recomputeBoardingStatus(container, flightId, flightDayId);
   }
 
   const result: AssignResult = { assigned, rejected };
   return { status: 200, jsonBody: result };
 }
 
-// Ready requires guests > 0 and total weight within payload — checked server-side
-// too, not just disabled-button UI (nfr.md § Reliability & safety).
-export async function setFlightReady(
+// Locks the roster (created -> assigned) — requires guests > 0 and total weight
+// within payload, checked server-side too, not just disabled-button UI (nfr.md §
+// Reliability & safety). Whether the flight then reads as "assigned" or "ready"
+// is decided immediately after by recomputeBoardingStatus, not here — e.g. a
+// flight whose guests were all already checked in (possible if a dispatcher
+// unlocked and relocked without touching check-in state) should land straight
+// on "ready", not sit on "assigned" until some unrelated action re-triggers it.
+export async function lockFlight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
@@ -304,7 +316,7 @@ export async function setFlightReady(
   const pilotWeightKg = await pilotWeightKgFor(container, flight, flightDayId);
   if (pilotWeightKg === null) {
     // Same rule as assignToFlight — an assigned pilot with no weight on file means
-    // payload can't be verified, so READY (the "confirmed fit to fly" gate) must
+    // payload can't be verified, so locking (the "confirmed fit to fly" gate) must
     // refuse rather than silently pass on an undercounted total.
     return { status: 409, jsonBody: { error: "pilot-weight-unknown" } };
   }
@@ -322,12 +334,19 @@ export async function setFlightReady(
     return { status: 409, jsonBody: { error: "not-ready" } };
   }
 
-  const updated: Flight = { ...flight, status: "ready", updatedAt: new Date().toISOString() };
+  const updated: Flight = { ...flight, status: "assigned", updatedAt: new Date().toISOString() };
   await container.item(flightId, flightDayId).replace(updated);
-  return { status: 200, jsonBody: updated };
+  await recomputeBoardingStatus(container, flightId, flightDayId);
+  const { resource: final } = await container.item(flightId, flightDayId).read<Flight>();
+  return { status: 200, jsonBody: final ?? updated };
 }
 
-export async function unreadyFlight(
+// Unlocks the roster back to "created" — from either locked state ("assigned" or
+// already fully "ready") since a dispatcher may need to swap a passenger even
+// after everyone's checked in. Refuses from "created" (nothing to unlock),
+// "airborne", or "completed" (too late — matches nfr.md § Reliability & safety's
+// "critical actions require confirmation/can't be casually undone" spirit).
+export async function unlockFlight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
@@ -337,13 +356,19 @@ export async function unreadyFlight(
   const container = await getOperationsContainer();
   const { resource: flight } = await container.item(flightId, flightDayId).read<Flight>();
   if (!flight) return { status: 404, jsonBody: { error: "not-found" } };
-  const updated: Flight = { ...flight, status: "planned", updatedAt: new Date().toISOString() };
+  if (flight.status !== "assigned" && flight.status !== "ready") {
+    return { status: 409, jsonBody: { error: "not-locked" } };
+  }
+  const updated: Flight = { ...flight, status: "created", updatedAt: new Date().toISOString() };
   await container.item(flightId, flightDayId).replace(updated);
   return { status: 200, jsonBody: updated };
 }
 
-// Start requires ready + every assigned guest checked in — matches the prototype's
-// canStart() and the manual's boarding-before-takeoff flow.
+// Start requires the flight to be fully boarded ("ready") — matches the
+// prototype's canStart() and the manual's boarding-before-takeoff flow. The
+// allCheckedIn re-check here is defense in depth, not the primary gate: status
+// "ready" should already imply it by construction (recomputeBoardingStatus is
+// what sets it), but this endpoint doesn't trust that alone.
 export async function startFlight(
   request: HttpRequest,
   _context: InvocationContext,
@@ -434,18 +459,18 @@ app.http("assignToFlight", {
   handler: assignToFlight,
 });
 
-app.http("setFlightReady", {
+app.http("lockFlight", {
   methods: ["POST"],
-  route: "flights/{id}/actions/set-ready",
+  route: "flights/{id}/actions/lock",
   authLevel: "anonymous",
-  handler: setFlightReady,
+  handler: lockFlight,
 });
 
-app.http("unreadyFlight", {
+app.http("unlockFlight", {
   methods: ["POST"],
-  route: "flights/{id}/actions/unready",
+  route: "flights/{id}/actions/unlock",
   authLevel: "anonymous",
-  handler: unreadyFlight,
+  handler: unlockFlight,
 });
 
 app.http("startFlight", {

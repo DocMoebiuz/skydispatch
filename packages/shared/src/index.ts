@@ -4,8 +4,8 @@ export type { Aircraft } from "./types/aircraft";
 export type { Flight, AssignRejectReason, AssignResult } from "./types/flight";
 export type { FlightDay } from "./types/flightDay";
 
-export type { GuestStatus } from "./status";
-export { deriveGuestStatus } from "./status";
+export type { GuestStatus, FlightStage } from "./status";
+export { deriveGuestStatus, deriveFlightStage } from "./status";
 
 export type { GuestCreateRequest } from "./schemas/guestCreateRequest";
 export { guestCreateRequestSchema } from "./schemas/guestCreateRequest";

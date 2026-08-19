@@ -74,7 +74,7 @@ test("dashboard shows a flight card and lands an airborne flight via a quick act
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ guestIds: [guestId] }),
     });
-    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/set-ready`, {
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/lock`, {
       method: "POST",
     });
     await fetch(`http://localhost:4280/api/guests/${guestId}/actions/check-in`, {
@@ -88,7 +88,7 @@ test("dashboard shows a flight card and lands an airborne flight via a quick act
     await page.goto("/dispatch");
     const card = page.getByTestId("flight-card").filter({ hasText: flight.code });
     await expect(card).toBeVisible();
-    await expect(card.getByTestId("flight-card-status")).toContainText("in der Luft");
+    await expect(card.getByTestId("flight-card-status")).toContainText("In der Luft");
     await expect(card.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "1");
 
     await card.getByTestId("dashboard-land-button").click();

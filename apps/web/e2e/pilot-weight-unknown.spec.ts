@@ -4,7 +4,7 @@ import { getTestContainer, deleteGuestByEmail, deleteById } from "./helpers/cosm
 
 // Regression test for a real bug: real pilot records created before the weightKg
 // field existed have no weight on file, and apps/api's pilotWeightKgFor used to
-// silently treat that as 0kg — undercounting payload and letting assign/set-ready
+// silently treat that as 0kg — undercounting payload and letting assign/lock
 // through a hard-limit check they should have failed (nfr.md § Reliability &
 // safety). Fixed by treating "pilot assigned but no weight on file" as a hard
 // block, surfaced in the UI, and fixable in place via Setup's click-to-edit
@@ -14,7 +14,7 @@ import { getTestContainer, deleteGuestByEmail, deleteById } from "./helpers/cosm
 // to reproduce the legacy state is to insert the Cosmos document directly,
 // bypassing the API — exactly what a pre-existing real record looks like.
 
-test("a pilot with no weight on file blocks assign/set-ready until fixed", async ({ page }) => {
+test("a pilot with no weight on file blocks assign/lock until fixed", async ({ page }) => {
   const stamp = Date.now();
   const pilotName = `E2E No-Weight Pilot ${stamp}`;
   const guestName = `E2E No-Weight Guest ${stamp}`;
@@ -75,7 +75,7 @@ test("a pilot with no weight on file blocks assign/set-ready until fixed", async
     }).then((r) => r.json());
     flightId = flight.id;
 
-    // --- API-level: assign and set-ready both refuse, not silently undercount ---
+    // --- API-level: assign and lock both refuse, not silently undercount ---
     const assignResponse = await fetch(
       `http://localhost:4280/api/flights/${flightId}/actions/assign`,
       {
@@ -87,12 +87,12 @@ test("a pilot with no weight on file blocks assign/set-ready until fixed", async
     expect(assignResponse.status).toBe(409);
     expect((await assignResponse.json()).error).toBe("pilot-weight-unknown");
 
-    const readyResponse = await fetch(
-      `http://localhost:4280/api/flights/${flightId}/actions/set-ready`,
+    const lockResponse = await fetch(
+      `http://localhost:4280/api/flights/${flightId}/actions/lock`,
       { method: "POST" },
     );
-    expect(readyResponse.status).toBe(409);
-    expect((await readyResponse.json()).error).toBe("pilot-weight-unknown");
+    expect(lockResponse.status).toBe(409);
+    expect((await lockResponse.json()).error).toBe("pilot-weight-unknown");
 
     // --- UI: Setup surfaces the missing weight ---
     await page.goto("/dispatch/setup");

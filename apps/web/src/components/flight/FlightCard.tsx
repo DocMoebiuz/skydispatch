@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Plane, UserRound, Armchair } from "lucide-react";
-import type { Aircraft, Flight, Pilot } from "shared";
+import type { Aircraft, Flight, FlightStage, Pilot } from "shared";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,11 @@ import type { FlightLoad } from "@/lib/flightLoad";
 
 interface FlightCardProps {
   flight: Flight;
+  // The finer-grained "what's next" stage (see shared/src/status.ts), not the
+  // raw 4-value persisted status — computed upstream from `flight` + its
+  // assigned guests, same as `load`, so FlightCard stays a pure presentational
+  // shell that doesn't need a guest list of its own.
+  stage: FlightStage;
   aircraft: Aircraft | undefined;
   pilot: Pilot | undefined;
   load: FlightLoad;
@@ -40,6 +45,7 @@ interface FlightCardProps {
 // page (Dashboard wants quick start/land, Planning wants ready/unready).
 export function FlightCard({
   flight,
+  stage,
   aircraft,
   pilot,
   load,
@@ -66,7 +72,7 @@ export function FlightCard({
           {flight.code}
           <span className="text-muted-foreground font-normal">— {aircraft?.reg ?? "—"}</span>
           <Badge variant="outline" data-testid="flight-card-status">
-            {t(`dispatch.planning.status.${flight.status}`)}
+            {t(`dispatch.stage.${stage}`)}
           </Badge>
         </CardTitle>
       </CardHeader>

@@ -6,7 +6,15 @@ export interface Flight {
   aircraftId: string;
   pilotId: string | null;
   guestIds: string[];
-  status: "planned" | "ready" | "airborne" | "completed";
+  // "created" -> "assigned" -> "ready" -> "airborne" -> "completed". "assigned"
+  // and "ready" are both "roster locked" (set/cleared by the dispatcher via
+  // lockFlight/unlockFlight) — the difference between them is NOT a dispatcher
+  // action, it's system-derived from guest check-in state ("ready" means every
+  // assigned guest is checked in) and kept in sync by
+  // apps/api/src/lib/flightBoardingStatus.ts's recomputeBoardingStatus,
+  // called after check-in/undo/no-show/(un)assign. See
+  // docs/architecture.md § Shared flight components.
+  status: "created" | "assigned" | "ready" | "airborne" | "completed";
   offBlock: string | null;
   onBlock: string | null;
   createdAt: string;

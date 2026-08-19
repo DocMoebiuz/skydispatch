@@ -62,8 +62,17 @@ not ported CSS.
 
 ## Shared flight components
 
-The dispatcher-view rework (Dashboard/Planning/Tracking) uses one shared visual
-shell for a flight instead of each page inventing its own card markup:
+The dispatcher-view rework (Dashboard/Planning/Tracking/Check-in — **all four**
+surfaces that ever show a flight) uses one shared visual shell for a flight
+instead of each page inventing its own card markup. This was a real gap for a
+while — Tracking and Check-in each had their own bespoke `Card` markup for a
+flight even after Dashboard/Planning were unified on `FlightCard` — closed by
+migrating both onto the same component (Tracking: swapped its bespoke `Card`
+for `FlightCard` with start/land actions and takeoff/landing times in the
+`children` slot; Check-in: its flight picker is now a grid of `size="compact"`
+`FlightCard`s, click-to-select same as Planning, instead of plain tab buttons).
+"Minimum variations, reused everywhere" is the standing rule for any new flight
+UI — reach for `FlightCard` first, don't add a fifth flavor.
 
 - `apps/web/src/lib/flightLoad.ts` — `computeFlightLoad()`, a pure function
   aggregating a flight's seats-used/weight-used (pilot weight counts toward
@@ -82,24 +91,55 @@ shell for a flight instead of each page inventing its own card markup:
   list into assignable units (a `groupId`'s members together, everyone else as
   their own solo unit).
 - `apps/web/src/components/flight/AssignableUnitCard.tsx` — one card per unit,
-  reused both in Planning's pool (draggable via `@dnd-kit/core`, plus a
-  flight-picker `<select>` as the click/keyboard fallback — there's no single
-  "selected flight" any more for a plain button to target) and inside a
-  flight's own card (not draggable, a plain "Entfernen" button instead).
+  reused both in Planning's pool (draggable via `@dnd-kit/core`, plus an
+  icon-only assign button as the click/keyboard fallback — click a flight card
+  to select it first, then the pool row's button targets that selection) and
+  inside a flight's own card (not draggable, an icon-only "remove" button
+  instead).
+- `apps/web/src/components/ui/empty-state.tsx` — one shared "nothing here yet"
+  shell: a single card roughly the size a real item/section would occupy, a
+  short message, and an optional action pointing at where to go fix it (e.g.
+  Dashboard/Check-in/Tracking's "No flights" all link to Planning; Planning's
+  own "No flights" opens the create-flight dialog directly). Reused wherever a
+  flight list can be empty instead of each page writing its own bare
+  `<p>text</p>`. The "go to Planning" copy itself was two different strings
+  ("Zur Planung" / "Zur Flugplanung") before this pass — consolidated into one
+  `dispatch.common.goToPlanning` key.
 
 Assignment is **unit-level** (a group, or a solo guest acting as a
 group-of-one), not per-seat — seating itself is the pilot's discretion at
-boarding, not something the app tracks. Check-in's `PassengerRow` (per-person,
-since boarding confirmation is inherently individual, unlike assignment) is
-still to come.
+boarding, not something the app tracks. Check-in shows guests per-person (a
+plain row per guest, not a shared component — boarding confirmation is
+inherently individual, unlike assignment) below its `FlightCard` flight picker.
+
+**`Flight.status` is `created → assigned → ready → airborne → completed`.**
+`assigned` and `ready` are both "roster locked" (set/cleared by the dispatcher
+via `lockFlight`/`unlockFlight`, the API handlers behind Planning's "Sperren"/
+"Entsperren" buttons) — the difference between them is **not** a dispatcher
+action, it's mechanical: `ready` means every assigned guest is checked in,
+kept in sync by `apps/api/src/lib/flightBoardingStatus.ts`'s
+`recomputeBoardingStatus()`, called after check-in/undo-check-in/no-show/
+unassign/assign. `packages/shared/src/status.ts`'s `deriveFlightStage()`
+turns this into a 7-value UI-facing `FlightStage` (`new/planning/assigned/
+boarding/boarded/airborne/landed`) that `FlightCard`'s badge shows everywhere
+— splitting `created` into "has anyone been assigned yet" and `assigned` into
+"has anyone checked in yet", neither of which needs its own persisted status.
+This status set went through two real revisions in one session: it started as
+`planned/ready/airborne/completed` (`ready` meant "locked," full stop,
+regardless of boarding progress — confusing once check-in-driven sub-states
+were added on top, since "ready" then meant two different things depending on
+who you asked) before landing on the current 5-value set specifically to
+resolve that collision.
 
 **Planning is organized into three lanes by how much attention each flight
 status needs right now, not chronological order** — screen space is a scarce
 resource and should go to what's actually actionable:
-- **"In Planung"** (`planned`) — the real work (build/fill a flight). Full-size
+- **"In Planung"** (`created`) — the real work (build/fill a flight). Full-size
   `FlightCard`s, the most columns, the most screen space.
-- **"Ready" (`ready`)** — occasionally needs a trip back to `planned` via
-  `unready` (a no-show frees a seat, the flight may no longer be full). Same
+- **"Gesperrt"** (`assigned` or `ready` — Planning only cares whether the
+  roster is locked, not boarding progress; each card's own badge shows the
+  finer stage) — occasionally needs a trip back to `created` via `unlockFlight`
+  (a no-show frees a seat, the flight may no longer be full). Same
   `FlightCard`, `size="compact"`, more columns since each card needs less room.
 - **"Erledigt"** (`airborne` + `completed`) — zero planning actions available;
   Tracking owns `airborne`→`completed`, Reporting owns the historical record.
@@ -230,9 +270,11 @@ interface Flight {
   code: string;                  // e.g. "FL-003"
   aircraftId: string; pilotId: string | null;
   guestIds: string[];
-  status: "planned" | "ready" | "airborne" | "completed"; // English values in data —
-  // the prototype used German strings as data, which the localization convention
-  // below rules out; the UI maps these to German labels for display.
+  status: "created" | "assigned" | "ready" | "airborne" | "completed"; // English
+  // values in data — the prototype used German strings as data, which the
+  // localization convention below rules out; the UI maps these to German labels
+  // for display. See § Shared flight components above for what each value means
+  // and which transitions are a dispatcher action vs. system-derived.
   offBlock: string | null; onBlock: string | null;
   createdAt: string; updatedAt: string;
 }
@@ -352,6 +394,12 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
    burn? a fixed reserve subtracted from payload? refuel-between-flights
    tracking for turnaround planning?). Revisit once the shape of the
    requirement is clearer — don't guess a schema for it now.
+6. **EN/DE language rotation on timetable-style displays.** Flagged by the user
+   as a future visual-refinement idea, not scoped yet: on a timetable/chart
+   view of flights (e.g. a future Tracking timeline), rotate the flight-status
+   label between English and German instead of committing to one. No design or
+   mechanism decided (interval-based? per-render random? user toggle?) — revisit
+   during a dedicated visual-refinement pass, not in scope now.
 
 ## Domain-model naming
 

@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { Guest, Aircraft, Pilot, Flight } from "shared";
+import { deriveFlightStage, type Guest, type Aircraft, type Pilot, type Flight } from "shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
 
-const ORDER: Record<Flight["status"], number> = { airborne: 0, ready: 1, planned: 2, completed: 3 };
+const ORDER: Record<Flight["status"], number> = {
+  created: 0,
+  assigned: 1,
+  ready: 2,
+  airborne: 3,
+  completed: 4,
+};
 
 // The dashboard is both an overview AND a place to take quick action without
 // navigating away (track a landing, start a boarded flight) — deep
@@ -150,14 +157,15 @@ export function DashboardPage() {
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">{t("dispatch.dashboard.flights.title")}</h2>
         {sortedActive.length === 0 ? (
-          <Card>
-            <CardContent className="text-muted-foreground flex flex-col items-center gap-3 py-8 text-sm">
-              {t("dispatch.dashboard.flights.empty")}
+          <EmptyState
+            data-testid="dashboard-flights-empty"
+            message={t("dispatch.dashboard.flights.empty")}
+            action={
               <Button asChild size="sm">
-                <Link to="/dispatch/planning">{t("dispatch.dashboard.flights.goToPlanning")}</Link>
+                <Link to="/dispatch/planning">{t("dispatch.common.goToPlanning")}</Link>
               </Button>
-            </CardContent>
-          </Card>
+            }
+          />
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {sortedActive.map((f) => {
@@ -167,12 +175,16 @@ export function DashboardPage() {
                 .map((id) => guests.find((g) => g.id === id))
                 .filter((g): g is Guest => !!g);
               const load = computeFlightLoad(f, aircraft, pilot, flightGuests);
-              const notCheckedIn = flightGuests.filter((g) => !g.checkedIn).length;
-              const canStart = f.status === "ready" && f.guestIds.length > 0 && notCheckedIn === 0;
+              const stage = deriveFlightStage(f, flightGuests);
               const isPending = pending.has(f.id);
 
+              // One primary action per stage — always the actual next thing to
+              // do, never a disabled dead-end button. "assigned"/"boarding"
+              // used to render a disabled "Start nicht möglich" button here;
+              // now they point straight at Check-in, since that's what's
+              // actually blocking the start.
               let actions;
-              if (f.status === "airborne") {
+              if (stage === "airborne") {
                 actions = (
                   <Button
                     variant="destructive"
@@ -184,21 +196,27 @@ export function DashboardPage() {
                     {t("dispatch.tracking.land")}
                   </Button>
                 );
-              } else if (f.status === "ready") {
+              } else if (stage === "boarded") {
                 actions = (
                   <Button
                     size="sm"
                     data-testid="dashboard-start-button"
-                    disabled={!canStart || isPending}
+                    disabled={isPending}
                     onClick={() => void start(f.id)}
                   >
-                    {canStart ? t("dispatch.tracking.start") : t("dispatch.tracking.startBlocked")}
+                    {t("dispatch.tracking.start")}
+                  </Button>
+                );
+              } else if (stage === "assigned" || stage === "boarding") {
+                actions = (
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/dispatch/checkin">{t("dispatch.common.goToCheckin")}</Link>
                   </Button>
                 );
               } else {
                 actions = (
                   <Button asChild variant="outline" size="sm">
-                    <Link to="/dispatch/planning">{t("dispatch.dashboard.goToPlanning")}</Link>
+                    <Link to="/dispatch/planning">{t("dispatch.common.goToPlanning")}</Link>
                   </Button>
                 );
               }
@@ -207,6 +225,7 @@ export function DashboardPage() {
                 <FlightCard
                   key={f.id}
                   flight={f}
+                  stage={stage}
                   aircraft={aircraft}
                   pilot={pilot}
                   load={load}

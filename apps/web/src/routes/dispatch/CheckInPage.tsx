@@ -1,29 +1,40 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { Guest, Flight } from "shared";
+import { deriveFlightStage, type Guest, type Aircraft, type Pilot, type Flight } from "shared";
+import { Check, X, Undo2, Loader2, CircleCheck, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FlightCard } from "@/components/flight/FlightCard";
+import { computeFlightLoad } from "@/lib/flightLoad";
 
-// Check-in & boarding — matches the prototype's flow: pick a flight (planned or
-// ready), check in its assigned guests one by one or via quick ID/name search, or
-// mark a no-show (which immediately frees the seat — see apps/api guests.ts).
+// Check-in & boarding — matches the prototype's flow: check in assigned guests (or
+// mark a no-show, which immediately frees the seat — see apps/api guests.ts).
+// Every flight is shown as a card with its passengers listed and actionable right
+// there — no separate "select a flight, then act in a list below" step, and no
+// separate quick-check-in submit flow either: the search field just filters the
+// passenger lists live, by name or code, down to whoever you're looking for. See
+// docs/architecture.md § Shared flight components.
 export function CheckInPage() {
   const { t } = useTranslation();
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
+  const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
-  const [quickSearch, setQuickSearch] = useState("");
-  const [quickError, setQuickError] = useState(false);
+  const [search, setSearch] = useState("");
   const [pending, setPending] = useState<Set<string>>(new Set());
 
   function reload(): Promise<void> {
     return Promise.all([
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, f]) => {
+    ]).then(([g, a, p, f]) => {
       setGuests(g);
+      setAircraftList(a);
+      setPilots(p);
       setFlights(f);
     });
   }
@@ -38,10 +49,14 @@ export function CheckInPage() {
     let cancelled = false;
     Promise.all([
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, f]) => {
+    ]).then(([g, a, p, f]) => {
       if (cancelled) return;
       setGuests(g);
+      setAircraftList(a);
+      setPilots(p);
       setFlights(f);
     });
     return () => {
@@ -51,12 +66,14 @@ export function CheckInPage() {
 
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
   const boardableFlights = flights.filter(
-    (f) => f.status === "planned" || f.status === "ready",
+    (f) => f.status !== "airborne" && f.status !== "completed",
   );
-  const selectedFlight = boardableFlights.find((f) => f.id === selectedFlightId) ?? null;
-  const flightGuests = selectedFlight
-    ? selectedFlight.guestIds.map((id) => guestById.get(id)).filter((g): g is Guest => !!g)
-    : [];
+
+  function matchesSearch(g: Guest): boolean {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return g.name.toLowerCase().includes(q) || g.code.toLowerCase() === q;
+  }
 
   function setPendingFor(id: string, on: boolean) {
     setPending((prev) => {
@@ -90,131 +107,138 @@ export function CheckInPage() {
     setPendingFor(guestId, false);
   }
 
-  async function quickCheckIn() {
-    const q = quickSearch.trim().toLowerCase();
-    if (!q || !selectedFlight) return;
-    const hit = flightGuests.find(
-      (g) => g.code.toLowerCase() === q || g.name.toLowerCase().includes(q),
-    );
-    if (!hit) {
-      setQuickError(true);
-      return;
-    }
-    setQuickError(false);
-    setQuickSearch("");
-    await checkIn(hit.id);
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.checkin")}</h1>
 
-      {boardableFlights.length > 0 ? (
-        <div className="flex flex-wrap gap-2" data-testid="checkin-flight-tabs">
-          {boardableFlights.map((f) => {
-            const boarded = f.guestIds.filter((id) => guestById.get(id)?.checkedIn).length;
-            return (
-              <Button
-                key={f.id}
-                size="sm"
-                variant={f.id === selectedFlightId ? "default" : "outline"}
-                data-testid="checkin-flight-tab"
-                onClick={() => setSelectedFlightId(f.id)}
-              >
-                {f.code} ({boarded}/{f.guestIds.length})
-              </Button>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-muted-foreground text-sm">{t("dispatch.checkin.noFlights")}</p>
-      )}
-
-      {selectedFlight && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("dispatch.checkin.quickTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center gap-2">
-            <Input
-              className="max-w-56"
-              placeholder={t("dispatch.checkin.quickPlaceholder")}
-              data-testid="quick-checkin-input"
-              value={quickSearch}
-              onChange={(e) => {
-                setQuickSearch(e.target.value);
-                setQuickError(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void quickCheckIn();
-              }}
-            />
-            <Button data-testid="quick-checkin-button" onClick={() => void quickCheckIn()}>
-              {t("dispatch.checkin.quickSubmit")}
+      {boardableFlights.length === 0 ? (
+        <EmptyState
+          data-testid="checkin-flights-empty"
+          message={t("dispatch.checkin.noFlights")}
+          action={
+            <Button asChild size="sm">
+              <Link to="/dispatch/planning">{t("dispatch.common.goToPlanning")}</Link>
             </Button>
-            {quickError && (
-              <span className="text-destructive text-sm">{t("dispatch.checkin.quickError")}</span>
-            )}
-          </CardContent>
-        </Card>
-      )}
+          }
+        />
+      ) : (
+        <>
+          <Input
+            className="max-w-64"
+            placeholder={t("dispatch.checkin.searchPlaceholder")}
+            data-testid="checkin-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
-      {selectedFlight && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{selectedFlight.code}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {flightGuests.map((g) => (
-              <div
-                key={g.id}
-                className="flex items-center justify-between rounded-md border p-2 text-sm"
-                data-testid="checkin-guest-row"
-              >
-                <span>
-                  {g.name} — {g.weightKg} kg · {g.code}
-                </span>
-                {g.checkedIn ? (
-                  <div className="flex items-center gap-2">
-                    <Badge>{t("dispatch.checkin.checkedIn")}</Badge>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      data-testid="undo-checkin-button"
-                      disabled={pending.has(g.id)}
-                      onClick={() => void undoCheckIn(g.id)}
+          <div
+            className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+            data-testid="checkin-flight-picker"
+          >
+            {boardableFlights.map((f) => {
+              const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+              const pilot = pilots.find((p) => p.id === f.pilotId);
+              const flightGuestsForCard = f.guestIds
+                .map((id) => guestById.get(id))
+                .filter((g): g is Guest => !!g);
+              const visibleGuests = flightGuestsForCard.filter(matchesSearch);
+              if (search.trim() && visibleGuests.length === 0) return null;
+              const load = computeFlightLoad(f, aircraft, pilot, flightGuestsForCard);
+              const stage = deriveFlightStage(f, flightGuestsForCard);
+
+              return (
+                <FlightCard
+                  key={f.id}
+                  flight={f}
+                  stage={stage}
+                  aircraft={aircraft}
+                  pilot={pilot}
+                  load={load}
+                >
+                  {visibleGuests.length > 0 ? (
+                    <div
+                      className="flex max-h-40 flex-col gap-0.5 overflow-y-auto"
+                      data-testid="checkin-card-passengers"
                     >
-                      {t("dispatch.checkin.undo")}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      data-testid="checkin-button"
-                      disabled={pending.has(g.id)}
-                      onClick={() => void checkIn(g.id)}
-                    >
-                      {t("dispatch.checkin.checkin")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      data-testid="checkin-noshow-button"
-                      disabled={pending.has(g.id)}
-                      onClick={() => void noShow(g.id)}
-                    >
-                      {t("dispatch.guests.noShow")}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-            {flightGuests.length === 0 && (
-              <p className="text-muted-foreground text-sm">{t("dispatch.checkin.empty")}</p>
-            )}
-          </CardContent>
-        </Card>
+                      {visibleGuests.map((g) => {
+                        const isPending = pending.has(g.id);
+                        return (
+                          <div
+                            key={g.id}
+                            className="flex items-center justify-between gap-1"
+                            data-testid="checkin-card-passenger-row"
+                          >
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              {g.checkedIn ? (
+                                <CircleCheck
+                                  className="text-primary size-3.5 shrink-0"
+                                  aria-hidden
+                                />
+                              ) : (
+                                <Circle
+                                  className="text-muted-foreground/40 size-3.5 shrink-0"
+                                  aria-hidden
+                                />
+                              )}
+                              <span className="truncate">{g.name}</span>
+                            </span>
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              {g.checkedIn ? (
+                                <Button
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  aria-label={t("dispatch.checkin.undo")}
+                                  disabled={isPending}
+                                  data-testid="card-undo-checkin-button"
+                                  onClick={() => void undoCheckIn(g.id)}
+                                >
+                                  {isPending ? (
+                                    <Loader2 className="size-3.5 animate-spin" />
+                                  ) : (
+                                    <Undo2 className="size-3.5" />
+                                  )}
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label={t("dispatch.checkin.checkin")}
+                                    disabled={isPending}
+                                    data-testid="card-checkin-button"
+                                    onClick={() => void checkIn(g.id)}
+                                  >
+                                    {isPending ? (
+                                      <Loader2 className="size-3.5 animate-spin" />
+                                    ) : (
+                                      <Check className="size-3.5" />
+                                    )}
+                                  </Button>
+                                  <Button
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label={t("dispatch.guests.noShow")}
+                                    disabled={isPending}
+                                    data-testid="card-noshow-button"
+                                    onClick={() => void noShow(g.id)}
+                                  >
+                                    <X className="size-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">{t("dispatch.planning.builder.empty")}</p>
+                  )}
+                </FlightCard>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

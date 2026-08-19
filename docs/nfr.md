@@ -49,7 +49,7 @@ These are hard product requirements carried over from the manual, not aspiration
   required `weightKg` (Setup); flight assignment and the ready-status gate both sum
   pilot + assigned-guest weight against `aircraft.maxPayloadKg` server-side.
 - A flight whose assigned pilot has **no weight on file** (real pilot records
-  created before `weightKg` existed) refuses assign/set-ready outright — an unknown
+  created before `weightKg` existed) refuses assign/lock outright — an unknown
   weight is never silently treated as 0kg, which would undercount payload and let
   an over-limit flight through unnoticed. Fixable in place via Setup's pilot list
   (`POST /api/pilots/{id}/actions/set-weight`).

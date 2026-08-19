@@ -4,10 +4,11 @@ import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
 // Planning is organized into three lanes by how much attention each status
 // needs right now, not just chronological order: "In Planung" (the actual
-// work — full detail, most screen space), "Ready" (occasionally needs a trip
-// back to "planned" via unready — compact cards), "Erledigt" (airborne +
-// completed — zero planning actions left, collapsed by default, on demand
-// only). See docs/architecture.md § Shared flight components.
+// work — full detail, most screen space), "Gesperrt" (locked — "assigned" or
+// "ready" — occasionally needs a trip back to "created" via unlock — compact
+// cards), "Erledigt" (airborne + completed — zero planning actions left,
+// collapsed by default, on demand only). See docs/architecture.md § Shared
+// flight components.
 
 test("finished flights stay hidden until asked for, ready flights render compact", async ({
   page,
@@ -73,7 +74,7 @@ test("finished flights stay hidden until asked for, ready flights render compact
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ guestIds: [guestId] }),
     });
-    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/set-ready`, {
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/lock`, {
       method: "POST",
     });
     await fetch(`http://localhost:4280/api/guests/${guestId}/actions/check-in`, {
@@ -181,23 +182,23 @@ test("a ready flight renders in the compact secondary lane and can go back to pl
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ guestIds: [guestId] }),
     });
-    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/set-ready`, {
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/lock`, {
       method: "POST",
     });
 
     await page.goto("/dispatch/planning");
     const flightCard = page.getByTestId("flight-card").filter({ hasText: flight.code });
     await expect(flightCard).toBeVisible();
-    await expect(flightCard.getByTestId("flight-card-status")).toHaveText("READY");
+    await expect(flightCard.getByTestId("flight-card-status")).toHaveText("Zugewiesen");
     // Compact rendering skips the per-unit removable rows — just a name summary.
     await expect(flightCard.getByTestId("flight-assigned-units")).toContainText(
       "E2E Lanes Ready Guest",
     );
     await expect(flightCard.getByTestId("assigned-unit")).toHaveCount(0);
 
-    // A no-show: move the flight back to "planned" so it can be refilled.
+    // A no-show: move the flight back to "created" so it can be refilled.
     await flightCard.getByTestId("unready-flight").click();
-    await expect(flightCard.getByTestId("flight-card-status")).toHaveText("geplant");
+    await expect(flightCard.getByTestId("flight-card-status")).toHaveText("In Planung");
     await expect(flightCard.getByTestId("set-ready-flight")).toBeVisible();
   } finally {
     await deleteGuestByEmail(email);

@@ -16,6 +16,18 @@
       "tracking": "Tracking",
       "reporting": "Reporting"
     },
+    "common": {
+      "goToPlanning": "Zur Flugplanung"
+    },
+    "stage": {
+      "new": "Neu",
+      "planning": "In Planung",
+      "assigned": "Zugewiesen",
+      "boarding": "Boarding",
+      "boarded": "Startklar",
+      "airborne": "In der Luft",
+      "landed": "Gelandet"
+    },
     "dashboard": {
       "kpi": {
         "activeFlights": "Flüge aktiv",
@@ -29,10 +41,8 @@
       },
       "flights": {
         "title": "Live-Flüge",
-        "empty": "Noch keine Flüge geplant.",
-        "goToPlanning": "Zur Flugplanung"
-      },
-      "goToPlanning": "Zur Planung"
+        "empty": "Noch keine Flüge geplant."
+      }
     },
     "setup": {
       "flightDay": {
@@ -81,7 +91,7 @@
       "dragHint": "Gruppe oder Einzelperson auf einen Flug ziehen, um sie zuzuweisen — oder einen Flug anklicken, um passende Gäste zu sehen und per ✚ zuzuweisen.",
       "lanes": {
         "planning": "In Planung",
-        "ready": "Bereit (READY)",
+        "ready": "Gesperrt",
         "finished": "Erledigt"
       },
       "flights": {
@@ -108,30 +118,26 @@
         "empty": "Noch niemand zugewiesen.",
         "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen.",
         "unassign": "Entfernen",
-        "setReady": "Auf READY setzen",
-        "unready": "READY zurücksetzen",
-        "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/READY gesperrt."
+        "setReady": "Sperren",
+        "unready": "Entsperren",
+        "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Sperren nicht möglich."
       },
       "status": {
-        "planned": "geplant",
-        "ready": "READY",
+        "created": "geplant",
+        "assigned": "zugewiesen",
+        "ready": "bereit",
         "airborne": "in der Luft",
         "completed": "abgeschlossen"
       }
     },
     "checkin": {
-      "noFlights": "Keine Flüge mit zugewiesenen Gästen. Erst in der Flugplanung zuweisen.",
-      "quickTitle": "Schnell-Check-in",
-      "quickPlaceholder": "z. B. G-001 oder Name",
-      "quickSubmit": "Check-in",
-      "quickError": "Kein zugewiesener Gast gefunden.",
+      "noFlights": "Keine Flüge mit zugewiesenen Gästen.",
+      "searchPlaceholder": "Gast suchen (Name oder Code) …",
       "checkedIn": "eingecheckt",
       "undo": "Rückgängig",
-      "checkin": "Check-in",
-      "empty": "Keine Gäste zugewiesen."
+      "checkin": "Check-in"
     },
     "tracking": {
-      "pax": "Pax",
       "notCheckedIn": "nicht eingecheckt",
       "takeoff": "Start",
       "landing": "Landung",

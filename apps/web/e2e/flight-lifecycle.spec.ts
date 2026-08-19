@@ -105,22 +105,27 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     await expect(flightCard.getByTestId("assigned-unit")).toContainText(guestName);
 
     await flightCard.getByTestId("set-ready-flight").click();
-    await expect(flightCard.getByTestId("flight-card-status")).toHaveText("READY");
+    await expect(flightCard.getByTestId("flight-card-status")).toHaveText("Zugewiesen");
 
     // --- Check-in ---
+    // Every boardable flight renders as a card with its passengers listed and
+    // actionable directly on the card — no separate select-then-act step. See
+    // docs/architecture.md § Shared flight components.
     await page.goto("/dispatch/checkin");
-    await page.getByTestId("checkin-flight-tab").filter({ hasText: flightCode }).click();
-    const checkinRow = page.getByTestId("checkin-guest-row").filter({ hasText: guestName });
-    await checkinRow.getByTestId("checkin-button").click();
-    await expect(checkinRow).toContainText("eingecheckt");
+    const checkinCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
+    const checkinRow = checkinCard
+      .getByTestId("checkin-card-passenger-row")
+      .filter({ hasText: guestName });
+    await checkinRow.getByTestId("card-checkin-button").click();
+    await expect(checkinRow.getByTestId("card-undo-checkin-button")).toBeVisible();
 
     // --- Start + land ---
     await page.goto("/dispatch/tracking");
-    const card = page.getByTestId("tracking-flight-card").filter({ hasText: flightCode });
+    const card = page.getByTestId("flight-card").filter({ hasText: flightCode });
     await card.getByTestId("start-button").click();
-    await expect(card.getByTestId("tracking-status")).toHaveText("in der Luft");
+    await expect(card.getByTestId("flight-card-status")).toHaveText("In der Luft");
     await card.getByTestId("land-button").click();
-    await expect(card.getByTestId("tracking-status")).toHaveText("abgeschlossen");
+    await expect(card.getByTestId("flight-card-status")).toHaveText("Gelandet");
 
     // --- Verify: guest flown, shows on board as completed ---
     await page.goto("/dispatch/guests");
