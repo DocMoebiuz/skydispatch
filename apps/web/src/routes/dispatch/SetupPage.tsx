@@ -33,6 +33,7 @@ export function SetupPage() {
   const [date, setDate] = useState("");
   const [airfieldName, setAirfieldName] = useState("");
   const [airfieldIcao, setAirfieldIcao] = useState("");
+  const [pricePerGuestEur, setPricePerGuestEur] = useState("");
   const [savingDay, setSavingDay] = useState(false);
 
   const [pilots, setPilots] = useState<Pilot[]>([]);
@@ -50,14 +51,18 @@ export function SetupPage() {
   const [savingAircraft, setSavingAircraft] = useState(false);
 
   useEffect(() => {
+    // 404 means no flight day configured yet — not an error, just nothing to
+    // prefill (see apps/api flightday.ts's getFlightDay for why this isn't a
+    // 200+null body).
     fetch("/api/flightday")
-      .then((r) => r.json() as Promise<FlightDay | null>)
+      .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
       .then((d) => {
         if (d) {
           setFlightDay(d);
           setDate(d.date);
           setAirfieldName(d.airfieldName);
           setAirfieldIcao(d.airfieldIcao);
+          setPricePerGuestEur(String(d.pricePerGuestEur));
         }
       })
       .catch(() => undefined);
@@ -72,13 +77,21 @@ export function SetupPage() {
   }, []);
 
   async function saveFlightDay() {
-    if (!date.trim() || !airfieldName.trim() || !airfieldIcao.trim()) return;
+    const price = Number(pricePerGuestEur);
+    if (!date.trim() || !airfieldName.trim() || !airfieldIcao.trim() || !Number.isFinite(price)) {
+      return;
+    }
     setSavingDay(true);
     try {
       const response = await fetch("/api/flightday", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, airfieldName, airfieldIcao }),
+        body: JSON.stringify({
+          date,
+          airfieldName,
+          airfieldIcao,
+          pricePerGuestEur: price,
+        }),
       });
       if (response.ok) setFlightDay((await response.json()) as FlightDay);
     } finally {
@@ -169,7 +182,7 @@ export function SetupPage() {
         <CardHeader>
           <CardTitle>{t("dispatch.setup.flightDay.title")}</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="grid gap-2">
             <Label htmlFor="fd-date">{t("dispatch.setup.flightDay.date")}</Label>
             <Input id="fd-date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -188,6 +201,15 @@ export function SetupPage() {
               id="fd-icao"
               value={airfieldIcao}
               onChange={(e) => setAirfieldIcao(e.target.value.toUpperCase())}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="fd-price">{t("dispatch.setup.flightDay.price")}</Label>
+            <Input
+              id="fd-price"
+              type="number"
+              value={pricePerGuestEur}
+              onChange={(e) => setPricePerGuestEur(e.target.value)}
             />
           </div>
         </CardContent>

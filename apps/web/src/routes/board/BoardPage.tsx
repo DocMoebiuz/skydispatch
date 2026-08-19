@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { Guest, Aircraft, Flight } from "shared";
 import { Button } from "@/components/ui/button";
@@ -23,13 +24,24 @@ function fmtTime(iso: string | null): string {
 // by guest code, matching docs/static-html-app/SkyDispatch-Terminal.html in
 // behavior. Polls every 15s — a public kiosk display, not worth websockets for a
 // single-airfield low-concurrency event (see docs/architecture.md § Open decisions).
+//
+// Registration links here with ?code=G-001 (see RegisterPage's success screen) so a
+// guest can check their own boarding status without retyping their ID — looked up
+// automatically, once, the first time flight/guest data has loaded.
 export function BoardPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
-  const [lookupCode, setLookupCode] = useState("");
+  const [lookupCode, setLookupCode] = useState(searchParams.get("code") ?? "");
   const [lookupResult, setLookupResult] = useState<Guest | "not-found" | null>(null);
+  const pendingAutoLookup = useRef(searchParams.get("code"));
+
+  function runLookup(code: string, guestList: Guest[]) {
+    const found = guestList.find((g) => g.code.toUpperCase() === code.trim().toUpperCase());
+    setLookupResult(found ?? "not-found");
+  }
 
   function reload() {
     void Promise.all([
@@ -40,6 +52,10 @@ export function BoardPage() {
       setFlights(f);
       setAircraftList(a);
       setGuests(g);
+      if (pendingAutoLookup.current) {
+        runLookup(pendingAutoLookup.current, g);
+        pendingAutoLookup.current = null;
+      }
     });
   }
 
@@ -47,13 +63,11 @@ export function BoardPage() {
     reload();
     const interval = setInterval(reload, 15_000);
     return () => clearInterval(interval);
+    // reload isn't in the deps array deliberately — it closes over state and is
+    // re-created every render; depending on it would restart the poll interval on
+    // every render instead of running it once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  function lookup() {
-    const code = lookupCode.trim().toUpperCase();
-    const found = guests.find((g) => g.code.toUpperCase() === code);
-    setLookupResult(found ?? "not-found");
-  }
 
   const sorted = [...flights].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
   const lookupFlight =
@@ -108,9 +122,12 @@ export function BoardPage() {
             data-testid="board-lookup-input"
             value={lookupCode}
             onChange={(e) => setLookupCode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && lookup()}
+            onKeyDown={(e) => e.key === "Enter" && runLookup(lookupCode, guests)}
           />
-          <Button data-testid="board-lookup-button" onClick={lookup}>
+          <Button
+            data-testid="board-lookup-button"
+            onClick={() => runLookup(lookupCode, guests)}
+          >
             {t("board.lookup.submit")}
           </Button>
         </div>

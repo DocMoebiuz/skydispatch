@@ -38,6 +38,7 @@ export async function upsertFlightDay(
     date: parsed.data.date,
     airfieldName: parsed.data.airfieldName,
     airfieldIcao: parsed.data.airfieldIcao,
+    pricePerGuestEur: parsed.data.pricePerGuestEur,
     status: existing?.status ?? "planned",
   };
   await container.items.upsert(flightDay);
@@ -52,7 +53,12 @@ export async function getFlightDay(
   const { resource } = await container
     .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)
     .read<FlightDay>();
-  return { status: 200, jsonBody: resource ?? null };
+  // 404, not 200+jsonBody:null — the Functions host drops the response body
+  // entirely for a null jsonBody (no "null" string, no bytes at all), which broke
+  // every consumer's response.json() with "Unexpected end of JSON input" (silently
+  // swallowed everywhere by a .catch(), until an e2e test surfaced it directly).
+  if (!resource) return { status: 404 };
+  return { status: 200, jsonBody: resource };
 }
 
 export async function startDay(

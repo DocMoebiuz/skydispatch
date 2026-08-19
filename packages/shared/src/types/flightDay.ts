@@ -8,5 +8,6 @@ export interface FlightDay {
   date: string;
   airfieldName: string;
   airfieldIcao: string;
+  pricePerGuestEur: number; // paid at the front desk, not during registration — see nfr.md § Security & Privacy
   status: "planned" | "active" | "closed";
 }

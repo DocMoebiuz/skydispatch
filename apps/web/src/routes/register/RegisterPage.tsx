@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
@@ -6,6 +7,7 @@ import {
   guestCreateRequestSchema,
   type GuestCreateRequest,
   type Guest,
+  type FlightDay,
 } from "shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +35,7 @@ import { cn } from "@/lib/utils";
 // i18next, never rendered from the Zod schema directly — see the schema's comment.
 
 type FormStep = "contact" | "weight";
-type Phase = "form" | "success" | "group-prompt";
+type Phase = "form" | "success" | "group-prompt" | "done";
 
 const defaultValues: GuestCreateRequest = {
   name: "",
@@ -60,6 +62,18 @@ export function RegisterPage() {
   const [groupNameInput, setGroupNameInput] = useState("");
   const [groupPromptError, setGroupPromptError] = useState(false);
   const [startingGroup, setStartingGroup] = useState(false);
+
+  // 404 means no flight day configured yet — not an error, just falls back to 0
+  // (see apps/api flightday.ts's getFlightDay for why this isn't a 200+null body).
+  const [pricePerGuestEur, setPricePerGuestEur] = useState(0);
+  useEffect(() => {
+    fetch("/api/flightday")
+      .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
+      .then((d) => {
+        if (d) setPricePerGuestEur(d.pricePerGuestEur);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const {
     register,
@@ -219,9 +233,67 @@ export function RegisterPage() {
               </div>
             )}
           </CardContent>
-          <CardFooter>
-            <Button className="w-full" onClick={addAnother}>
+          <CardFooter className="flex-col gap-2">
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={addAnother}
+              data-testid="add-another-button"
+            >
               {t("register.success.again")}
+            </Button>
+            <Button
+              className="w-full"
+              onClick={() => setPhase("done")}
+              data-testid="finish-registration-button"
+            >
+              {t("register.success.finish")}
+            </Button>
+          </CardFooter>
+        </Card>
+      </main>
+    );
+  }
+
+  if (phase === "done") {
+    const total = pricePerGuestEur * sessionGuests.length;
+    return (
+      <main className="mx-auto max-w-md p-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("register.done.title")}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <ol className="flex flex-col gap-3">
+              <li className="flex gap-2 text-sm">
+                <span className="font-semibold">1.</span>
+                <span>
+                  {t("register.done.step1", {
+                    total: total.toFixed(2).replace(".", ",") + " €",
+                  })}
+                </span>
+              </li>
+              <li className="flex gap-2 text-sm">
+                <span className="font-semibold">2.</span>
+                <span>{t("register.done.step2")}</span>
+              </li>
+            </ol>
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium">{t("register.done.summaryHeading")}</p>
+              <ul className="text-sm">
+                {sessionGuests.map((g) => (
+                  <li key={g.code} data-testid="session-guest">
+                    {g.code} — {g.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button asChild className="w-full">
+              <Link to="/board" target="_blank" rel="noopener noreferrer">
+                {t("register.done.boardLink")}
+              </Link>
             </Button>
           </CardFooter>
         </Card>

@@ -30,6 +30,7 @@
         "date": "Datum",
         "airfieldName": "Flugplatz – Name",
         "airfieldIcao": "ICAO-Kennung",
+        "price": "Preis/Gast (EUR)",
         "save": "Speichern",
         "start": "Tag starten",
         "end": "Tag beenden",
@@ -198,10 +199,18 @@
     "success": {
       "title": "Anmeldung abgeschlossen!",
       "lead": "Vielen Dank, {{name}}. Ihre Fluggast-ID lautet:",
-      "note": "Bitte am Flugplatz beim Check-in melden, wiegen lassen und die Bezahlung vor Ort vornehmen.",
+      "note": "Bitte am Flugplatz beim Check-in melden und wiegen lassen.",
       "again": "Weitere Person anmelden",
+      "finish": "Anmeldung abschließen",
       "groupLabel": "Gruppe",
       "sessionListHeading": "Bisher angemeldet in dieser Gruppe:"
+    },
+    "done": {
+      "title": "Nächste Schritte",
+      "step1": "Gehen Sie zur Rundflugstation und bezahlen Sie Ihre Gebühr von {{total}}.",
+      "step2": "Verfolgen Sie die Abflugtafel, um Ihre Abflugzeit zu sehen.",
+      "summaryHeading": "Ihre Anmeldung(en):",
+      "boardLink": "Zur Abflugtafel"
     },
     "group": {
       "prompt": {
