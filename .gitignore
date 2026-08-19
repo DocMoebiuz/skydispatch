@@ -12,6 +12,7 @@ build/
 # Azure Functions / SWA
 apps/api/local.settings.json
 .swa/
+api-deploy/
 
 # Env / secrets
 .env
