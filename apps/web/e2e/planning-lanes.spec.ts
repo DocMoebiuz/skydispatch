@@ -202,10 +202,95 @@ test("a ready flight renders in the compact secondary lane and can go back to pl
     );
     await expect(flightCard.getByTestId("assigned-unit")).toHaveCount(0);
 
+    // Locked-but-not-fully-boarded points at Boarding, the actual next step.
+    await expect(flightCard.getByRole("link", { name: "Zum Boarding" })).toBeVisible();
+
     // A no-show: move the flight back to "created" so it can be refilled.
     await flightCard.getByTestId("unready-flight").click();
     await expect(flightCard.getByTestId("flight-card-status")).toHaveText("In Planung");
     await expect(flightCard.getByTestId("set-ready-flight")).toBeVisible();
+  } finally {
+    await deleteGuestByEmail(email);
+    if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);
+    if (aircraftId) await deleteById(aircraftId, DEFAULT_FLIGHT_DAY_ID);
+    if (pilotId) await deleteById(pilotId, DEFAULT_FLIGHT_DAY_ID);
+  }
+});
+
+test("a fully-boarded flight's secondary-lane link points at Tracking, not Boarding", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const email = `e2e-lanes-boarded-${stamp}@example.test`;
+  let pilotId: string | undefined;
+  let aircraftId: string | undefined;
+  let flightId: string | undefined;
+  let guestId: string | undefined;
+
+  try {
+    const pilot = await fetch("http://localhost:4280/api/pilots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: `E2E Lanes Boarded Pilot ${stamp}`, license: "PPL", weightKg: 80 }),
+    }).then((r) => r.json());
+    pilotId = pilot.id;
+
+    const aircraft = await fetch("http://localhost:4280/api/aircraft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reg: `E2E-LANESB-${stamp}`,
+        model: "Cessna 172",
+        seats: 4,
+        emptyWeightKg: 500,
+        maxTakeoffMassKg: 800,
+        fuelType: "avgas",
+        fuelOnBoardL: 0,
+      }),
+    }).then((r) => r.json());
+    aircraftId = aircraft.id;
+
+    const guest = await fetch("http://localhost:4280/api/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "E2E Lanes Boarded Guest",
+        email,
+        declaredWeightKg: 75,
+        dateOfBirth: "1990-05-14",
+        address: { street: "Musterstraße 1", zipCode: "71522", city: "Backnang" },
+        consent: true,
+        newsletter: false,
+      }),
+    }).then((r) => r.json());
+    guestId = guest.id;
+    await fetch(`http://localhost:4280/api/guests/${guestId}/actions/mark-paid`, { method: "POST" });
+    await fetch(`http://localhost:4280/api/guests/${guestId}/actions/weigh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weightKg: 75 }),
+    });
+
+    const flight = await fetch("http://localhost:4280/api/flights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aircraftId, pilotId }),
+    }).then((r) => r.json());
+    flightId = flight.id;
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guestIds: [guestId] }),
+    });
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/lock`, { method: "POST" });
+    // Checking in the only passenger auto-flips the flight to "ready".
+    await fetch(`http://localhost:4280/api/guests/${guestId}/actions/check-in`, { method: "POST" });
+
+    await page.goto("/dispatch/planning");
+    const flightCard = page.getByTestId("flight-card").filter({ hasText: flight.code });
+    await expect(flightCard.getByTestId("flight-card-status")).toHaveText("Startklar");
+    await expect(flightCard.getByRole("link", { name: "Zum Tracking" })).toBeVisible();
+    await expect(flightCard.getByRole("link", { name: "Zum Boarding" })).toHaveCount(0);
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

@@ -101,11 +101,12 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     // --- Boarding ---
     // Every boardable flight renders as a card with its passengers listed and
     // actionable directly on the card — no separate select-then-act step. See
-    // docs/architecture.md § Shared flight components. Boarding only shows
-    // "assigned" flights (still locked, not yet fully checked in) — this
-    // guest is the flight's only passenger, so checking them in completes
-    // the roster and the flight auto-flips to "ready" server-side
-    // (recomputeBoardingStatus), dropping its card off this page entirely.
+    // docs/architecture.md § Shared flight components. Boarding's primary
+    // list only shows "assigned" flights (still locked, not yet fully
+    // checked in) — this guest is the flight's only passenger, so checking
+    // them in completes the roster and the flight auto-flips to "ready"
+    // server-side (recomputeBoardingStatus), moving its card into the
+    // secondary "fully boarded" lane instead of disappearing outright.
     await page.goto("/dispatch/boarding");
     const boardingCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
     const boardingRow = boardingCard
@@ -116,7 +117,9 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     );
     await boardingRow.getByTestId("card-checkin-button").click();
     await checkInResponse;
-    await expect(page.getByTestId("flight-card").filter({ hasText: flightCode })).toHaveCount(0);
+    const boardedCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
+    await expect(boardedCard.getByTestId("reset-boarding-button")).toBeVisible();
+    await expect(boardedCard.getByTestId("boarding-card-passenger-row")).toHaveCount(0);
 
     // --- Start + land ---
     await page.goto("/dispatch/tracking");

@@ -25,7 +25,8 @@
     "common": {
       "goToPlanning": "Zur Flugplanung",
       "goToGuests": "Zu den Gästen",
-      "goToBoarding": "Zum Boarding"
+      "goToBoarding": "Zum Boarding",
+      "goToTracking": "Zum Tracking"
     },
     "stage": {
       "new": "Neu",
@@ -178,7 +179,9 @@
       "searchPlaceholder": "Gast suchen (Name oder Code) …",
       "checkedIn": "eingecheckt",
       "undo": "Rückgängig",
-      "checkin": "Check-in"
+      "checkin": "Check-in",
+      "boardedLane": "Vollständig geboardet",
+      "resetBoarding": "Boarding zurücksetzen"
     },
     "tracking": {
       "notCheckedIn": "nicht eingecheckt",

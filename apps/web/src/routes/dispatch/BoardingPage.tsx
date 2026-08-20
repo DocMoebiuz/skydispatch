@@ -71,9 +71,14 @@ export function BoardingPage() {
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
   // Only "assigned" — locked, boarding actively in progress. "created" isn't
   // locked yet (Planning's job, not boarding's); once every guest is checked
-  // in the flight auto-flips to "ready" (recomputeBoardingStatus) and boarding
-  // is done, so it drops off here — Tracking picks it up from there.
+  // in the flight auto-flips to "ready" (recomputeBoardingStatus). It used to
+  // just vanish from this page at that point — now it moves into
+  // boardedFlights below instead, a smaller secondary lane (same "done, but
+  // still worth a quick correction or hand-off" pattern as Planning's own
+  // "Bereit" lane) so the dispatcher can still reset it back or move on to
+  // Tracking, rather than losing sight of it entirely.
   const boardableFlights = flights.filter((f) => f.status === "assigned");
+  const boardedFlights = flights.filter((f) => f.status === "ready");
 
   function matchesSearch(g: Guest): boolean {
     const q = search.trim().toLowerCase();
@@ -113,11 +118,34 @@ export function BoardingPage() {
     setPendingFor(guestId, false);
   }
 
+  // "Reset boarding" for a fully-boarded flight — undoes every passenger's
+  // check-in at once (reusing the same per-guest endpoint the individual
+  // undo button already calls) rather than a new bulk API, since that's all
+  // "reset" actually means: recomputeBoardingStatus already flips the flight
+  // back to "assigned" the moment even one guest is no longer checked in, so
+  // it naturally moves itself back into boardableFlights above once this
+  // resolves — no separate flight-level action needed.
+  async function resetBoarding(flight: Flight) {
+    const key = `reset:${flight.id}`;
+    setPendingFor(key, true);
+    const checkedInGuestIds = flight.guestIds
+      .map((id) => guestById.get(id))
+      .filter((g): g is Guest => !!g && g.checkedIn)
+      .map((g) => g.id);
+    await Promise.all(
+      checkedInGuestIds.map((id) =>
+        fetch(`/api/guests/${id}/actions/undo-check-in`, { method: "POST" }),
+      ),
+    );
+    await reload();
+    setPendingFor(key, false);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.boarding")}</h1>
 
-      {boardableFlights.length === 0 ? (
+      {boardableFlights.length === 0 && boardedFlights.length === 0 ? (
         <EmptyState
           data-testid="boarding-flights-empty"
           message={t("dispatch.checkin.noFlights")}
@@ -127,7 +155,7 @@ export function BoardingPage() {
             </Button>
           }
         />
-      ) : (
+      ) : boardableFlights.length === 0 ? null : (
         <>
           <Input
             className="max-w-64"
@@ -245,6 +273,59 @@ export function BoardingPage() {
             })}
           </div>
         </>
+      )}
+
+      {/* Fully boarded — nothing left to check in, but still worth a quick
+          glance: reset it back (a mis-click, a passenger who needs to be
+          swapped) or move on to Tracking, the actual next step. Same
+          compact-card, secondary-lane treatment as Planning's own "Bereit"
+          lane. */}
+      {boardedFlights.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-muted-foreground text-sm font-medium">
+            {t("dispatch.checkin.boardedLane")} ({boardedFlights.length})
+          </h2>
+          <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+            {boardedFlights.map((f) => {
+              const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+              const pilot = pilots.find((p) => p.id === f.pilotId);
+              const flightGuestsForCard = f.guestIds
+                .map((id) => guestById.get(id))
+                .filter((g): g is Guest => !!g);
+              const load = computeFlightLoad(f, aircraft, pilot, flightGuestsForCard);
+              const stage = deriveFlightStage(f, flightGuestsForCard);
+              const isResetting = pending.has(`reset:${f.id}`);
+              return (
+                <FlightCard
+                  key={f.id}
+                  flight={f}
+                  stage={stage}
+                  aircraft={aircraft}
+                  pilot={pilot}
+                  load={load}
+                  size="compact"
+                  actions={
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="reset-boarding-button"
+                        disabled={isResetting}
+                        onClick={() => void resetBoarding(f)}
+                      >
+                        {isResetting && <Loader2 className="size-3.5 animate-spin" />}
+                        {t("dispatch.checkin.resetBoarding")}
+                      </Button>
+                      <Button asChild variant="ghost" size="sm">
+                        <Link to="/dispatch/tracking">{t("dispatch.common.goToTracking")}</Link>
+                      </Button>
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

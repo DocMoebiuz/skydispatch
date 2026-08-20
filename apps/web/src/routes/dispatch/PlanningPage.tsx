@@ -548,17 +548,30 @@ export function PlanningPage() {
     const fitLevel = flightFitLevelForSelectedUnit(aircraft, load);
 
     const statusPending = pending.has(`status:${f.id}`);
+    // Locking is a Planning-internal action, but it's also the moment this
+    // flight becomes someone else's job — Boarding's while still "assigned"
+    // (locked, boarding not finished), Tracking's once "ready" (fully
+    // boarded already, Boarding wouldn't even show it any more). A ghost
+    // link keeps that next step one click away without making it look like
+    // the primary action on this card.
     const actions = isLocked ? (
-      <Button
-        variant="outline"
-        size="sm"
-        data-testid="unready-flight"
-        disabled={statusPending}
-        onClick={() => void setFlightStatus(f.id, "unlock")}
-      >
-        {statusPending && <Loader2 className="size-3.5 animate-spin" />}
-        {t("dispatch.planning.builder.unready")}
-      </Button>
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid="unready-flight"
+          disabled={statusPending}
+          onClick={() => void setFlightStatus(f.id, "unlock")}
+        >
+          {statusPending && <Loader2 className="size-3.5 animate-spin" />}
+          {t("dispatch.planning.builder.unready")}
+        </Button>
+        <Button asChild variant="ghost" size="sm">
+          <Link to={f.status === "ready" ? "/dispatch/tracking" : "/dispatch/boarding"}>
+            {f.status === "ready" ? t("dispatch.common.goToTracking") : t("dispatch.common.goToBoarding")}
+          </Link>
+        </Button>
+      </>
     ) : (
       <Button
         size="sm"
@@ -927,7 +940,7 @@ export function PlanningPage() {
                 <h2 className="text-muted-foreground text-sm font-medium">
                   {t("dispatch.planning.lanes.ready")} ({readyFlights.length})
                 </h2>
-                <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
                   {readyFlights.map((f) => renderFlightCard(f, "compact"))}
                 </div>
               </div>

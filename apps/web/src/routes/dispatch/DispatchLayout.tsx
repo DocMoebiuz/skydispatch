@@ -114,7 +114,15 @@ export function DispatchLayout() {
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        <header className="bg-brand-gradient flex h-14 items-center gap-3 border-b px-4">
+        {/* sticky, not just at the top of normal flow — on mobile the
+            sidebar is collapsed behind SidebarTrigger, so losing this bar to
+            scroll would mean scrolling all the way back up just to open the
+            menu again. bg-background underneath is required, not decorative
+            — bg-brand-gradient is a translucent radial wash with no opaque
+            backing of its own (by design, for page-level hero sections that
+            already sit on a solid surface); without it, scrolled content
+            visibly showed through the sticky header. */}
+        <header className="bg-background bg-brand-gradient sticky top-0 z-40 flex h-14 items-center gap-3 border-b px-4">
           <SidebarTrigger />
           <span className="font-medium">{t("dispatch.title")}</span>
           {flightDay && (

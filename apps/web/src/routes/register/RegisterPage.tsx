@@ -541,7 +541,10 @@ export function RegisterPage() {
                         id="dateOfBirthDay"
                         data-testid="dob-day"
                         aria-invalid={!!errors.dateOfBirth}
-                        className={cn("w-22.5", !!errors.dateOfBirth && "border-destructive")}
+                        className={cn(
+                          "min-w-0 flex-1 sm:w-22.5 sm:flex-none",
+                          !!errors.dateOfBirth && "border-destructive",
+                        )}
                       >
                         <SelectValue placeholder={t("register.form.dobDay")} />
                       </SelectTrigger>
@@ -562,7 +565,10 @@ export function RegisterPage() {
                       <SelectTrigger
                         data-testid="dob-month"
                         aria-invalid={!!errors.dateOfBirth}
-                        className={cn("w-35", !!errors.dateOfBirth && "border-destructive")}
+                        className={cn(
+                          "min-w-0 flex-1 sm:w-35 sm:flex-none",
+                          !!errors.dateOfBirth && "border-destructive",
+                        )}
                       >
                         <SelectValue placeholder={t("register.form.dobMonth")} />
                       </SelectTrigger>
@@ -581,7 +587,10 @@ export function RegisterPage() {
                       <SelectTrigger
                         data-testid="dob-year"
                         aria-invalid={!!errors.dateOfBirth}
-                        className={cn("w-25", !!errors.dateOfBirth && "border-destructive")}
+                        className={cn(
+                          "min-w-0 flex-1 sm:w-25 sm:flex-none",
+                          !!errors.dateOfBirth && "border-destructive",
+                        )}
                       >
                         <SelectValue placeholder={t("register.form.dobYear")} />
                       </SelectTrigger>

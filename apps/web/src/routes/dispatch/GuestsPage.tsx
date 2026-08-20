@@ -148,6 +148,103 @@ export function GuestsPage() {
     return true;
   });
 
+  // Shared by the desktop table row and the mobile card below — same markup,
+  // same state, so the two layouts can never drift out of sync with each
+  // other. Not extracted into a separate component: both need the page's own
+  // pending/weighInputs state and action functions, and passing all of that
+  // through props would be more ceremony than it's worth for two call sites.
+  //
+  // Both layouts are in the DOM at once (CSS `hidden`/`sm:hidden` picks
+  // which one is visible, not JS) — so `testIds` is false on the mobile
+  // call site to keep every data-testid unique per guest. Every existing e2e
+  // spec scopes through page.getByTestId("guest-row") first; if both copies
+  // carried it, that alone would resolve to 2 elements per guest (a Playwright
+  // strict-mode violation) before even reaching the button inside it.
+  // Playwright's default viewport is desktop-sized, so the table is what
+  // e2e actually exercises — the mobile layout doesn't need its own testids
+  // to stay covered, since it's the exact same state/handlers either way.
+  function renderWeightEditor(guest: Guest, testIds: boolean) {
+    const isPending = pending.has(guest.id);
+    if (!(guest.paid && guest.weightKg == null)) {
+      return guest.weightKg ?? `(${guest.declaredWeightKg})`;
+    }
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          type="number"
+          className="h-8 w-16"
+          data-testid={testIds ? "weigh-input" : undefined}
+          placeholder={String(guest.declaredWeightKg)}
+          value={weighInputs[guest.id] ?? ""}
+          onChange={(e) =>
+            setWeighInputs((prev) => ({
+              ...prev,
+              [guest.id]: e.target.value,
+            }))
+          }
+        />
+        <Button
+          size="icon-sm"
+          variant="outline"
+          data-testid={testIds ? "weigh-button" : undefined}
+          disabled={isPending}
+          aria-label={t("dispatch.guests.confirmWeight")}
+          onClick={() => void confirmWeight(guest.id, guest.declaredWeightKg)}
+        >
+          <Check className="size-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  function renderActions(guest: Guest, testIds: boolean) {
+    const isPending = pending.has(guest.id);
+    const canDelete = !guest.flown;
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {!guest.paid && (
+          <Button
+            size="icon-sm"
+            variant="outline"
+            data-testid={testIds ? "mark-paid-button" : undefined}
+            disabled={isPending}
+            aria-label={t("dispatch.guests.markPaid")}
+            onClick={() => void callAction(guest.id, "actions/mark-paid")}
+          >
+            <Banknote className="size-3.5" />
+          </Button>
+        )}
+        {!guest.noShow && !guest.flown && (
+          <Button
+            size="icon-sm"
+            variant="outline"
+            data-testid={testIds ? "no-show-button" : undefined}
+            disabled={isPending}
+            aria-label={t("dispatch.guests.noShow")}
+            onClick={() => void callAction(guest.id, "actions/no-show")}
+          >
+            <UserX className="size-3.5" />
+          </Button>
+        )}
+        {canDelete && (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            data-testid={testIds ? "delete-guest-button" : undefined}
+            disabled={isPending}
+            onClick={() => void deleteGuest(guest.id)}
+            aria-label={t("dispatch.guests.delete")}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        )}
+        {actionError.has(guest.id) && (
+          <p className="text-destructive text-xs">{t("dispatch.guests.actionError")}</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -193,131 +290,97 @@ export function GuestsPage() {
         <p className="text-muted-foreground text-sm">{t("dispatch.guests.empty")}</p>
       )}
       {!loadError && guests && filtered.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("dispatch.guests.table.code")}</TableHead>
-              <TableHead>{t("dispatch.guests.table.name")}</TableHead>
-              <TableHead>{t("dispatch.guests.table.weight")}</TableHead>
-              <TableHead>{t("dispatch.guests.table.status")}</TableHead>
-              <TableHead>{t("dispatch.guests.table.action")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          {/* Desktop/tablet — the full table. A guest row's weight-editor and
+              action buttons are shared (renderWeightEditor/renderActions
+              below) with the mobile card layout underneath, so the two never
+              drift out of sync with each other. */}
+          <Table className="hidden sm:table">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("dispatch.guests.table.code")}</TableHead>
+                <TableHead>{t("dispatch.guests.table.name")}</TableHead>
+                <TableHead>{t("dispatch.guests.table.weight")}</TableHead>
+                <TableHead>{t("dispatch.guests.table.status")}</TableHead>
+                <TableHead>{t("dispatch.guests.table.action")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((guest) => {
+                const status = deriveGuestStatus(guest);
+                const flight = flightByGuestId.get(guest.id);
+                return (
+                  <TableRow
+                    key={guest.id}
+                    data-testid="guest-row"
+                    data-code={guest.code}
+                    data-group-id={guest.groupId ?? ""}
+                  >
+                    <TableCell className="font-medium">{guest.code}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span>{guest.name}</span>
+                        {guest.groupName && (
+                          <span className="text-muted-foreground text-xs">{guest.groupName}</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell data-testid="guest-weight">{renderWeightEditor(guest, true)}</TableCell>
+                    <TableCell data-testid="guest-status">
+                      <div className="flex flex-col gap-0.5">
+                        <Badge variant={STATUS_VARIANT[status]} className="w-fit">
+                          {t(`dispatch.guests.status.${status}`)}
+                        </Badge>
+                        {flight && (
+                          <span
+                            className="text-muted-foreground text-xs"
+                            data-testid="guest-flight-code"
+                          >
+                            {flight.code}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{renderActions(guest, true)}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+
+          {/* Mobile — a table doesn't fit a narrow screen without either
+              squeezing columns unreadably or forcing horizontal scroll, so
+              this stacks each guest as its own card instead: name+code+group
+              combined up top, status/flight below that, actions always
+              visible at the bottom (never behind an overflow/scroll). */}
+          <div className="flex flex-col gap-3 sm:hidden">
             {filtered.map((guest) => {
               const status = deriveGuestStatus(guest);
-              const canDelete = !guest.flown;
-              const isPending = pending.has(guest.id);
               const flight = flightByGuestId.get(guest.id);
               return (
-                <TableRow
-                  key={guest.id}
-                  data-testid="guest-row"
-                  data-code={guest.code}
-                  data-group-id={guest.groupId ?? ""}
-                >
-                  <TableCell className="font-medium">{guest.code}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span>{guest.name}</span>
-                      {guest.groupName && (
-                        <span className="text-muted-foreground text-xs">{guest.groupName}</span>
-                      )}
+                <div key={guest.id} className="rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-col">
+                      <span className="font-medium">{guest.name}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {guest.code}
+                        {guest.groupName && ` · ${guest.groupName}`}
+                      </span>
                     </div>
-                  </TableCell>
-                  <TableCell data-testid="guest-weight">
-                    {guest.paid && guest.weightKg == null ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          className="h-8 w-16"
-                          data-testid="weigh-input"
-                          placeholder={String(guest.declaredWeightKg)}
-                          value={weighInputs[guest.id] ?? ""}
-                          onChange={(e) =>
-                            setWeighInputs((prev) => ({
-                              ...prev,
-                              [guest.id]: e.target.value,
-                            }))
-                          }
-                        />
-                        <Button
-                          size="icon-sm"
-                          variant="outline"
-                          data-testid="weigh-button"
-                          disabled={isPending}
-                          aria-label={t("dispatch.guests.confirmWeight")}
-                          onClick={() => void confirmWeight(guest.id, guest.declaredWeightKg)}
-                        >
-                          <Check className="size-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      (guest.weightKg ?? `(${guest.declaredWeightKg})`)
-                    )}
-                  </TableCell>
-                  <TableCell data-testid="guest-status">
-                    <div className="flex flex-col gap-0.5">
-                      <Badge variant={STATUS_VARIANT[status]} className="w-fit">
-                        {t(`dispatch.guests.status.${status}`)}
-                      </Badge>
-                      {flight && (
-                        <span className="text-muted-foreground text-xs" data-testid="guest-flight-code">
-                          {flight.code}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap items-center gap-1">
-                      {!guest.paid && (
-                        <Button
-                          size="icon-sm"
-                          variant="outline"
-                          data-testid="mark-paid-button"
-                          disabled={isPending}
-                          aria-label={t("dispatch.guests.markPaid")}
-                          onClick={() => void callAction(guest.id, "actions/mark-paid")}
-                        >
-                          <Banknote className="size-3.5" />
-                        </Button>
-                      )}
-                      {!guest.noShow && !guest.flown && (
-                        <Button
-                          size="icon-sm"
-                          variant="outline"
-                          data-testid="no-show-button"
-                          disabled={isPending}
-                          aria-label={t("dispatch.guests.noShow")}
-                          onClick={() => void callAction(guest.id, "actions/no-show")}
-                        >
-                          <UserX className="size-3.5" />
-                        </Button>
-                      )}
-                      {canDelete && (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          data-testid="delete-guest-button"
-                          disabled={isPending}
-                          onClick={() => void deleteGuest(guest.id)}
-                          aria-label={t("dispatch.guests.delete")}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      )}
-                      {actionError.has(guest.id) && (
-                        <p className="text-destructive text-xs">
-                          {t("dispatch.guests.actionError")}
-                        </p>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
+                    <div className="shrink-0 text-sm">{renderWeightEditor(guest, false)}</div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Badge variant={STATUS_VARIANT[status]} className="w-fit">
+                      {t(`dispatch.guests.status.${status}`)}
+                    </Badge>
+                    {flight && <span className="text-muted-foreground text-xs">{flight.code}</span>}
+                  </div>
+                  <div className="mt-2 border-t pt-2">{renderActions(guest, false)}</div>
+                </div>
               );
             })}
-          </TableBody>
-        </Table>
+          </div>
+        </>
       )}
     </div>
   );
