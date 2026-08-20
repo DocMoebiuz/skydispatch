@@ -75,6 +75,7 @@
         "empty": "Noch keine Piloten.",
         "available": "frei",
         "unavailable": "Pause",
+        "breakHint": "Pause empfohlen (3+ Std. geflogen)",
         "delete": "Pilot entfernen",
         "deleteError": "Pilot ist einem aktiven Flug zugeordnet."
       },

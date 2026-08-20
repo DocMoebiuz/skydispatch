@@ -257,7 +257,8 @@ export function PlanningPage() {
     const last = flights
       .filter((f) => f.aircraftId === aircraftId && f.pilotId)
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
-    return last?.pilotId && pilots.some((p) => p.id === last.pilotId) ? last.pilotId : "";
+    const pilot = last?.pilotId ? pilots.find((p) => p.id === last.pilotId) : undefined;
+    return pilot?.available ? pilot.id : "";
   }
 
   function openCreateFlightDialog() {
@@ -615,8 +616,9 @@ export function PlanningPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {pilots.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
+                      <SelectItem key={p.id} value={p.id} disabled={!p.available}>
                         {p.name}
+                        {!p.available && ` (${t("dispatch.setup.pilots.unavailable")})`}
                       </SelectItem>
                     ))}
                   </SelectContent>

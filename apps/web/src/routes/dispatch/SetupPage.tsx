@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { FlightDay, Pilot, Aircraft } from "shared";
+import type { FlightDay, Pilot, Aircraft, Flight } from "shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +46,8 @@ export function SetupPage() {
   const [weightEditValue, setWeightEditValue] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
 
+  const [flights, setFlights] = useState<Flight[]>([]);
+
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
   const [aircraftDialogOpen, setAircraftDialogOpen] = useState(false);
   const [reg, setReg] = useState("");
@@ -85,6 +87,12 @@ export function SetupPage() {
       .then((r) => r.json() as Promise<Aircraft[]>)
       .then((a) => {
         if (!cancelled) setAircraft(a);
+      })
+      .catch(() => undefined);
+    fetch("/api/flights")
+      .then((r) => r.json() as Promise<Flight[]>)
+      .then((f) => {
+        if (!cancelled) setFlights(f);
       })
       .catch(() => undefined);
     return () => {
@@ -217,6 +225,20 @@ export function SetupPage() {
     }
   }
 
+  // Sum of this pilot's actual airborne time today (offBlock -> onBlock, or
+  // now if still airborne) — not a hard limit, just a nudge: no automatic
+  // enforcement, the dispatcher still decides via the availability toggle.
+  function hoursFlownToday(pilotId: string): number {
+    const ms = flights
+      .filter((f) => f.pilotId === pilotId && f.offBlock)
+      .reduce((sum, f) => {
+        const start = Date.parse(f.offBlock!);
+        const end = f.onBlock ? Date.parse(f.onBlock) : Date.now();
+        return sum + Math.max(0, end - start);
+      }, 0);
+    return ms / (1000 * 60 * 60);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.setup")}</h1>
@@ -344,6 +366,15 @@ export function SetupPage() {
                   )}
                 </span>
                 <span className="flex items-center gap-2">
+                  {hoursFlownToday(p.id) >= 3 && (
+                    <span
+                      className="text-amber-600 text-xs dark:text-amber-500"
+                      data-testid="pilot-break-hint"
+                      title={t("dispatch.setup.pilots.breakHint")}
+                    >
+                      ⚠ {t("dispatch.setup.pilots.breakHint")}
+                    </span>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
