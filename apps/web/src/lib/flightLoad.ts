@@ -100,3 +100,14 @@ export function computeFlightLoad(
     fuel,
   };
 }
+
+// One plane can't be flying two flights at once — mirrors the server-side
+// guard in apps/api/src/functions/flights.ts's startFlight (hasAirborneFlight)
+// so Dashboard/Tracking can disable the Start button up front instead of only
+// surfacing the 409 after the fact. `flight` itself is excluded by construction:
+// it can't already be "airborne" while its own Start button is still showing.
+export function aircraftHasOtherAirborneFlight(flights: Flight[], flight: Flight): boolean {
+  return flights.some(
+    (other) => other.aircraftId === flight.aircraftId && other.id !== flight.id && other.status === "airborne",
+  );
+}

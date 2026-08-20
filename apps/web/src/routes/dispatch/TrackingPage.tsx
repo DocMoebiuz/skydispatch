@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FlightCard } from "@/components/flight/FlightCard";
-import { computeFlightLoad } from "@/lib/flightLoad";
+import { computeFlightLoad, aircraftHasOtherAirborneFlight } from "@/lib/flightLoad";
 
 type TimeField = "offBlock" | "onBlock";
 
@@ -285,9 +285,12 @@ export function TrackingPage() {
             const load = computeFlightLoad(f, aircraft, pilot, flightGuests);
             const stage = deriveFlightStage(f, flightGuests);
             const notCheckedIn = flightGuests.filter((g) => !g.checkedIn).length;
-            // Mid-refuel-break blocks a start the same way the API refuses it
-            // server-side (nfr.md § Reliability & safety) — see startFlight.
-            const canStart = stage === "boarded" && !load.refuelBreakActive;
+            // Mid-refuel-break, or the same aircraft already airborne on
+            // another flight, both block a start the same way the API
+            // refuses it server-side (nfr.md § Reliability & safety) — see
+            // startFlight.
+            const aircraftAirborneElsewhere = aircraftHasOtherAirborneFlight(flights, f);
+            const canStart = stage === "boarded" && !load.refuelBreakActive && !aircraftAirborneElsewhere;
             const isPending = pending.has(f.id);
 
             let actions;
@@ -313,9 +316,11 @@ export function TrackingPage() {
                 >
                   {stage === "boarded" && load.refuelBreakActive
                     ? t("dispatch.tracking.startBlockedRefueling")
-                    : canStart
-                      ? t("dispatch.tracking.start")
-                      : t("dispatch.tracking.startBlocked")}
+                    : stage === "boarded" && aircraftAirborneElsewhere
+                      ? t("dispatch.tracking.startBlockedAirborne")
+                      : canStart
+                        ? t("dispatch.tracking.start")
+                        : t("dispatch.tracking.startBlocked")}
                 </Button>
               );
             } else {

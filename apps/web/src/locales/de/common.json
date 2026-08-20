@@ -197,6 +197,7 @@
       "start": "Start erfassen",
       "startBlocked": "Start nicht möglich",
       "startBlockedRefueling": "Flugzeug wird betankt",
+      "startBlockedAirborne": "Flugzeug bereits in der Luft",
       "saveTime": "Uhrzeit speichern",
       "completed": "Abgeschlossen",
       "empty": "Noch keine Flüge angelegt.",

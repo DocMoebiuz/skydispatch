@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FlightCard } from "@/components/flight/FlightCard";
-import { computeFlightLoad } from "@/lib/flightLoad";
+import { computeFlightLoad, aircraftHasOtherAirborneFlight } from "@/lib/flightLoad";
 import { cn } from "@/lib/utils";
 
 // Static lookup, not `` `border-l-${key}-500` `` — Tailwind's JIT can't see
@@ -211,18 +211,22 @@ export function DashboardPage() {
         </Button>
       );
     } else if (stage === "boarded") {
-      // Mid-refuel-break blocks a start the same way the API refuses it
+      // Mid-refuel-break, or the same aircraft already airborne on another
+      // flight, both block a start the same way the API refuses it
       // server-side (nfr.md § Reliability & safety) — see startFlight.
+      const aircraftAirborneElsewhere = aircraftHasOtherAirborneFlight(flights, f);
       actions = (
         <Button
           size="sm"
           data-testid="dashboard-start-button"
-          disabled={isPending || load.refuelBreakActive}
+          disabled={isPending || load.refuelBreakActive || aircraftAirborneElsewhere}
           onClick={() => void start(f.id)}
         >
           {load.refuelBreakActive
             ? t("dispatch.tracking.startBlockedRefueling")
-            : t("dispatch.tracking.start")}
+            : aircraftAirborneElsewhere
+              ? t("dispatch.tracking.startBlockedAirborne")
+              : t("dispatch.tracking.start")}
         </Button>
       );
     } else if (stage === "assigned" || stage === "boarding") {

@@ -21,6 +21,7 @@ import {
 import type { Container } from "@azure/cosmos";
 import { getOperationsContainer } from "../lib/cosmos";
 import { recomputeBoardingStatus } from "../lib/flightBoardingStatus";
+import { hasAirborneFlight } from "../lib/activeFlightGuard";
 
 const MAX_COUNTER_ATTEMPTS = 10;
 
@@ -413,6 +414,14 @@ export async function startFlight(
     .read<Aircraft>();
   if (startAircraft?.refuelBreakActive) {
     return { status: 409, jsonBody: { error: "aircraft-refueling" } };
+  }
+
+  // One plane can't be flying two flights at once — a second flight for the
+  // same aircraft can't start while an earlier one is still airborne (the
+  // query naturally excludes this flight itself, since it isn't "airborne"
+  // yet at this point in the request).
+  if (await hasAirborneFlight(flight.aircraftId)) {
+    return { status: 409, jsonBody: { error: "aircraft-already-airborne" } };
   }
 
   const updated: Flight = {
