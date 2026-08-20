@@ -3,13 +3,15 @@ import { DEFAULT_FLIGHT_DAY_ID } from "shared";
 import { selectByText } from "./helpers/select";
 import { deleteGuestByEmail, deleteById, setAircraftFuelBurned } from "./helpers/cosmos";
 
-// The flight card's primary weight number is dynamic (burn-adjusted,
-// realistic but with some margin of error) — once it's actually diverged
-// from the static (last-reported, pessimistic) figure, that static number
-// shows right underneath it with the fuel icon, no separate line buried
-// further down the card. See FlightCard.tsx's staticFreeKg comment.
+// The flight card's primary weight number is static (fuel exactly as last
+// reported — at creation, or after a refuel) — the SAFE figure a dispatcher
+// can rely on without trusting a burn-rate projection. Once it's actually
+// diverged from the dynamic (burn-adjusted, realistic but with some margin
+// of error) figure, dynamic shows right underneath it with the fuel icon,
+// no separate line buried further down the card. See FlightCard.tsx's
+// staticFreeKg comment.
 
-test("a flight card shows the static (pessimistic) payload right under the dynamic (realistic) one once they diverge", async ({
+test("a flight card shows the dynamic (realistic) payload right under the static (safe) one once they diverge", async ({
   page,
 }) => {
   const stamp = Date.now();
@@ -90,13 +92,13 @@ test("a flight card shows the static (pessimistic) payload right under the dynam
     await flightCard.click();
     await assignResponse;
 
-    // Dynamic (realistic): 242 - 80(pilot) - 75(guest) = 87kg free.
-    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("87 kg");
-    // Static (pessimistic), right underneath with the fuel icon: 228 - 155 = 73kg.
-    const staticLine = flightCard.getByTestId("flight-card-static-payload");
-    await expect(staticLine).toBeVisible();
-    await expect(staticLine).toContainText("73 kg");
-    await expect(staticLine.locator("svg")).toBeVisible();
+    // Static (safe): 228 - 80(pilot) - 75(guest) = 73kg free.
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("73 kg");
+    // Dynamic (realistic), right underneath with the fuel icon: 242 - 155 = 87kg.
+    const dynamicLine = flightCard.getByTestId("flight-card-dynamic-payload");
+    await expect(dynamicLine).toBeVisible();
+    await expect(dynamicLine).toContainText("87 kg");
+    await expect(dynamicLine.locator("svg")).toBeVisible();
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

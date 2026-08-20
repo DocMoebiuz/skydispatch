@@ -174,9 +174,7 @@
         "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Fertigstellen nicht möglich.",
         "fuelUnknown": "⚠ Sprit-Stand unbekannt – Zuweisen/Fertigstellen nicht möglich.",
         "refuelBreakActive": "⛽ Wird betankt – Start nicht möglich",
-        "mtom": "{{gross}} / {{max}} kg MTOM",
-        "fuelWeight": "({{fuel}} kg Sprit)",
-        "staticPayloadTooltip": "Statisch, letzte Meldung (pessimistisch)"
+        "dynamicPayloadTooltip": "Dynamisch, mit Verbrauch (realistisch)"
       },
       "status": {
         "created": "geplant",

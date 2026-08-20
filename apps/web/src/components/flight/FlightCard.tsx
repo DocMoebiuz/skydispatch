@@ -81,13 +81,20 @@ export function FlightCard({
 }: FlightCardProps) {
   const { t } = useTranslation();
   const compact = size === "compact";
+  // Dynamic (burn-adjusted, realistic but with some margin of error) — still
+  // what assign/lock actually gate on server-side (load.over/load.pct, the
+  // progress bar below), but shown here only as the smaller, secondary
+  // figure — see staticFreeKg below for why it's not the headline number.
   const freeKg = load.maxPayloadKg - load.usedWeightKg;
-  // Same "how much is actually free for this flight" framing as freeKg above,
-  // just from the static (last-reported) fuel figure instead of the
-  // burn-adjusted dynamic one — NOT the raw staticMaxPayloadKg (that's the
-  // aircraft's total static capacity, not netted against this flight's
-  // current passengers, and would overstate what's actually still free).
+  // Static (fuel exactly as last reported — at creation, or after a refuel)
+  // is the SAFE figure: what the dispatcher can rely on without trusting a
+  // burn-rate projection. That's the headline number a glance should land
+  // on; dynamic is the more realistic one but secondary. NOT the raw
+  // staticMaxPayloadKg (that's the aircraft's total static capacity, not
+  // netted against this flight's current passengers, and would overstate
+  // what's actually still free).
   const staticFreeKg = load.staticMaxPayloadKg - load.usedWeightKg;
+  const staticOver = load.staticMaxPayloadKg > 0 && load.usedWeightKg > load.staticMaxPayloadKg;
   return (
     <Card
       className={cn(
@@ -160,12 +167,12 @@ export function FlightCard({
                 // Red once genuinely over, but also while still technically
                 // free — under 5kg left is close enough to the limit to flag
                 // before the next guest actually tips it over, not just after.
-                (load.over || (freeKg >= 0 && freeKg < 5))
+                (staticOver || (staticFreeKg >= 0 && staticFreeKg < 5))
                   ? "text-destructive"
                   : "text-muted-foreground",
               )}
             >
-              {load.over
+              {staticOver
                 ? t("dispatch.planning.builder.weightOver")
                 : t("dispatch.planning.builder.weightFree")}
             </span>
@@ -173,34 +180,37 @@ export function FlightCard({
               data-testid="flight-card-weight"
               className={cn(
                 "text-xl font-semibold tabular-nums",
-                (load.over || (freeKg >= 0 && freeKg < 5)) && "text-destructive",
+                (staticOver || (staticFreeKg >= 0 && staticFreeKg < 5)) && "text-destructive",
               )}
             >
-              {/* Fuel not known yet means maxPayloadKg is a meaningless 0,
-                  not "no room" — show a dash instead of a misleading 0kg. */}
-              {load.fuelUnknown ? "—" : `${load.over ? load.usedWeightKg - load.maxPayloadKg : freeKg} kg`}
+              {/* Fuel not known yet means staticMaxPayloadKg is a meaningless
+                  0, not "no room" — show a dash instead of a misleading 0kg. */}
+              {load.fuelUnknown
+                ? "—"
+                : `${staticOver ? load.usedWeightKg - load.staticMaxPayloadKg : staticFreeKg} kg`}
             </span>
-            {/* Static (last-reported fuel, pessimistic) right under the
-                dynamic number above (burn-adjusted, realistic but with some
-                margin of error) — a dispatcher shouldn't have to do mental
-                math to sanity-check one against the other. Only shown once
-                dynamic tracking has actually diverged from static (some fuel
-                burn recorded since the last report); identical figures would
-                just be visual noise. Not itself a hard limit — assign/lock
-                still gate on the dynamic number above — so no "over limit"
-                wording, just a quieter red when it's already negative. */}
+            {/* Dynamic (burn-adjusted, realistic but with some margin of
+                error) right under the static/safe number above — a
+                dispatcher shouldn't have to do mental math to sanity-check
+                one against the other. Only shown once it's actually
+                diverged from static (some fuel burn recorded since the last
+                report); identical figures would just be visual noise. This
+                is still what assign/lock actually gate on server-side
+                (load.over, the progress bar below) even though it's the
+                smaller number here — so no "over limit" wording of its own,
+                just a quieter red when it's already negative. */}
             {!load.fuelUnknown && load.staticMaxPayloadKg !== load.maxPayloadKg && (
               <span
                 className={cn(
                   "mt-0.5 flex items-center gap-1 text-xs tabular-nums",
-                  staticFreeKg < 0 ? "text-destructive" : "text-muted-foreground",
+                  freeKg < 0 ? "text-destructive" : "text-muted-foreground",
                 )}
-                data-testid="flight-card-static-payload"
-                title={t("dispatch.planning.builder.staticPayloadTooltip")}
+                data-testid="flight-card-dynamic-payload"
+                title={t("dispatch.planning.builder.dynamicPayloadTooltip")}
               >
                 <Fuel className="size-3 shrink-0" aria-hidden />
-                <span className="sr-only">{t("dispatch.planning.builder.staticPayloadTooltip")}: </span>
-                {staticFreeKg} kg
+                <span className="sr-only">{t("dispatch.planning.builder.dynamicPayloadTooltip")}: </span>
+                {freeKg} kg
               </span>
             )}
           </div>
@@ -224,28 +234,6 @@ export function FlightCard({
           {pilot?.name ?? "—"}
           {!compact && aircraft?.model && <span>· {aircraft.model}</span>}
         </p>
-
-        {/* Secondary: gross weight vs. MTOM — only rendered when the aircraft
-            has fuel figures on file (see FlightLoad.fuel), independent of the
-            payload gauge above. */}
-        {load.fuel && !compact && (
-          <p
-            className={cn(
-              "flex items-center gap-1.5",
-              load.fuel.over ? "text-destructive font-semibold" : "text-muted-foreground",
-            )}
-            data-testid="flight-card-fuel"
-          >
-            <Fuel className="size-4 shrink-0" aria-hidden />
-            {t("dispatch.planning.builder.mtom", {
-              gross: load.fuel.grossWeightKg,
-              max: load.fuel.maxTakeoffMassKg,
-            })}
-            <span className="text-muted-foreground">
-              {t("dispatch.planning.builder.fuelWeight", { fuel: load.fuel.fuelWeightKg })}
-            </span>
-          </p>
-        )}
 
         {load.refuelBreakActive && (
           <p className="text-amber-600 dark:text-amber-500" data-testid="refuel-break-warning">

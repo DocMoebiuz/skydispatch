@@ -1,7 +1,6 @@
 import {
   availablePayloadKg,
   staticAvailablePayloadKg,
-  dynamicFuelWeightKg,
   type Aircraft,
   type Flight,
   type Guest,
@@ -38,14 +37,6 @@ export interface FlightLoad {
   // refuses server-side the same way it does for fuelUnknown, see
   // apps/api/src/functions/flights.ts's startFlight.
   refuelBreakActive: boolean;
-  // Gross weight (empty + dynamic fuel + pilot + pax) vs. MTOM — the same
-  // hard limit as the payload gauge above, restated in absolute terms
-  // instead of "kg free"; kept as its own display since a dispatcher may
-  // want the actual gross-weight/MTOM figures, not just the derived
-  // remainder. Uses dynamic fuel (the best current estimate), same
-  // reasoning as maxPayloadKg. Only present once fuel on board is known
-  // (see fuelUnknown).
-  fuel: { fuelWeightKg: number; grossWeightKg: number; maxTakeoffMassKg: number; over: boolean } | null;
 }
 
 // Aggregate seats/weight for one flight — pilot weight counts toward payload
@@ -72,20 +63,6 @@ export function computeFlightLoad(
   const over = maxPayloadKg > 0 && usedWeightKg > maxPayloadKg;
   const refuelBreakActive = !!aircraft?.refuelBreakActive;
 
-  let fuel: FlightLoad["fuel"] = null;
-  if (aircraft) {
-    const fuelKg = dynamicFuelWeightKg(aircraft);
-    if (fuelKg != null) {
-      const grossWeightKg = aircraft.emptyWeightKg + fuelKg + usedWeightKg;
-      fuel = {
-        fuelWeightKg: fuelKg,
-        grossWeightKg,
-        maxTakeoffMassKg: aircraft.maxTakeoffMassKg,
-        over: grossWeightKg > aircraft.maxTakeoffMassKg,
-      };
-    }
-  }
-
   return {
     usedSeats,
     totalSeats,
@@ -97,7 +74,6 @@ export function computeFlightLoad(
     pilotWeightUnknown,
     fuelUnknown,
     refuelBreakActive,
-    fuel,
   };
 }
 

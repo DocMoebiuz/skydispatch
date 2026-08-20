@@ -85,11 +85,10 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     await flightCard.click();
     await assignResponse;
 
-    // Gross weight = empty(700) + fuel(100 L × 0.72 kg/L = 72) + pilot(80) +
-    // guest(75) = 927 kg, shown against the 1200 kg MTOM — independent of the
-    // seats/payload gauge above it.
-    await expect(flightCard.getByTestId("flight-card-fuel")).toContainText("927 / 1200 kg MTOM");
-    await expect(flightCard.getByTestId("flight-card-fuel")).toContainText("72 kg");
+    // Available payload = 1200 MTOM - 700 empty - 72kg fuel (100L × 0.72
+    // kg/L) = 428kg, minus pilot(80) + guest(75) = 273kg free. No burn yet,
+    // so static == dynamic — the primary number reads the same either way.
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("273 kg");
 
     // --- Ready, boarding, start, land ---
     await flightCard.getByTestId("set-ready-flight").click();
