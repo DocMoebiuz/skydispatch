@@ -2,6 +2,7 @@ import {
   DEFAULT_FLIGHT_DAY_ID,
   DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
   DEFAULT_BOARDING_MINUTES,
+  DEFAULT_RESERVE_FUEL_MINUTES,
   type FlightDay,
 } from "shared";
 import { deleteOrphanedFlights, getTestContainer } from "./helpers/cosmos";
@@ -33,6 +34,7 @@ async function seedFlightDay(): Promise<void> {
     pricePerGuestEur: 80,
     averageFlightDurationMinutes: DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
     boardingMinutes: DEFAULT_BOARDING_MINUTES,
+    reserveFuelMinutes: DEFAULT_RESERVE_FUEL_MINUTES,
     status: "active",
   };
   await container.items.upsert(flightDay);

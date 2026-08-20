@@ -18,3 +18,7 @@ export const FUEL_DENSITY_KG_PER_L: Record<"avgas" | "diesel", number> = {
 // any FlightDay document saved before these fields existed. See schedule.ts.
 export const DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES = 15;
 export const DEFAULT_BOARDING_MINUTES = 5;
+
+// The standard VFR-day fuel reserve (SERA.5005 and equivalent) — 30 minutes
+// at the aircraft's own burn rate. See types/flightDay.ts's reserveFuelMinutes.
+export const DEFAULT_RESERVE_FUEL_MINUTES = 30;

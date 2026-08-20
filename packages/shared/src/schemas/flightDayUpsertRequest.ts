@@ -16,6 +16,7 @@ export const flightDayUpsertRequestSchema = z.object({
   pricePerGuestEur: z.number().min(0),
   averageFlightDurationMinutes: z.number().int().min(1),
   boardingMinutes: z.number().int().min(1),
+  reserveFuelMinutes: z.number().int().min(0),
 });
 
 export type FlightDayUpsertRequest = z.infer<typeof flightDayUpsertRequestSchema>;

@@ -3,10 +3,14 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   deriveFlightStage,
+  wouldBreachReserve,
+  DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+  DEFAULT_RESERVE_FUEL_MINUTES,
   type Guest,
   type Aircraft,
   type Pilot,
   type Flight,
+  type FlightDay,
   type AssignResult,
 } from "shared";
 import {
@@ -107,10 +111,12 @@ export function PlanningPage() {
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
   const [newFlightDialogOpen, setNewFlightDialogOpen] = useState(false);
   const [newFlightAircraftId, setNewFlightAircraftId] = useState("");
   const [newFlightPilotId, setNewFlightPilotId] = useState("");
   const [creatingFlight, setCreatingFlight] = useState(false);
+  const [createFlightError, setCreateFlightError] = useState(false);
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [lastResult, setLastResult] = useState<{ flightId: string; result: AssignResult } | null>(
     null,
@@ -151,11 +157,15 @@ export function PlanningPage() {
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, a, p, f]) => {
+      // 404 means no flight day configured yet — falls back to the DEFAULT_*
+      // reserve/duration constants below.
+      fetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+    ]).then(([g, a, p, f, d]) => {
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
+      setFlightDay(d);
     });
   }
 
@@ -177,13 +187,15 @@ export function PlanningPage() {
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      fetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
     ])
-      .then(([g, a, p, f]) => {
+      .then(([g, a, p, f, d]) => {
         if (cancelled) return;
         setGuests(g);
         setAircraftList(a);
         setPilots(p);
         setFlights(f);
+        setFlightDay(d);
       })
       .finally(() => {
         if (!cancelled) setInitialLoading(false);
@@ -377,17 +389,33 @@ export function PlanningPage() {
     const aircraftId = suggestAircraftId();
     setNewFlightAircraftId(aircraftId);
     setNewFlightPilotId(aircraftId ? suggestPilotIdFor(aircraftId) : "");
+    setCreateFlightError(false);
     setNewFlightDialogOpen(true);
   }
 
   function selectNewFlightAircraft(aircraftId: string) {
     setNewFlightAircraftId(aircraftId);
     setNewFlightPilotId(suggestPilotIdFor(aircraftId));
+    setCreateFlightError(false);
   }
 
+  // Don't plan a flight onto an aircraft that's already known to need a
+  // refuel break first — same reasoning/function as createFlight's own
+  // server-side check (nfr.md § Reliability & safety), computed client-side
+  // too so the dialog can explain *before* a rejected submit, not just after.
+  const newFlightAircraft = aircraftList.find((a) => a.id === newFlightAircraftId);
+  const newFlightWouldBreachReserve =
+    !!newFlightAircraft &&
+    wouldBreachReserve(
+      newFlightAircraft,
+      flightDay?.averageFlightDurationMinutes ?? DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+      flightDay?.reserveFuelMinutes ?? DEFAULT_RESERVE_FUEL_MINUTES,
+    );
+
   async function createFlight() {
-    if (!newFlightAircraftId) return;
+    if (!newFlightAircraftId || newFlightWouldBreachReserve) return;
     setCreatingFlight(true);
+    setCreateFlightError(false);
     try {
       const response = await fetch("/api/flights", {
         method: "POST",
@@ -402,6 +430,11 @@ export function PlanningPage() {
         setNewFlightAircraftId("");
         setNewFlightPilotId("");
         setNewFlightDialogOpen(false);
+      } else if (response.status === 409) {
+        // Race with another dispatcher/tab, or aircraft/flight-day data
+        // changed between opening the dialog and submitting — the client-side
+        // check above already covers the common case.
+        setCreateFlightError(true);
       }
     } finally {
       setCreatingFlight(false);
@@ -765,11 +798,30 @@ export function PlanningPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {newFlightWouldBreachReserve && (
+                <p
+                  className="flex items-start gap-1.5 text-sm text-amber-600 dark:text-amber-500"
+                  data-testid="new-flight-reserve-warning"
+                >
+                  <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                  <span>
+                    {t("dispatch.planning.newFlight.reserveWarning")}{" "}
+                    <Link to="/dispatch/refueling" className="underline underline-offset-2">
+                      {t("dispatch.planning.newFlight.reserveWarningLink")}
+                    </Link>
+                  </span>
+                </p>
+              )}
+              {createFlightError && (
+                <p className="text-destructive text-sm" data-testid="create-flight-error">
+                  {t("dispatch.planning.newFlight.createError")}
+                </p>
+              )}
             </div>
             <DialogFooter>
               <Button
                 data-testid="create-flight"
-                disabled={!newFlightAircraftId || creatingFlight}
+                disabled={!newFlightAircraftId || creatingFlight || newFlightWouldBreachReserve}
                 onClick={() => void createFlight()}
               >
                 {creatingFlight && <Loader2 className="size-3.5 animate-spin" />}

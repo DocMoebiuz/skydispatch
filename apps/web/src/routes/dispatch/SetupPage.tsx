@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
   DEFAULT_BOARDING_MINUTES,
+  DEFAULT_RESERVE_FUEL_MINUTES,
   type FlightDay,
   type Pilot,
   type Aircraft,
@@ -59,6 +60,7 @@ export function SetupPage() {
     String(DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES),
   );
   const [boardingMinutes, setBoardingMinutes] = useState(String(DEFAULT_BOARDING_MINUTES));
+  const [reserveFuelMinutes, setReserveFuelMinutes] = useState(String(DEFAULT_RESERVE_FUEL_MINUTES));
   const [savingDay, setSavingDay] = useState(false);
 
   const [pilots, setPilots] = useState<Pilot[]>([]);
@@ -117,6 +119,7 @@ export function SetupPage() {
           String(d.averageFlightDurationMinutes ?? DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES),
         );
         setBoardingMinutes(String(d.boardingMinutes ?? DEFAULT_BOARDING_MINUTES));
+        setReserveFuelMinutes(String(d.reserveFuelMinutes ?? DEFAULT_RESERVE_FUEL_MINUTES));
       })
       .catch(() => undefined);
     fetch("/api/pilots")
@@ -146,6 +149,7 @@ export function SetupPage() {
     const price = Number(pricePerGuestEur);
     const avgFlightMinutes = Number(averageFlightDurationMinutes);
     const boardingMin = Number(boardingMinutes);
+    const reserveMin = Number(reserveFuelMinutes);
     if (
       !date.trim() ||
       !airfieldName.trim() ||
@@ -154,7 +158,9 @@ export function SetupPage() {
       !Number.isInteger(avgFlightMinutes) ||
       avgFlightMinutes < 1 ||
       !Number.isInteger(boardingMin) ||
-      boardingMin < 1
+      boardingMin < 1 ||
+      !Number.isInteger(reserveMin) ||
+      reserveMin < 0
     ) {
       return;
     }
@@ -170,6 +176,7 @@ export function SetupPage() {
           pricePerGuestEur: price,
           averageFlightDurationMinutes: avgFlightMinutes,
           boardingMinutes: boardingMin,
+          reserveFuelMinutes: reserveMin,
         }),
       });
       if (response.ok) setFlightDay((await response.json()) as FlightDay);
@@ -445,6 +452,19 @@ export function SetupPage() {
               data-testid="fd-boarding-minutes"
               value={boardingMinutes}
               onChange={(e) => setBoardingMinutes(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="fd-reserve-fuel-minutes">
+              {t("dispatch.setup.flightDay.reserveFuelMinutes")}
+            </Label>
+            <Input
+              id="fd-reserve-fuel-minutes"
+              type="number"
+              min={0}
+              data-testid="fd-reserve-fuel-minutes"
+              value={reserveFuelMinutes}
+              onChange={(e) => setReserveFuelMinutes(e.target.value)}
             />
           </div>
         </CardContent>

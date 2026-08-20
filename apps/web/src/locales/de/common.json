@@ -65,6 +65,7 @@
         "price": "Preis/Gast (EUR)",
         "averageFlightDurationMinutes": "Ø Flugdauer (Min.)",
         "boardingMinutes": "Boarding-Zeit (Min.)",
+        "reserveFuelMinutes": "Sprit-Reserve (Min.)",
         "save": "Speichern",
         "start": "Tag starten",
         "end": "Tag beenden",
@@ -144,7 +145,10 @@
         "title": "Neuer Flug",
         "aircraft": "Flugzeug",
         "pilot": "Pilot",
-        "create": "Flug anlegen"
+        "create": "Flug anlegen",
+        "reserveWarning": "Nicht genug Sprit für einen weiteren Flug über der Reserve.",
+        "reserveWarningLink": "Zur Betankung",
+        "createError": "Flug konnte nicht angelegt werden."
       },
       "pool": {
         "title": "Verfügbare Gäste",

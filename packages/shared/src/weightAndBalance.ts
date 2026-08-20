@@ -66,3 +66,27 @@ export function availablePayloadKg(aircraft: DynamicPayloadFields): number | nul
 export function staticAvailablePayloadKg(aircraft: PayloadFields): number | null {
   return payloadFromFuelKg(aircraft, fuelWeightKg(aircraft));
 }
+
+type ReserveFields = Pick<Aircraft, "fuelOnBoardL" | "fuelBurnedSinceReportL" | "fuelType" | "fuelBurnLPerHour">;
+
+// Would creating one more average-length flight for this aircraft run its
+// dynamic fuel below the event's reserve? Used by createFlight (409, hard
+// block) so a flight never gets planned onto an aircraft that's already
+// known to need a refuel break first — an unplanned break mid-queue cascades
+// delays through every other flight already chained behind it on that
+// aircraft (schedule.ts's estimateDepartures). `false` (never blocks) when
+// there isn't enough data to project — an unset burn rate or unknown fuel
+// level is a *different*, already-handled gap (fuelUnknown blocks
+// assign/lock, not this).
+export function wouldBreachReserve(
+  aircraft: ReserveFields,
+  averageFlightDurationMinutes: number,
+  reserveFuelMinutes: number,
+): boolean {
+  if (aircraft.fuelBurnLPerHour == null) return false;
+  const currentL = dynamicFuelOnBoardL(aircraft);
+  if (currentL == null) return false;
+  const consumptionL = aircraft.fuelBurnLPerHour * (averageFlightDurationMinutes / 60);
+  const reserveL = aircraft.fuelBurnLPerHour * (reserveFuelMinutes / 60);
+  return currentL - consumptionL < reserveL;
+}

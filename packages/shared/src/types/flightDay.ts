@@ -16,4 +16,14 @@ export interface FlightDay {
   // before these fields existed.
   averageFlightDurationMinutes: number;
   boardingMinutes: number;
+  // Minimum fuel (expressed in minutes at the aircraft's own burn rate, the
+  // usual VFR-day-reserve convention — not a fixed liters number, since that
+  // varies by aircraft) that must remain after a flight. createFlight refuses
+  // (409) to create a new flight for an aircraft whose current dynamic fuel
+  // wouldn't cover one more average flight and still clear this reserve — see
+  // weightAndBalance.ts's wouldBreachReserve. The insight: an aircraft that's
+  // already known to need a refuel break shouldn't get a flight planned onto
+  // it in the first place, since an unplanned mid-day break then cascades
+  // delays through every other flight already queued behind it (schedule.ts).
+  reserveFuelMinutes: number;
 }

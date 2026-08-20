@@ -38,6 +38,7 @@ export {
   FUEL_DENSITY_KG_PER_L,
   DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
   DEFAULT_BOARDING_MINUTES,
+  DEFAULT_RESERVE_FUEL_MINUTES,
 } from "./constants";
 export type { ScheduleSettings } from "./schedule";
 export { estimateDepartures } from "./schedule";
@@ -48,4 +49,5 @@ export {
   dynamicFuelWeightKg,
   availablePayloadKg,
   staticAvailablePayloadKg,
+  wouldBreachReserve,
 } from "./weightAndBalance";
