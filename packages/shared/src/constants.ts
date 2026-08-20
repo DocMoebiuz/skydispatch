@@ -10,3 +10,9 @@ export const FUEL_DENSITY_KG_PER_L: Record<"avgas" | "diesel", number> = {
   avgas: 0.72,
   diesel: 0.84,
 };
+
+// Fixed rule (the user's own words): "We estimate 15 mins for the flight.
+// 5 mins for the boarding." Not a FlightDay setting — the user gave exact
+// numbers, not a request to make them editable; see schedule.ts.
+export const AVERAGE_FLIGHT_DURATION_MINUTES = 15;
+export const BOARDING_MINUTES = 5;

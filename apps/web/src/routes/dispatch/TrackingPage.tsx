@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { deriveFlightStage, type Guest, type Aircraft, type Pilot, type Flight } from "shared";
+import {
+  deriveFlightStage,
+  estimateDepartures,
+  type Guest,
+  type Aircraft,
+  type Pilot,
+  type Flight,
+} from "shared";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,6 +105,14 @@ export function TrackingPage() {
   }, []);
 
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
+  // Computed from the FULL flight list (not sortedFlights below) — the
+  // per-aircraft chain needs every "assigned"/"ready" flight for that
+  // aircraft to estimate correctly, including ones Tracking itself doesn't
+  // display yet (still Planning's/Boarding's concern).
+  const departureEstimates = useMemo(() => {
+    const aircraftById = new Map(aircraftList.map((a) => [a.id, a]));
+    return estimateDepartures(flights, aircraftById, new Date());
+  }, [flights, aircraftList]);
   // "ready" (fully boarded, about to depart), "airborne", and "completed" —
   // not "created"/"assigned" (still Planning's/Boarding's concern, nothing
   // to track yet). Within that, the filter above decides whether "completed"
@@ -310,6 +325,15 @@ export function TrackingPage() {
                 {stage !== "airborne" && stage !== "landed" && (
                   <p data-testid="tracking-not-checked-in">
                     {notCheckedIn} {t("dispatch.tracking.notCheckedIn")}
+                  </p>
+                )}
+                {!f.offBlock && departureEstimates.get(f.id) && (
+                  <p className="text-muted-foreground text-xs" data-testid="tracking-estimated-departure">
+                    {t("dispatch.tracking.estimatedDeparture")}:{" "}
+                    {new Date(departureEstimates.get(f.id)!).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </p>
                 )}
                 {f.offBlock && renderTimeField(f.id, "offBlock", t("dispatch.tracking.takeoff"), f.offBlock)}

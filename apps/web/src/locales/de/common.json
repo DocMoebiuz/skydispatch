@@ -190,6 +190,7 @@
       "notCheckedIn": "nicht eingecheckt",
       "takeoff": "Start",
       "landing": "Landung",
+      "estimatedDeparture": "Vorauss. Abflug",
       "land": "Landung erfassen",
       "start": "Start erfassen",
       "startBlocked": "Start nicht möglich",
@@ -370,6 +371,7 @@
       "notFound": "ID nicht gefunden.",
       "flown": "{{name}} – Ihr Rundflug ist abgeschlossen.",
       "assigned": "{{name}} – Flug {{flight}} ({{status}}).",
+      "assignedWithEstimate": "{{name}} – Flug {{flight}} ({{status}}), vorauss. Abflug ca. {{time}} Uhr. Bitte spätestens 15 Min. vorher am Treffpunkt sein.",
       "waiting": "{{name}} – noch keinem Flug zugewiesen.",
       "groupHeading": "Gruppe {{group}} – Status Ihrer Mitreisenden:"
     }

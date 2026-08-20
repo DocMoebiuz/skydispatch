@@ -33,7 +33,13 @@ export { startRefuelBreakRequestSchema } from "./schemas/startRefuelBreakRequest
 export type { EndRefuelBreakRequest } from "./schemas/endRefuelBreakRequest";
 export { endRefuelBreakRequestSchema } from "./schemas/endRefuelBreakRequest";
 
-export { DEFAULT_FLIGHT_DAY_ID, FUEL_DENSITY_KG_PER_L } from "./constants";
+export {
+  DEFAULT_FLIGHT_DAY_ID,
+  FUEL_DENSITY_KG_PER_L,
+  AVERAGE_FLIGHT_DURATION_MINUTES,
+  BOARDING_MINUTES,
+} from "./constants";
+export { estimateDepartures } from "./schedule";
 export { ageFromDateOfBirth, isMinor, MINOR_AGE_THRESHOLD } from "./age";
 export {
   fuelWeightKg,

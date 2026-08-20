@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { deriveFlightStage, type Guest, type Aircraft, type Flight, type FlightDay } from "shared";
+import {
+  deriveFlightStage,
+  estimateDepartures,
+  type Guest,
+  type Aircraft,
+  type Flight,
+  type FlightDay,
+} from "shared";
 import { PlaneTakeoff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,6 +144,12 @@ export function BoardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Per-aircraft projected departure for flights not airborne yet — fills the
+  // manual's "voraussichtliche bzw. tatsächliche Zeit" column (§4.1) for
+  // scheduled/boarding flights, which otherwise have no real offBlock yet.
+  const aircraftById = new Map(aircraftList.map((a) => [a.id, a]));
+  const departureEstimates = estimateDepartures(flights, aircraftById, now);
+
   const withStatus = flights
     .map((flight) => ({
       flight,
@@ -196,16 +209,28 @@ export function BoardPage() {
         : [lookupResult]
       : [];
 
+  // Manual §4.2 "Wann bin ich an der Reihe?": flight number, estimated
+  // departure, and "be at the stand 15 min before departure" — shown once a
+  // real estimate exists (not airborne/completed, which get their own
+  // branches above and don't need one).
   function statusLine(g: Guest): string {
     if (g.flown) return t("board.lookup.flown", { name: g.name });
     const flight = flights.find((f) => f.guestIds.includes(g.id));
-    return flight
-      ? t("board.lookup.assigned", {
-          name: g.name,
-          flight: flight.code,
-          status: t(`dispatch.planning.status.${flight.status}`),
-        })
-      : t("board.lookup.waiting", { name: g.name });
+    if (!flight) return t("board.lookup.waiting", { name: g.name });
+    const estimate = departureEstimates.get(flight.id);
+    if (estimate) {
+      return t("board.lookup.assignedWithEstimate", {
+        name: g.name,
+        flight: flight.code,
+        status: t(`dispatch.planning.status.${flight.status}`),
+        time: fmtTime(estimate),
+      });
+    }
+    return t("board.lookup.assigned", {
+      name: g.name,
+      flight: flight.code,
+      status: t(`dispatch.planning.status.${flight.status}`),
+    });
   }
 
   return (
@@ -267,7 +292,17 @@ export function BoardPage() {
                 >
                   <TableCell className="font-bold tracking-wide text-amber-300">{f.code}</TableCell>
                   <TableCell className="text-slate-300">{aircraft?.reg ?? "—"}</TableCell>
-                  <TableCell className="tabular-nums text-slate-300">{fmtTime(f.offBlock)}</TableCell>
+                  <TableCell className="tabular-nums text-slate-300">
+                    {f.offBlock ? (
+                      fmtTime(f.offBlock)
+                    ) : departureEstimates.get(f.id) ? (
+                      <span className="text-slate-400 italic" data-testid="board-estimated-time">
+                        ca. {fmtTime(departureEstimates.get(f.id)!)}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={cn("font-sans", BOARD_STATUS_CLASS[status])}>
                       {t(`board.status.${status}`)}
