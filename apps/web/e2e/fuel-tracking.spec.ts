@@ -89,6 +89,10 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     // kg/L) = 428kg, minus pilot(80) + guest(75) = 273kg free. No burn yet,
     // so static == dynamic — the primary number reads the same either way.
     await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("273 kg");
+    // The dynamic line still shows even though it's identical to static
+    // right now (no burn yet) — it must never look like dynamic tracking
+    // just isn't happening at all.
+    await expect(flightCard.getByTestId("flight-card-dynamic-payload")).toContainText("273");
 
     // --- Ready, boarding, start, land ---
     await flightCard.getByTestId("set-ready-flight").click();

@@ -5,13 +5,15 @@ import { deleteGuestByEmail, deleteById, setAircraftFuelBurned } from "./helpers
 
 // The flight card's primary weight number is static (fuel exactly as last
 // reported — at creation, or after a refuel) — the SAFE figure a dispatcher
-// can rely on without trusting a burn-rate projection. Once it's actually
-// diverged from the dynamic (burn-adjusted, realistic but with some margin
-// of error) figure, dynamic shows right underneath it with the fuel icon,
-// no separate line buried further down the card. See FlightCard.tsx's
-// staticFreeKg comment.
+// can rely on without trusting a burn-rate projection. Dynamic (burn-
+// adjusted, realistic but with some margin of error) shows right underneath
+// it with the fuel icon and its own "Dynamisch" label — always, not just
+// once it's diverged from static (a user reported not seeing it at all
+// early on: most flights haven't burned enough fuel yet for the two figures
+// to actually differ, so gating on divergence hid it almost all the time).
+// See FlightCard.tsx's staticFreeKg comment.
 
-test("a flight card shows the dynamic (realistic) payload right under the static (safe) one once they diverge", async ({
+test("a flight card shows the dynamic (realistic) payload right under the static (safe) one, labeled", async ({
   page,
 }) => {
   const stamp = Date.now();
@@ -97,7 +99,8 @@ test("a flight card shows the dynamic (realistic) payload right under the static
     // Dynamic (realistic), right underneath with the fuel icon: 242 - 155 = 87kg.
     const dynamicLine = flightCard.getByTestId("flight-card-dynamic-payload");
     await expect(dynamicLine).toBeVisible();
-    await expect(dynamicLine).toContainText("87 kg");
+    await expect(dynamicLine).toContainText("Dynamisch");
+    await expect(dynamicLine).toContainText("87");
     await expect(dynamicLine.locator("svg")).toBeVisible();
   } finally {
     await deleteGuestByEmail(email);

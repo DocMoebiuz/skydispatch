@@ -166,6 +166,8 @@
         "weight": "Gewicht",
         "weightFree": "frei",
         "weightOver": "über Limit",
+        "safeLabel": "Sicher",
+        "dynamicLabel": "Dynamisch",
         "empty": "Noch niemand zugewiesen.",
         "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen.",
         "unassign": "Entfernen",
@@ -173,8 +175,7 @@
         "unready": "Wieder öffnen",
         "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Fertigstellen nicht möglich.",
         "fuelUnknown": "⚠ Sprit-Stand unbekannt – Zuweisen/Fertigstellen nicht möglich.",
-        "refuelBreakActive": "⛽ Wird betankt – Start nicht möglich",
-        "dynamicPayloadTooltip": "Dynamisch, mit Verbrauch (realistisch)"
+        "refuelBreakActive": "⛽ Wird betankt – Start nicht möglich"
       },
       "status": {
         "created": "geplant",

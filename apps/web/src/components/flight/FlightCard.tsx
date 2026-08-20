@@ -94,7 +94,6 @@ export function FlightCard({
   // netted against this flight's current passengers, and would overstate
   // what's actually still free).
   const staticFreeKg = load.staticMaxPayloadKg - load.usedWeightKg;
-  const staticOver = load.staticMaxPayloadKg > 0 && load.usedWeightKg > load.staticMaxPayloadKg;
   return (
     <Card
       className={cn(
@@ -158,59 +157,58 @@ export function FlightCard({
             </span>
           </div>
           {/* Label on top, the actual number big and right-aligned below it
-              — "frei"/"über Limit" alone doesn't need to share a line with
-              the number that matters. */}
+              — a label alone doesn't need to share a line with the number
+              that matters. The label says "Sicher" (safe), never "über
+              Limit" — that wording is a real policy statement (assign/lock
+              actually refuse), which only applies to the dynamic figure
+              below, not this conservative static one. A negative number
+              here just means the safe estimate is tight/exceeded, not that
+              anything is actually blocked. */}
           <div className="ml-auto flex flex-col items-end leading-none">
             <span
               className={cn(
                 "text-xs",
-                // Red once genuinely over, but also while still technically
-                // free — under 5kg left is close enough to the limit to flag
+                // Red once genuinely negative, but also while still
+                // technically free — under 5kg left is close enough to flag
                 // before the next guest actually tips it over, not just after.
-                (staticOver || (staticFreeKg >= 0 && staticFreeKg < 5))
-                  ? "text-destructive"
-                  : "text-muted-foreground",
+                staticFreeKg < 5 ? "text-destructive" : "text-muted-foreground",
               )}
             >
-              {staticOver
-                ? t("dispatch.planning.builder.weightOver")
-                : t("dispatch.planning.builder.weightFree")}
+              {t("dispatch.planning.builder.safeLabel")}
             </span>
             <span
               data-testid="flight-card-weight"
               className={cn(
                 "text-xl font-semibold tabular-nums",
-                (staticOver || (staticFreeKg >= 0 && staticFreeKg < 5)) && "text-destructive",
+                staticFreeKg < 5 && "text-destructive",
               )}
             >
-              {/* Fuel not known yet means staticMaxPayloadKg is a meaningless
-                  0, not "no room" — show a dash instead of a misleading 0kg. */}
-              {load.fuelUnknown
-                ? "—"
-                : `${staticOver ? load.usedWeightKg - load.staticMaxPayloadKg : staticFreeKg} kg`}
+              {/* Fuel not known yet means staticFreeKg is meaningless, not
+                  "no room" — show a dash instead of a misleading 0kg. */}
+              {load.fuelUnknown ? "—" : `${staticFreeKg} kg`}
             </span>
             {/* Dynamic (burn-adjusted, realistic but with some margin of
-                error) right under the static/safe number above — a
-                dispatcher shouldn't have to do mental math to sanity-check
-                one against the other. Only shown once it's actually
-                diverged from static (some fuel burn recorded since the last
-                report); identical figures would just be visual noise. This
-                is still what assign/lock actually gate on server-side
-                (load.over, the progress bar below) even though it's the
-                smaller number here — so no "over limit" wording of its own,
-                just a quieter red when it's already negative. */}
-            {!load.fuelUnknown && load.staticMaxPayloadKg !== load.maxPayloadKg && (
+                error) right under the static/safe number above — always
+                shown once fuel is known, even when it happens to currently
+                equal the static figure (not just once they've diverged):
+                otherwise this line vanishes for most of a flight day, before
+                any real burn has accumulated, which reads as "the dynamic
+                figure isn't being tracked at all." This IS what assign/lock
+                actually gate on server-side (load.over, the progress bar
+                below), so "über Limit" wording belongs here, not above. */}
+            {!load.fuelUnknown && (
               <span
                 className={cn(
                   "mt-0.5 flex items-center gap-1 text-xs tabular-nums",
-                  freeKg < 0 ? "text-destructive" : "text-muted-foreground",
+                  load.over ? "text-destructive font-semibold" : "text-muted-foreground",
                 )}
                 data-testid="flight-card-dynamic-payload"
-                title={t("dispatch.planning.builder.dynamicPayloadTooltip")}
               >
                 <Fuel className="size-3 shrink-0" aria-hidden />
-                <span className="sr-only">{t("dispatch.planning.builder.dynamicPayloadTooltip")}: </span>
-                {freeKg} kg
+                {t("dispatch.planning.builder.dynamicLabel")}:{" "}
+                {load.over
+                  ? `${load.usedWeightKg - load.maxPayloadKg} ${t("dispatch.planning.builder.weightOver")}`
+                  : `${freeKg} ${t("dispatch.planning.builder.weightFree")}`}
               </span>
             )}
           </div>
