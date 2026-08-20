@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { DEFAULT_FLIGHT_DAY_ID } from "shared";
 import { fillDateOfBirth } from "./helpers/dob";
+import { selectByText } from "./helpers/select";
 import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
 // Completes the guest journey (registriert -> ... -> geflogen) that assign-flight
@@ -72,8 +73,8 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     // --- Create flight, assign, set ready ---
     await page.goto("/dispatch/planning");
     await page.getByTestId("open-create-flight").click();
-    await page.getByTestId("new-flight-aircraft").selectOption(aircraftId!);
-    await page.getByTestId("new-flight-pilot").selectOption(pilotId!);
+    await selectByText(page, "new-flight-aircraft", `${reg} — Cessna 172`);
+    await selectByText(page, "new-flight-pilot", pilotName);
     await page.getByTestId("create-flight").click();
     await expect(page.getByTestId("create-flight")).not.toBeVisible();
     const createdFlight = await fetch("http://localhost:4280/api/flights")
@@ -131,7 +132,7 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     await page.goto("/dispatch/guests");
     await expect(
       page.getByTestId("guest-row").filter({ hasText: guestName }).getByTestId("guest-status"),
-    ).toHaveText("geflogen");
+    ).toContainText("geflogen");
 
     // Not the board's guest-code lookup here — the flight-row check above already
     // proves the same fact (flight shows completed on the board) without relying

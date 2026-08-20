@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { UserPlus } from "lucide-react";
-import { deriveGuestStatus, type Guest, type GuestStatus } from "shared";
+import { UserPlus, Check, Banknote, UserX, X } from "lucide-react";
+import { deriveGuestStatus, type Guest, type Flight, type GuestStatus } from "shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ const FILTER_KEYS: FilterKey[] = ["all", "open", "ready", "flown", "noshow"];
 export function GuestsPage() {
   const { t } = useTranslation();
   const [guests, setGuests] = useState<Guest[] | null>(null);
+  const [flights, setFlights] = useState<Flight[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
@@ -46,13 +47,17 @@ export function GuestsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/guests")
-      .then((res) => {
+    Promise.all([
+      fetch("/api/guests").then((res) => {
         if (!res.ok) throw new Error(`GET /api/guests failed: ${res.status}`);
         return res.json() as Promise<Guest[]>;
-      })
-      .then((data) => {
-        if (!cancelled) setGuests(data);
+      }),
+      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+    ])
+      .then(([g, f]) => {
+        if (cancelled) return;
+        setGuests(g);
+        setFlights(f);
       })
       .catch(() => {
         if (!cancelled) setLoadError(true);
@@ -122,6 +127,11 @@ export function GuestsPage() {
     }
   }
 
+  const flightByGuestId = new Map<string, Flight>();
+  for (const f of flights) {
+    for (const guestId of f.guestIds) flightByGuestId.set(guestId, f);
+  }
+
   const filtered = (guests ?? []).filter((g) => {
     const status = deriveGuestStatus(g);
     if (filter === "open" && !(!g.paid || g.weightKg == null)) return false;
@@ -187,7 +197,6 @@ export function GuestsPage() {
               <TableHead>{t("dispatch.guests.table.name")}</TableHead>
               <TableHead>{t("dispatch.guests.table.weight")}</TableHead>
               <TableHead>{t("dispatch.guests.table.status")}</TableHead>
-              <TableHead>{t("dispatch.guests.group")}</TableHead>
               <TableHead>{t("dispatch.guests.table.action")}</TableHead>
             </TableRow>
           </TableHeader>
@@ -195,6 +204,8 @@ export function GuestsPage() {
             {filtered.map((guest) => {
               const status = deriveGuestStatus(guest);
               const canDelete = !guest.flown;
+              const isPending = pending.has(guest.id);
+              const flight = flightByGuestId.get(guest.id);
               return (
                 <TableRow
                   key={guest.id}
@@ -203,66 +214,81 @@ export function GuestsPage() {
                   data-group-id={guest.groupId ?? ""}
                 >
                   <TableCell className="font-medium">{guest.code}</TableCell>
-                  <TableCell>{guest.name}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span>{guest.name}</span>
+                      {guest.groupName && (
+                        <span className="text-muted-foreground text-xs">{guest.groupName}</span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell data-testid="guest-weight">
-                    {guest.weightKg ?? `(${guest.declaredWeightKg})`}
+                    {guest.paid && guest.weightKg == null ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          className="h-8 w-16"
+                          data-testid="weigh-input"
+                          placeholder={String(guest.declaredWeightKg)}
+                          value={weighInputs[guest.id] ?? ""}
+                          onChange={(e) =>
+                            setWeighInputs((prev) => ({
+                              ...prev,
+                              [guest.id]: e.target.value,
+                            }))
+                          }
+                        />
+                        <Button
+                          size="icon-sm"
+                          variant="outline"
+                          data-testid="weigh-button"
+                          disabled={isPending}
+                          aria-label={t("dispatch.guests.confirmWeight")}
+                          onClick={() => void confirmWeight(guest.id, guest.declaredWeightKg)}
+                        >
+                          <Check className="size-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      (guest.weightKg ?? `(${guest.declaredWeightKg})`)
+                    )}
                   </TableCell>
                   <TableCell data-testid="guest-status">
-                    <Badge variant={STATUS_VARIANT[status]}>
-                      {t(`dispatch.guests.status.${status}`)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell data-testid="guest-group-name">
-                    {guest.groupName ?? "—"}
+                    <div className="flex flex-col gap-0.5">
+                      <Badge variant={STATUS_VARIANT[status]} className="w-fit">
+                        {t(`dispatch.guests.status.${status}`)}
+                      </Badge>
+                      {flight && (
+                        <span className="text-muted-foreground text-xs" data-testid="guest-flight-code">
+                          {flight.code}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap items-center gap-1">
                       {!guest.paid && (
                         <Button
-                          size="sm"
+                          size="icon-sm"
                           variant="outline"
                           data-testid="mark-paid-button"
-                          disabled={pending.has(guest.id)}
+                          disabled={isPending}
+                          aria-label={t("dispatch.guests.markPaid")}
                           onClick={() => void callAction(guest.id, "actions/mark-paid")}
                         >
-                          {t("dispatch.guests.markPaid")}
+                          <Banknote className="size-3.5" />
                         </Button>
-                      )}
-                      {guest.paid && guest.weightKg == null && (
-                        <>
-                          <Input
-                            type="number"
-                            className="h-8 w-20"
-                            data-testid="weigh-input"
-                            placeholder={String(guest.declaredWeightKg)}
-                            value={weighInputs[guest.id] ?? ""}
-                            onChange={(e) =>
-                              setWeighInputs((prev) => ({
-                                ...prev,
-                                [guest.id]: e.target.value,
-                              }))
-                            }
-                          />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            data-testid="weigh-button"
-                            disabled={pending.has(guest.id)}
-                            onClick={() => void confirmWeight(guest.id, guest.declaredWeightKg)}
-                          >
-                            {t("dispatch.guests.confirmWeight")}
-                          </Button>
-                        </>
                       )}
                       {!guest.noShow && !guest.flown && (
                         <Button
-                          size="sm"
+                          size="icon-sm"
                           variant="outline"
                           data-testid="no-show-button"
-                          disabled={pending.has(guest.id)}
+                          disabled={isPending}
+                          aria-label={t("dispatch.guests.noShow")}
                           onClick={() => void callAction(guest.id, "actions/no-show")}
                         >
-                          {t("dispatch.guests.noShow")}
+                          <UserX className="size-3.5" />
                         </Button>
                       )}
                       {canDelete && (
@@ -270,11 +296,11 @@ export function GuestsPage() {
                           size="icon-sm"
                           variant="ghost"
                           data-testid="delete-guest-button"
-                          disabled={pending.has(guest.id)}
+                          disabled={isPending}
                           onClick={() => void deleteGuest(guest.id)}
                           aria-label={t("dispatch.guests.delete")}
                         >
-                          ✕
+                          <X className="size-3.5" />
                         </Button>
                       )}
                       {actionError.has(guest.id) && (

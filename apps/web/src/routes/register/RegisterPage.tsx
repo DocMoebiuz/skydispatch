@@ -7,12 +7,18 @@ import {
   guestCreateRequestSchema,
   type GuestCreateRequest,
   type Guest,
-  type FlightDay,
 } from "shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Card,
   CardHeader,
@@ -108,24 +114,6 @@ export function RegisterPage() {
   const [dobMonth, setDobMonth] = useState<number | null>(null);
   const [dobYear, setDobYear] = useState<number | null>(null);
 
-  // 404 means no flight day configured yet — not an error, just falls back to 0
-  // (see apps/api flightday.ts's getFlightDay for why this isn't a 200+null body).
-  const [pricePerGuestEur, setPricePerGuestEur] = useState(0);
-  // `cancelled` guard — see PlanningPage's identical effect for why this
-  // matters even here (React StrictMode's dev-mode double mount can let a
-  // stale fetch wave resolve after a fresher one).
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/flightday")
-      .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
-      .then((d) => {
-        if (!cancelled && d) setPricePerGuestEur(d.pricePerGuestEur);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const {
     register,
@@ -353,7 +341,6 @@ export function RegisterPage() {
   }
 
   if (phase === "done" && guest) {
-    const total = pricePerGuestEur * sessionGuests.length;
     return (
       <main className="mx-auto max-w-md p-8">
         <Card>
@@ -364,11 +351,7 @@ export function RegisterPage() {
             <ol className="flex flex-col gap-3">
               <li className="flex gap-2 text-sm">
                 <span className="font-semibold">1.</span>
-                <span>
-                  {t("register.done.step1", {
-                    total: total.toFixed(2).replace(".", ",") + " €",
-                  })}
-                </span>
+                <span>{t("register.done.step1")}</span>
               </li>
               <li className="flex gap-2 text-sm">
                 <span className="font-semibold">2.</span>
@@ -491,67 +474,66 @@ export function RegisterPage() {
                 <div className="grid gap-2">
                   <Label htmlFor="dateOfBirthDay">{t("register.form.dateOfBirth")}</Label>
                   <div className="flex gap-2">
-                    <select
-                      id="dateOfBirthDay"
-                      data-testid="dob-day"
-                      className={cn(
-                        "h-9 rounded-md border border-input bg-transparent px-2 text-base shadow-xs outline-none md:text-sm dark:bg-input/30",
-                        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                        !!errors.dateOfBirth && "border-destructive",
-                      )}
-                      aria-invalid={!!errors.dateOfBirth}
-                      value={dobDay ?? ""}
-                      onChange={(e) => setDobDay(e.target.value ? Number(e.target.value) : null)}
+                    <Select
+                      value={dobDay != null ? String(dobDay) : ""}
+                      onValueChange={(v) => setDobDay(v ? Number(v) : null)}
                     >
-                      <option value="">{t("register.form.dobDay")}</option>
-                      {Array.from({ length: daysInMonth(dobMonth, dobYear) }, (_, i) => i + 1).map(
-                        (day) => (
-                          <option key={day} value={day}>
-                            {day}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                    <select
-                      data-testid="dob-month"
-                      className={cn(
-                        "h-9 flex-1 rounded-md border border-input bg-transparent px-2 text-base shadow-xs outline-none md:text-sm dark:bg-input/30",
-                        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                        !!errors.dateOfBirth && "border-destructive",
-                      )}
-                      aria-invalid={!!errors.dateOfBirth}
-                      value={dobMonth ?? ""}
-                      onChange={(e) =>
-                        handleDobMonthChange(e.target.value ? Number(e.target.value) : null)
-                      }
+                      <SelectTrigger
+                        id="dateOfBirthDay"
+                        data-testid="dob-day"
+                        aria-invalid={!!errors.dateOfBirth}
+                        className={cn("w-22.5", !!errors.dateOfBirth && "border-destructive")}
+                      >
+                        <SelectValue placeholder={t("register.form.dobDay")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: daysInMonth(dobMonth, dobYear) }, (_, i) => i + 1).map(
+                          (day) => (
+                            <SelectItem key={day} value={String(day)}>
+                              {day}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={dobMonth != null ? String(dobMonth) : ""}
+                      onValueChange={(v) => handleDobMonthChange(v ? Number(v) : null)}
                     >
-                      <option value="">{t("register.form.dobMonth")}</option>
-                      {DOB_MONTHS.map(({ value, label }) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      data-testid="dob-year"
-                      className={cn(
-                        "h-9 rounded-md border border-input bg-transparent px-2 text-base shadow-xs outline-none md:text-sm dark:bg-input/30",
-                        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                        !!errors.dateOfBirth && "border-destructive",
-                      )}
-                      aria-invalid={!!errors.dateOfBirth}
-                      value={dobYear ?? ""}
-                      onChange={(e) =>
-                        handleDobYearChange(e.target.value ? Number(e.target.value) : null)
-                      }
+                      <SelectTrigger
+                        data-testid="dob-month"
+                        aria-invalid={!!errors.dateOfBirth}
+                        className={cn("w-35", !!errors.dateOfBirth && "border-destructive")}
+                      >
+                        <SelectValue placeholder={t("register.form.dobMonth")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DOB_MONTHS.map(({ value, label }) => (
+                          <SelectItem key={value} value={String(value)}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={dobYear != null ? String(dobYear) : ""}
+                      onValueChange={(v) => handleDobYearChange(v ? Number(v) : null)}
                     >
-                      <option value="">{t("register.form.dobYear")}</option>
-                      {DOB_YEARS.map((year) => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger
+                        data-testid="dob-year"
+                        aria-invalid={!!errors.dateOfBirth}
+                        className={cn("w-25", !!errors.dateOfBirth && "border-destructive")}
+                      >
+                        <SelectValue placeholder={t("register.form.dobYear")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DOB_YEARS.map((year) => (
+                          <SelectItem key={year} value={String(year)}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   {errors.dateOfBirth && (
                     <p className="text-destructive text-sm">

@@ -28,6 +28,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, X, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -226,6 +233,47 @@ export function PlanningPage() {
       else next.delete(key);
       return next;
     });
+  }
+
+  // Least-recently-used aircraft first (never-used ones sort first, via
+  // Infinity) — spreads new flights across the fleet round-robin instead of
+  // always defaulting to the same one.
+  function suggestAircraftId(): string {
+    let best: string | null = null;
+    let bestLastUsed = Infinity;
+    for (const a of aircraftList) {
+      const lastUsed = Math.max(
+        0,
+        ...flights.filter((f) => f.aircraftId === a.id).map((f) => Date.parse(f.createdAt)),
+      );
+      const score = lastUsed === 0 ? -Infinity : lastUsed;
+      if (score < bestLastUsed) {
+        bestLastUsed = score;
+        best = a.id;
+      }
+    }
+    return best ?? "";
+  }
+
+  // Pilots typically stay on the same plane — default to whoever flew this
+  // aircraft most recently.
+  function suggestPilotIdFor(aircraftId: string): string {
+    const last = flights
+      .filter((f) => f.aircraftId === aircraftId && f.pilotId)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+    return last?.pilotId && pilots.some((p) => p.id === last.pilotId) ? last.pilotId : "";
+  }
+
+  function openCreateFlightDialog() {
+    const aircraftId = suggestAircraftId();
+    setNewFlightAircraftId(aircraftId);
+    setNewFlightPilotId(aircraftId ? suggestPilotIdFor(aircraftId) : "");
+    setNewFlightDialogOpen(true);
+  }
+
+  function selectNewFlightAircraft(aircraftId: string) {
+    setNewFlightAircraftId(aircraftId);
+    setNewFlightPilotId(suggestPilotIdFor(aircraftId));
   }
 
   async function createFlight() {
@@ -523,7 +571,7 @@ export function PlanningPage() {
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">{t("dispatch.nav.planning")}</h1>
-          <Button data-testid="open-create-flight" onClick={() => setNewFlightDialogOpen(true)}>
+          <Button data-testid="open-create-flight" onClick={openCreateFlightDialog}>
             <Plus /> {t("dispatch.planning.newFlight.create")}
           </Button>
         </div>
@@ -540,39 +588,35 @@ export function PlanningPage() {
                 <label className="text-sm font-medium" htmlFor="pf-aircraft">
                   {t("dispatch.planning.newFlight.aircraft")}
                 </label>
-                <select
-                  id="pf-aircraft"
-                  data-testid="new-flight-aircraft"
-                  className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
-                  value={newFlightAircraftId}
-                  onChange={(e) => setNewFlightAircraftId(e.target.value)}
-                >
-                  <option value="">—</option>
-                  {aircraftList.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.reg} — {a.model}
-                    </option>
-                  ))}
-                </select>
+                <Select value={newFlightAircraftId} onValueChange={selectNewFlightAircraft}>
+                  <SelectTrigger id="pf-aircraft" data-testid="new-flight-aircraft" className="w-full">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {aircraftList.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.reg} — {a.model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium" htmlFor="pf-pilot">
                   {t("dispatch.planning.newFlight.pilot")}
                 </label>
-                <select
-                  id="pf-pilot"
-                  data-testid="new-flight-pilot"
-                  className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
-                  value={newFlightPilotId}
-                  onChange={(e) => setNewFlightPilotId(e.target.value)}
-                >
-                  <option value="">—</option>
-                  {pilots.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                <Select value={newFlightPilotId} onValueChange={setNewFlightPilotId}>
+                  <SelectTrigger id="pf-pilot" data-testid="new-flight-pilot" className="w-full">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pilots.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>
@@ -658,7 +702,7 @@ export function PlanningPage() {
                   data-testid="planning-flights-empty"
                   message={t("dispatch.planning.flights.empty")}
                   action={
-                    <Button size="sm" onClick={() => setNewFlightDialogOpen(true)}>
+                    <Button size="sm" onClick={openCreateFlightDialog}>
                       <Plus /> {t("dispatch.planning.newFlight.create")}
                     </Button>
                   }

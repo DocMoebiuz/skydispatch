@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { DEFAULT_FLIGHT_DAY_ID } from "shared";
 import { fillDateOfBirth } from "./helpers/dob";
+import { selectByText } from "./helpers/select";
 import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
 // Increment 3 — the heart of the app: create pilot/aircraft/flight (Setup +
@@ -121,8 +122,8 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     // --- Planning: create the flight ---
     await page.goto("/dispatch/planning");
     await page.getByTestId("open-create-flight").click();
-    await page.getByTestId("new-flight-aircraft").selectOption(aircraftId!);
-    if (pilotId) await page.getByTestId("new-flight-pilot").selectOption(pilotId);
+    await selectByText(page, "new-flight-aircraft", `${reg} — Cessna 172`);
+    if (pilotId) await selectByText(page, "new-flight-pilot", pilotName);
     await page.getByTestId("create-flight").click();
     // Not flight-tabs visibility — that section can already be visible from other
     // flights, so it doesn't prove *this* flight's POST has landed. The dialog only
