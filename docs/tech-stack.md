@@ -65,10 +65,17 @@ re-justifying simplicity per decision.
   this scale — one flight day, low hundreds of guests). Full schema and reasoning:
   [architecture.md § Data model & persistence](./architecture.md#data-model--persistence).
   Database/container names are overridable via `COSMOS_DATABASE_ID`/
-  `COSMOS_CONTAINER_ID` (both optional, same account either way) — e2e sets
-  `COSMOS_DATABASE_ID=skydispatch.test` (see § Testing), and the deployed Azure
-  app can point at its own dedicated database/container the same way once it
-  needs one separate from local dev's.
+  `COSMOS_CONTAINER_ID` (both optional) — **three databases, one shared Cosmos
+  account**, so poking around locally or running the test suite can never land
+  in (or wipe) what the live site is reading:
+  - `skydispatch` (the default, i.e. unset) — the deployed Azure app only.
+    Never set `COSMOS_DATABASE_ID` in a local/CI context.
+  - `skydispatch.dev` — local interactive `pnpm dev` browsing, set in
+    `apps/api/local.settings.json` (gitignored; `local.settings.json.example`
+    documents it).
+  - `skydispatch.test` — Playwright e2e, both locally and in CI (same suite,
+    one database) — set once in `playwright.config.ts` so both the spawned
+    dev server and the test/helper process inherit it (see § Testing).
 
 ## Testing
 
@@ -156,12 +163,13 @@ recorded below since they're easy to reintroduce by accident.
   updated to check `process.env.COSMOS_CONNECTION_STRING` first.
 - **e2e uses its own Cosmos database** (`skydispatch.test`, `COSMOS_DATABASE_ID`
   env var, set once in `playwright.config.ts` so both the spawned dev server
-  and the test/helper process itself inherit it) — keeps test churn out of the
-  database local dev/manual testing uses. Both `COSMOS_DATABASE_ID` and
-  `COSMOS_CONTAINER_ID` are optional overrides on `apps/api/src/lib/cosmos.ts`
-  (default `skydispatch`/`operations`), so the deployed Azure app can use its
-  own dedicated database/container too, the same way, once it needs one
-  separate from local dev's.
+  and the test/helper process itself inherit it, in CI exactly the same way as
+  locally — CI never sets `COSMOS_DATABASE_ID` itself, `playwright.config.ts`'s
+  assignment is unconditional) — keeps test churn out of both the live site's
+  database and local dev/manual testing's own (`skydispatch.dev`, see § Data).
+  Both `COSMOS_DATABASE_ID` and `COSMOS_CONTAINER_ID` are optional overrides on
+  `apps/api/src/lib/cosmos.ts` (default `skydispatch`/`operations`) — three
+  databases, one shared account, see § Data for the full breakdown.
 - **`deploy.yml`** (push to `main`, and PR open/sync/reopened/closed): builds
   locally in-workflow rather than delegating to SWA's Oryx build for the
   frontend (`skip_app_build: true` — Oryx's pnpm-workspace detection doesn't

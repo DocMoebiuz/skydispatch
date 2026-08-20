@@ -1,4 +1,35 @@
-import { deleteOrphanedFlights } from "./helpers/cosmos";
+import { DEFAULT_FLIGHT_DAY_ID, type FlightDay } from "shared";
+import { deleteOrphanedFlights, getTestContainer } from "./helpers/cosmos";
+
+// Every real deployment has a dispatcher configure the flight day before
+// anything else happens — a completely absent FlightDay is a real state
+// (GET /api/flightday 404s, by design, see apps/api flightday.ts's
+// getFlightDay), but not the STEADY state this suite should be testing
+// against by accident. Seeding one here means a from-scratch database (e.g.
+// right after Setup's "Gefahrenzone" reset, or a first-ever run against a
+// fresh Cosmos account) still gives every flightday-fetching page
+// (Register/Setup/Reporting/Board/DispatchLayout) a real 200 to work with,
+// instead of a 404 whose "Failed to load resource" console log then trips
+// smoke.spec.ts's no-console-errors check depending on unrelated test
+// ordering (confirmed: exactly this raced and failed once, see git history).
+async function seedFlightDay(): Promise<void> {
+  const container = await getTestContainer();
+  const { resource: existing } = await container
+    .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)
+    .read<FlightDay>();
+  if (existing) return;
+  const flightDay: FlightDay = {
+    id: DEFAULT_FLIGHT_DAY_ID,
+    type: "FlightDay",
+    flightDayId: DEFAULT_FLIGHT_DAY_ID,
+    date: new Date().toISOString().slice(0, 10),
+    airfieldName: "Flugplatz Backnang-Heiningen",
+    airfieldIcao: "EDSH",
+    pricePerGuestEur: 80,
+    status: "active",
+  };
+  await container.items.upsert(flightDay);
+}
 
 // Runs once before the whole e2e run. Self-heals a real, repeatedly-observed gap:
 // a spec killed mid-run (Playwright test timeout, or the devcontainer itself
@@ -14,4 +45,5 @@ export default async function globalSetup(): Promise<void> {
   if (removed > 0) {
     console.log(`[global-setup] removed ${removed} orphaned e2e flight(s) from Cosmos`);
   }
+  await seedFlightDay();
 }

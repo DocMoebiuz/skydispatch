@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { deleteGuestByEmail } from "./helpers/cosmos";
-import { fillDateOfBirth } from "./helpers/dob";
+import { fillRegistrationForm } from "./helpers/register";
 
 // Increment 1b — front-desk marks a guest paid. Completes priority 1: no payment
 // step at registration, `paid` is a staff action taken later on /dispatch. See
@@ -13,16 +13,7 @@ test("front-desk marks a guest paid on /dispatch", async ({ page }) => {
 
   try {
     await page.goto("/register");
-    await page.getByLabel("Vor- und Nachname").fill(guestName);
-    await page.getByLabel("E-Mail-Adresse").fill(email);
-    await page.getByRole("button", { name: "Weiter" }).click();
-    await fillDateOfBirth(page, "1990-05-14");
-    await page.getByLabel("Straße und Hausnummer").fill("Musterstraße 1");
-    await page.getByLabel("PLZ").fill("71522");
-    await page.getByLabel("Ort").fill("Backnang");
-    await page.getByRole("button", { name: "Weiter" }).click();
-    await page.getByLabel("Ihr Gewicht (kg)").fill("72");
-    await page.getByLabel(/gelesen und stimme zu/).check();
+    await fillRegistrationForm(page, { name: guestName, email, weightKg: "72" });
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
 

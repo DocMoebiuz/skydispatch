@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { DEFAULT_FLIGHT_DAY_ID } from "shared";
-import { fillDateOfBirth } from "./helpers/dob";
+import { fillRegistrationForm } from "./helpers/register";
 import { selectByText } from "./helpers/select";
 import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
@@ -33,24 +33,7 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     weightKg: string,
     { addAnother }: { addAnother: boolean },
   ) {
-    await page.getByLabel("Vor- und Nachname").fill(name);
-    await page.getByLabel("E-Mail-Adresse").fill(email);
-    await page.getByRole("button", { name: "Weiter" }).click();
-
-    await fillDateOfBirth(page, "1990-05-14");
-    // Address fields are hidden when the group's default "reuse first member's
-    // address" option is active (see RegisterPage's canReuseAddress) — nothing to
-    // fill in that case, just accept the default.
-    const streetInput = page.getByLabel("Straße und Hausnummer");
-    if (await streetInput.isVisible()) {
-      await streetInput.fill("Musterstraße 1");
-      await page.getByLabel("PLZ").fill("71522");
-      await page.getByLabel("Ort").fill("Backnang");
-    }
-    await page.getByRole("button", { name: "Weiter" }).click();
-
-    await page.getByLabel("Ihr Gewicht (kg)").fill(weightKg);
-    await page.getByLabel(/gelesen und stimme zu/).check();
+    await fillRegistrationForm(page, { name, email, weightKg });
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
     if (addAnother) {
@@ -157,7 +140,7 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     await flightCard.click();
     await soloAssignResponse;
     await expect(flightCard.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "1");
-    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("80 kg frei"); // 230-150
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("80 kg"); // 230-150
     await expect(flightCard.getByTestId("assigned-unit")).toContainText(nameSolo);
 
     // --- Assign the group via drag — only one more fits (2 seats max), the
@@ -185,7 +168,7 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     await groupAssignResponse;
 
     await expect(flightCard.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "2");
-    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("0 kg frei"); // 230-230, exactly at limit
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("0 kg"); // 230-230, exactly at limit
     await expect(flightCard.getByTestId("assign-warning")).toBeVisible();
     await expect(flightCard.getByTestId("assigned-unit")).toHaveCount(2);
   } finally {

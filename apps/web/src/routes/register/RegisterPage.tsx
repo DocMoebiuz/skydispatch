@@ -7,7 +7,9 @@ import {
   guestCreateRequestSchema,
   type GuestCreateRequest,
   type Guest,
+  type FlightDay,
 } from "shared";
+import { CalendarDays, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,21 +31,30 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
+import { Stepper } from "@/components/Stepper";
 
-// Increment 2 — two-step form (contact, then weight/consent/newsletter, matching
-// the prototype's step shape/card outline) plus the group registration loop: the
-// FIRST time a registrant adds another person, that's when we ask for a group name
-// — not upfront. It then applies retroactively to the person already registered
-// (via POST /api/guests/{id}/actions/start-group) and automatically to everyone
-// after. See docs/architecture.md § Group registration and § Prototype reference.
+// Increment 2 — three-step form (passenger, address, consent) plus the group
+// registration loop: the FIRST time a registrant adds another person, that's
+// when we ask for a group name — not upfront. It then applies retroactively
+// to the person already registered (via POST /api/guests/{id}/actions/start-
+// group) and automatically to everyone after. See docs/architecture.md §
+// Group registration and § Prototype reference.
+//
+// Steps are grouped by what's actually obliged (name/DOB/weight/address — see
+// nfr.md) vs. what isn't: "passenger" covers the three obliged personal
+// fields together (plus optional email/phone, clearly secondary), "address"
+// is its own step since it's reused across a group's members, and "consent"
+// is nothing but the waiver — decrowded from what used to also carry weight.
 //
 // No payment step (that's a front-desk action, see Increment 1b / nfr.md §
 // Security & Privacy). Field-level error text is looked up by field name via
 // i18next, never rendered from the Zod schema directly — see the schema's comment.
 
-type FormStep = "contact" | "address" | "weight";
+type FormStep = "passenger" | "address" | "consent";
 type Phase = "form" | "success" | "group-prompt" | "done";
 type Address = { street: string; zipCode: string; city: string };
+
+const STEP_ORDER: FormStep[] = ["passenger", "address", "consent"];
 
 // Three separate dropdowns instead of a native <input type="date"> — a date
 // picker/calendar widget is slow and unfamiliar for entering a birth date
@@ -88,12 +99,13 @@ export function RegisterPage() {
   const { t } = useTranslation();
 
   const [phase, setPhase] = useState<Phase>("form");
-  const [formStep, setFormStep] = useState<FormStep>("contact");
+  const [formStep, setFormStep] = useState<FormStep>("passenger");
   const [guest, setGuest] = useState<Guest | null>(null);
   const [sessionGuests, setSessionGuests] = useState<
     { code: string; name: string }[]
   >([]);
   const [submitError, setSubmitError] = useState(false);
+  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
 
   const [groupId, setGroupId] = useState<string | null>(null);
   const [groupName, setGroupName] = useState<string | null>(null);
@@ -115,6 +127,15 @@ export function RegisterPage() {
   const [dobMonth, setDobMonth] = useState<number | null>(null);
   const [dobYear, setDobYear] = useState<number | null>(null);
 
+  // Date/airfield the registrant is actually signing up for — the prototype's
+  // header always showed this ("📍 Flugplatz ... · EDSH"), fetched once here
+  // since it's read-only context, not a form field.
+  useEffect(() => {
+    fetch("/api/flightday")
+      .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
+      .then(setFlightDay)
+      .catch(() => undefined);
+  }, []);
 
   const {
     register,
@@ -161,16 +182,16 @@ export function RegisterPage() {
   }
 
   async function goToAddressStep() {
-    const ok = await trigger(["name", "email", "phone"]);
+    const ok = await trigger(["name", "dateOfBirth", "declaredWeightKg", "email", "phone"]);
     if (ok) setFormStep("address");
   }
 
-  async function goToWeightStep() {
+  async function goToConsentStep() {
     if (canReuseAddress && reuseAddress && firstAddress) {
       setValue("address", firstAddress, { shouldValidate: false });
     }
-    const ok = await trigger(["dateOfBirth", "address.street", "address.zipCode", "address.city"]);
-    if (ok) setFormStep("weight");
+    const ok = await trigger(["address.street", "address.zipCode", "address.city"]);
+    if (ok) setFormStep("consent");
   }
 
   async function onSubmit(values: GuestCreateRequest) {
@@ -180,6 +201,7 @@ export function RegisterPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...values,
+        email: values.email || undefined,
         phone: values.phone || undefined,
         group: groupId && groupName ? { groupId, groupName } : undefined,
       }),
@@ -199,7 +221,7 @@ export function RegisterPage() {
     setDobDay(null);
     setDobMonth(null);
     setDobYear(null);
-    setFormStep("contact");
+    setFormStep("passenger");
     setReuseAddress(true);
     setPhase("form");
   }
@@ -241,6 +263,31 @@ export function RegisterPage() {
       setStartingGroup(false);
     }
   }
+
+  // Shown at the top of every form-phase screen — "date and place you're
+  // registering for," matching the static prototype's own header chip. A
+  // plain JSX value, not a nested component function (that would remount
+  // and reset on every render — see react-hooks/static-components).
+  const flightDayChip = flightDay && (
+    <div
+      className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
+      data-testid="register-flightday"
+    >
+      <span className="flex items-center gap-1.5">
+        <CalendarDays className="size-4 shrink-0" aria-hidden />
+        {new Date(flightDay.date).toLocaleDateString("de-DE", {
+          weekday: "long",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <MapPin className="size-4 shrink-0" aria-hidden />
+        {flightDay.airfieldName} · {flightDay.airfieldIcao}
+      </span>
+    </div>
+  );
 
   if (phase === "group-prompt") {
     return (
@@ -389,44 +436,25 @@ export function RegisterPage() {
     );
   }
 
+  const currentStepIndex = STEP_ORDER.indexOf(formStep);
+
   return (
-    <main className="bg-brand-gradient mx-auto flex min-h-screen max-w-md flex-col gap-6 p-8">
+    <main className="bg-brand-gradient mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-primary flex items-center gap-2 text-2xl font-semibold">
           <Logo className="size-7 shrink-0" />
           {t("register.title")}
         </h1>
         <p className="text-muted-foreground">{t("register.lead")}</p>
+        {flightDayChip}
       </div>
 
       <Card>
-        <CardHeader className="border-b">
-          <div className="flex gap-4 text-sm">
-            <span
-              className={cn(
-                "font-medium",
-                formStep === "contact" ? "text-primary" : "text-muted-foreground",
-              )}
-            >
-              1. {t("register.steps.contact")}
-            </span>
-            <span
-              className={cn(
-                "font-medium",
-                formStep === "address" ? "text-primary" : "text-muted-foreground",
-              )}
-            >
-              2. {t("register.steps.address")}
-            </span>
-            <span
-              className={cn(
-                "font-medium",
-                formStep === "weight" ? "text-primary" : "text-muted-foreground",
-              )}
-            >
-              3. {t("register.steps.weight")}
-            </span>
-          </div>
+        <CardHeader className="border-b pb-6">
+          <Stepper
+            steps={STEP_ORDER.map((key) => ({ key, label: t(`register.steps.${key}`) }))}
+            currentIndex={currentStepIndex}
+          />
         </CardHeader>
         <form
           className="flex flex-col gap-6"
@@ -439,42 +467,35 @@ export function RegisterPage() {
               form needs the matching flex flex-col gap-6 itself or CardContent and
               CardFooter collapse together with no gap at all. */}
           <CardContent className="flex flex-col gap-4">
-            {formStep === "contact" && (
+            {formStep === "passenger" && (
               <>
-                <div className="grid gap-2">
-                  <Label htmlFor="name">{t("register.form.name")}</Label>
-                  <Input id="name" {...register("name")} aria-invalid={!!errors.name} />
-                  {errors.name && (
-                    <p className="text-destructive text-sm">
-                      {t("register.errors.name")}
-                    </p>
-                  )}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">{t("register.form.name")}</Label>
+                    <Input id="name" {...register("name")} aria-invalid={!!errors.name} />
+                    {errors.name && (
+                      <p className="text-destructive text-sm">{t("register.errors.name")}</p>
+                    )}
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="declaredWeightKg">{t("register.form.declaredWeightKg")}</Label>
+                    <Input
+                      id="declaredWeightKg"
+                      type="number"
+                      {...register("declaredWeightKg", { valueAsNumber: true })}
+                      aria-invalid={!!errors.declaredWeightKg}
+                    />
+                    {errors.declaredWeightKg && (
+                      <p className="text-destructive text-sm">
+                        {t("register.errors.declaredWeightKg")}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                <p className="text-muted-foreground -mt-2 text-xs">
+                  {t("register.form.declaredWeightKgHint")}
+                </p>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="email">{t("register.form.email")}</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    {...register("email")}
-                    aria-invalid={!!errors.email}
-                  />
-                  {errors.email && (
-                    <p className="text-destructive text-sm">
-                      {t("register.errors.email")}
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="phone">{t("register.form.phone")}</Label>
-                  <Input id="phone" {...register("phone")} />
-                </div>
-              </>
-            )}
-
-            {formStep === "address" && (
-              <>
                 <div className="grid gap-2">
                   <Label htmlFor="dateOfBirthDay">{t("register.form.dateOfBirth")}</Label>
                   <div className="flex gap-2">
@@ -546,6 +567,39 @@ export function RegisterPage() {
                   )}
                 </div>
 
+                {/* Optional and de-emphasized — not currently obliged (see
+                    guestCreateRequestSchema's comment): no email/SMS
+                    notifications exist yet to send with them. */}
+                <div className="mt-2 flex flex-col gap-3 border-t pt-4">
+                  <p className="text-muted-foreground text-xs font-medium uppercase">
+                    {t("register.form.optionalSection")}
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="email">{t("register.form.email")}</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        {...register("email")}
+                        aria-invalid={!!errors.email}
+                      />
+                      {errors.email && (
+                        <p className="text-destructive text-sm">
+                          {t("register.errors.email")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="phone">{t("register.form.phone")}</Label>
+                      <Input id="phone" {...register("phone")} />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {formStep === "address" && (
+              <>
                 {canReuseAddress && (
                   <div className="flex flex-col gap-2 rounded-md border p-3">
                     <div className="flex items-start gap-2">
@@ -615,33 +669,13 @@ export function RegisterPage() {
               </>
             )}
 
-            {formStep === "weight" && (
+            {formStep === "consent" && (
               <>
-                <div className="grid gap-2">
-                  <Label htmlFor="declaredWeightKg">
-                    {t("register.form.declaredWeightKg")}
-                  </Label>
-                  <Input
-                    id="declaredWeightKg"
-                    type="number"
-                    {...register("declaredWeightKg", { valueAsNumber: true })}
-                    aria-invalid={!!errors.declaredWeightKg}
-                  />
-                  <p className="text-muted-foreground text-xs">
-                    {t("register.form.declaredWeightKgHint")}
-                  </p>
-                  {errors.declaredWeightKg && (
-                    <p className="text-destructive text-sm">
-                      {t("register.errors.declaredWeightKg")}
-                    </p>
-                  )}
-                </div>
-
                 <div className="flex flex-col gap-1">
                   <p className="text-sm font-semibold">{t("register.form.waiverTitle")}</p>
                   <div
                     data-testid="waiver-text"
-                    className="text-muted-foreground max-h-32 overflow-y-auto rounded-md border p-3 text-xs leading-relaxed"
+                    className="text-muted-foreground max-h-48 overflow-y-auto rounded-md border p-3 text-xs leading-relaxed"
                   >
                     {t("register.form.waiverText")}
                   </div>
@@ -696,7 +730,7 @@ export function RegisterPage() {
             )}
           </CardContent>
           <CardFooter className="gap-2">
-            {formStep === "contact" && (
+            {formStep === "passenger" && (
               <Button
                 type="button"
                 className="w-full"
@@ -710,16 +744,16 @@ export function RegisterPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setFormStep("contact")}
+                  onClick={() => setFormStep("passenger")}
                 >
                   {t("register.form.back")}
                 </Button>
-                <Button type="button" className="flex-1" onClick={() => void goToWeightStep()}>
+                <Button type="button" className="flex-1" onClick={() => void goToConsentStep()}>
                   {t("register.form.next")}
                 </Button>
               </>
             )}
-            {formStep === "weight" && (
+            {formStep === "consent" && (
               <>
                 <Button
                   type="button"

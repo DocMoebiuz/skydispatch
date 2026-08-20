@@ -14,6 +14,13 @@ export default defineConfig({
   // by the same specs passing locally every time). Generous timeout rather
   // than a flaky default, matching webServer.timeout's own rationale below.
   timeout: 60_000,
+  // Default assertion timeout (5s) is also tight — repeatedly observed
+  // locally under this container's full ~14-worker parallel load (many
+  // specs hitting Setup's create-pilot/create-aircraft flow at once): the
+  // action itself succeeds, but the list re-render just hasn't landed within
+  // 5s yet, tripping `toContainText`/`toBeVisible`. Same "generous timeout,
+  // not a flaky default" call as the per-test timeout above.
+  expect: { timeout: 10_000 },
   // open: "never" — the default HTML reporter starts a local server and blocks
   // indefinitely waiting for Ctrl+C once tests finish, which hangs any non-interactive
   // run (including this one, the first time). Still writes the report to disk.

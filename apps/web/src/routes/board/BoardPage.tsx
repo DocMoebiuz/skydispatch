@@ -206,7 +206,10 @@ export function BoardPage() {
               </span>
             )}
           </div>
-          <div className="flex flex-col items-end gap-1">
+          {/* Left-aligned within its own block (not items-end) — the clock is
+              the thing to notice here, so its text shouldn't trail off to
+              the right edge away from where the eye lands first. */}
+          <div className="flex flex-col items-start gap-1">
             <span
               className="font-mono text-2xl tabular-nums text-amber-300"
               data-testid="board-clock"

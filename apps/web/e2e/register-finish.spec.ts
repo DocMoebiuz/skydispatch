@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { deleteGuestByEmail } from "./helpers/cosmos";
-import { fillDateOfBirth } from "./helpers/dob";
+import { fillRegistrationForm } from "./helpers/register";
 
 // "Anmeldung abschließen" — after registering (solo or as a group), a dedicated
 // finish screen tells the guest what to do next (pay at the front desk, watch the
@@ -19,16 +19,7 @@ test("finishing a group registration lists everyone and links to the board", asy
 
   try {
     await page.goto("/register");
-    await page.getByLabel("Vor- und Nachname").fill(name1);
-    await page.getByLabel("E-Mail-Adresse").fill(email1);
-    await page.getByRole("button", { name: "Weiter" }).click();
-    await fillDateOfBirth(page, "1990-05-14");
-    await page.getByLabel("Straße und Hausnummer").fill("Musterstraße 1");
-    await page.getByLabel("PLZ").fill("71522");
-    await page.getByLabel("Ort").fill("Backnang");
-    await page.getByRole("button", { name: "Weiter" }).click();
-    await page.getByLabel("Ihr Gewicht (kg)").fill("70");
-    await page.getByLabel(/gelesen und stimme zu/).check();
+    await fillRegistrationForm(page, { name: name1, email: email1, weightKg: "70" });
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
 
@@ -36,15 +27,14 @@ test("finishing a group registration lists everyone and links to the board", asy
     await page.getByLabel("Gruppenname").fill(groupName);
     await page.getByRole("button", { name: "Weiter" }).click();
 
-    await page.getByLabel("Vor- und Nachname").fill(name2);
-    await page.getByLabel("E-Mail-Adresse").fill(email2);
-    await page.getByRole("button", { name: "Weiter" }).click();
     // Group's default "reuse first member's address" is accepted — address fields
     // stay hidden, see register-group.spec.ts for the reuse/decline paths.
-    await fillDateOfBirth(page, "1988-11-02");
-    await page.getByRole("button", { name: "Weiter" }).click();
-    await page.getByLabel("Ihr Gewicht (kg)").fill("65");
-    await page.getByLabel(/gelesen und stimme zu/).check();
+    await fillRegistrationForm(page, {
+      name: name2,
+      email: email2,
+      weightKg: "65",
+      dateOfBirth: "1988-11-02",
+    });
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
 

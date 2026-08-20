@@ -7,7 +7,7 @@ export interface Guest {
   flightDayId: string; // partition key
   code: string; // e.g. "7K3Q" — random 4-char A-Z0-9, deliberately not sequential (privacy, see apps/api guests.ts)
   name: string;
-  email: string;
+  email?: string | null;
   phone?: string | null;
   declaredWeightKg: number; // self-reported at registration
   weightKg: number | null; // staff-verified at check-in (not built yet)

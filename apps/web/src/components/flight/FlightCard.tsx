@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Plane, UserRound, Armchair, Fuel } from "lucide-react";
 import type { Aircraft, Flight, FlightStage, Pilot } from "shared";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { FlightLoad } from "@/lib/flightLoad";
@@ -94,15 +95,23 @@ export function FlightCard({
       onClick={onClick}
     >
       <CardHeader className={cn(compact && "gap-0 px-3")}>
+        {/* justify-between, not flex-wrap — a badge that wraps to its own
+            line (or a flight code that gets squeezed by a long aircraft reg)
+            reads as broken, not responsive. Both sides truncate instead. */}
         <CardTitle
-          className={cn("flex flex-wrap items-center gap-1.5", compact && "text-sm font-semibold")}
+          className={cn("flex items-center justify-between gap-2", compact && "text-sm font-semibold")}
         >
-          <Plane className={cn("shrink-0", compact ? "size-3.5" : "size-4")} aria-hidden />
-          {flight.code}
-          <span className="text-muted-foreground font-normal">— {aircraft?.reg ?? "—"}</span>
+          <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+            <Plane className={cn("shrink-0", compact ? "size-3.5" : "size-4")} aria-hidden />
+            <span className="truncate">{flight.code}</span>
+            <Separator orientation="vertical" className="h-4 shrink-0" />
+            <span className="text-muted-foreground truncate font-normal">
+              {aircraft?.reg ?? "—"}
+            </span>
+          </span>
           <Badge
             variant="outline"
-            className={STAGE_BADGE_CLASS[stage]}
+            className={cn("shrink-0", STAGE_BADGE_CLASS[stage])}
             data-testid="flight-card-status"
           >
             {t(`dispatch.stage.${stage}`)}
@@ -135,20 +144,35 @@ export function FlightCard({
               {load.usedSeats}/{load.totalSeats} {t("dispatch.planning.builder.seats")}
             </span>
           </div>
-          <span
-            data-testid="flight-card-weight"
-            className={cn(
-              "ml-auto text-lg font-semibold tabular-nums",
-              // Red once genuinely over, but also while still technically free —
-              // under 5kg left is close enough to the limit to flag before the
-              // next guest actually tips it over, not just after.
-              (load.over || (freeKg >= 0 && freeKg < 5)) && "text-destructive",
-            )}
-          >
-            {load.over
-              ? `⚠ ${load.usedWeightKg - load.maxPayloadKg} ${t("dispatch.planning.builder.weightOver")}`
-              : `${freeKg} ${t("dispatch.planning.builder.weightFree")}`}
-          </span>
+          {/* Label on top, the actual number big and right-aligned below it
+              — "frei"/"über Limit" alone doesn't need to share a line with
+              the number that matters. */}
+          <div className="ml-auto flex flex-col items-end leading-none">
+            <span
+              className={cn(
+                "text-xs",
+                // Red once genuinely over, but also while still technically
+                // free — under 5kg left is close enough to the limit to flag
+                // before the next guest actually tips it over, not just after.
+                (load.over || (freeKg >= 0 && freeKg < 5))
+                  ? "text-destructive"
+                  : "text-muted-foreground",
+              )}
+            >
+              {load.over
+                ? t("dispatch.planning.builder.weightOver")
+                : t("dispatch.planning.builder.weightFree")}
+            </span>
+            <span
+              data-testid="flight-card-weight"
+              className={cn(
+                "text-xl font-semibold tabular-nums",
+                (load.over || (freeKg >= 0 && freeKg < 5)) && "text-destructive",
+              )}
+            >
+              {load.over ? load.usedWeightKg - load.maxPayloadKg : freeKg} kg
+            </span>
+          </div>
         </div>
         {!compact && (
           <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">

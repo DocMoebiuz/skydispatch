@@ -26,18 +26,19 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, UserRound, Plane } from "lucide-react";
+import { Plus, Trash2, UserRound, Plane, Coffee } from "lucide-react";
 
 // Increment 3 prerequisite — entity setup (flight day/pilots/aircraft). A
 // scenic-flight day realistically has single-digit pilots/aircraft (5-10
 // planes, maybe double that in pilots), so a card grid — not a dense list —
 // is the right shape: enough room per entity for a future avatar image, and
 // enough visual weight that "click a card" reads as "open its details," not
-// "click a row." Cards open a read-only details dialog; that dialog is the
-// only place delete lives (never a quick-access action right on the card —
-// too easy to misclick), and its own "Bearbeiten" button opens the same
-// create form, prefilled, for editing. One form serves both create and
-// edit — see editingPilotId/editingAircraftId below.
+// "click a row." Clicking a card opens the same create/edit form directly,
+// prefilled (see editingPilotId/editingAircraftId below — one form serves
+// both create and edit) — no separate read-only "details" step first, that
+// extra click didn't earn its keep. Delete lives in that same form's footer
+// (only once editing a real entity, never in create mode) — still never a
+// quick-access button right on the card itself, too easy to misclick.
 export function SetupPage() {
   const { t } = useTranslation();
 
@@ -53,7 +54,6 @@ export function SetupPage() {
   // null = creating a new pilot; a real id = editing that pilot — same dialog,
   // same fields, just a different submit target (POST vs. PUT) and label.
   const [editingPilotId, setEditingPilotId] = useState<string | null>(null);
-  const [detailsPilotId, setDetailsPilotId] = useState<string | null>(null);
   const [pilotName, setPilotName] = useState("");
   const [pilotLicense, setPilotLicense] = useState("");
   const [pilotWeightKg, setPilotWeightKg] = useState("");
@@ -65,7 +65,6 @@ export function SetupPage() {
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
   const [aircraftDialogOpen, setAircraftDialogOpen] = useState(false);
   const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
-  const [detailsAircraftId, setDetailsAircraftId] = useState<string | null>(null);
   const [reg, setReg] = useState("");
   const [model, setModel] = useState("");
   const [seats, setSeats] = useState("");
@@ -84,9 +83,6 @@ export function SetupPage() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirmValue, setResetConfirmValue] = useState("");
   const [resettingDatabase, setResettingDatabase] = useState(false);
-
-  const detailsPilot = detailsPilotId ? pilots.find((p) => p.id === detailsPilotId) : null;
-  const detailsAircraft = detailsAircraftId ? aircraft.find((a) => a.id === detailsAircraftId) : null;
 
   // `cancelled` guard on each fetch — required, not decorative: React
   // StrictMode's dev-mode double mount/unmount/remount runs this effect
@@ -181,7 +177,6 @@ export function SetupPage() {
   }
 
   function openEditPilotDialog(p: Pilot) {
-    setDetailsPilotId(null);
     setEditingPilotId(p.id);
     setPilotName(p.name);
     setPilotLicense(p.license);
@@ -225,7 +220,7 @@ export function SetupPage() {
       const response = await fetch(`/api/pilots/${pilotId}`, { method: "DELETE" });
       if (response.ok) {
         setPilots((prev) => prev.filter((p) => p.id !== pilotId));
-        setDetailsPilotId(null);
+        setPilotDialogOpen(false);
       } else {
         alert(t("dispatch.setup.pilots.deleteError"));
       }
@@ -249,7 +244,6 @@ export function SetupPage() {
   }
 
   function openEditAircraftDialog(a: Aircraft) {
-    setDetailsAircraftId(null);
     setEditingAircraftId(a.id);
     setReg(a.reg);
     setModel(a.model);
@@ -314,7 +308,7 @@ export function SetupPage() {
       const response = await fetch(`/api/aircraft/${aircraftId}`, { method: "DELETE" });
       if (response.ok) {
         setAircraft((prev) => prev.filter((a) => a.id !== aircraftId));
-        setDetailsAircraftId(null);
+        setAircraftDialogOpen(false);
       } else {
         alert(t("dispatch.setup.aircraft.deleteError"));
       }
@@ -467,7 +461,7 @@ export function SetupPage() {
                   key={p.id}
                   className="hover:bg-accent/50 cursor-pointer gap-3 py-4 transition-colors"
                   data-testid="pilot-row"
-                  onClick={() => setDetailsPilotId(p.id)}
+                  onClick={() => openEditPilotDialog(p)}
                 >
                   <CardContent className="flex items-center gap-3 px-4">
                     {/* Placeholder avatar slot — a future per-pilot image
@@ -500,6 +494,10 @@ export function SetupPage() {
                         </span>
                       )}
                     </div>
+                    {/* Label names the ACTION the click performs, not the
+                        pilot's current state — "frei"/"Pause" read as status
+                        either way, leaving it ambiguous whether clicking
+                        toggles anything. */}
                     <Button
                       size="sm"
                       variant="outline"
@@ -510,9 +508,10 @@ export function SetupPage() {
                         void togglePilotAvailable(p.id);
                       }}
                     >
+                      <Coffee className="size-3.5" aria-hidden />
                       {p.available
-                        ? t("dispatch.setup.pilots.available")
-                        : t("dispatch.setup.pilots.unavailable")}
+                        ? t("dispatch.setup.pilots.takeBreak")
+                        : t("dispatch.setup.pilots.endBreak")}
                     </Button>
                   </CardContent>
                 </Card>
@@ -521,56 +520,6 @@ export function SetupPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Details — the only place delete lives, never a quick-access button
-          right on the card. */}
-      <Dialog open={!!detailsPilotId} onOpenChange={(open) => !open && setDetailsPilotId(null)}>
-        <DialogContent data-testid="pilot-details">
-          {detailsPilot && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{detailsPilot.name}</DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col gap-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{t("dispatch.setup.pilots.license")}</span>
-                  <span>{detailsPilot.license}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{t("dispatch.setup.pilots.weightKg")}</span>
-                  <span>
-                    {detailsPilot.weightKg != null
-                      ? `${detailsPilot.weightKg} kg`
-                      : t("dispatch.setup.pilots.weightUnknown")}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{t("dispatch.setup.pilots.status")}</span>
-                  <span>
-                    {detailsPilot.available
-                      ? t("dispatch.setup.pilots.available")
-                      : t("dispatch.setup.pilots.unavailable")}
-                  </span>
-                </div>
-              </div>
-              <DialogFooter className="sm:justify-between">
-                <Button
-                  variant="destructive"
-                  data-testid="delete-pilot"
-                  disabled={deletingPilot}
-                  aria-label={t("dispatch.setup.pilots.delete")}
-                  onClick={() => void deletePilotConfirmed(detailsPilot.id)}
-                >
-                  <Trash2 /> {t("dispatch.setup.pilots.delete")}
-                </Button>
-                <Button data-testid="edit-pilot" onClick={() => openEditPilotDialog(detailsPilot)}>
-                  {t("dispatch.setup.pilots.edit")}
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={pilotDialogOpen} onOpenChange={setPilotDialogOpen}>
         <DialogContent>
@@ -602,8 +551,24 @@ export function SetupPage() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button data-testid="add-pilot" disabled={savingPilot} onClick={() => void savePilot()}>
+          <DialogFooter className="sm:justify-between">
+            {editingPilotId && (
+              <Button
+                variant="destructive"
+                data-testid="delete-pilot"
+                disabled={deletingPilot}
+                aria-label={t("dispatch.setup.pilots.delete")}
+                onClick={() => void deletePilotConfirmed(editingPilotId)}
+              >
+                <Trash2 /> {t("dispatch.setup.pilots.delete")}
+              </Button>
+            )}
+            <Button
+              data-testid="add-pilot"
+              disabled={savingPilot}
+              className="ml-auto"
+              onClick={() => void savePilot()}
+            >
               {editingPilotId ? t("dispatch.setup.pilots.save") : t("dispatch.setup.pilots.add")}
             </Button>
           </DialogFooter>
@@ -638,7 +603,7 @@ export function SetupPage() {
                   key={a.id}
                   className="hover:bg-accent/50 cursor-pointer gap-3 py-4 transition-colors"
                   data-testid="aircraft-row"
-                  onClick={() => setDetailsAircraftId(a.id)}
+                  onClick={() => openEditAircraftDialog(a)}
                 >
                   <CardContent className="flex items-center gap-3 px-4">
                     {/* Placeholder avatar slot — a future per-aircraft image
@@ -704,91 +669,6 @@ export function SetupPage() {
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={!!detailsAircraftId} onOpenChange={(open) => !open && setDetailsAircraftId(null)}>
-        <DialogContent data-testid="aircraft-details">
-          {detailsAircraft && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{detailsAircraft.reg}</DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col gap-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{t("dispatch.setup.aircraft.model")}</span>
-                  <span>{detailsAircraft.model}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{t("dispatch.setup.aircraft.seats")}</span>
-                  <span>{detailsAircraft.seats}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">
-                    {t("dispatch.setup.aircraft.maxPayloadKg")}
-                  </span>
-                  <span>{detailsAircraft.maxPayloadKg} kg</span>
-                </div>
-                {detailsAircraft.emptyWeightKg != null && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">
-                      {t("dispatch.setup.aircraft.emptyWeightKg")}
-                    </span>
-                    <span>{detailsAircraft.emptyWeightKg} kg</span>
-                  </div>
-                )}
-                {detailsAircraft.maxTakeoffMassKg != null && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">
-                      {t("dispatch.setup.aircraft.maxTakeoffMassKg")}
-                    </span>
-                    <span>{detailsAircraft.maxTakeoffMassKg} kg</span>
-                  </div>
-                )}
-                {detailsAircraft.fuelType && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        {t("dispatch.setup.aircraft.fuelType.label")}
-                      </span>
-                      <span>{t(`dispatch.setup.aircraft.fuelType.${detailsAircraft.fuelType}`)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        {t("dispatch.setup.aircraft.fuelOnBoardL")}
-                      </span>
-                      <span>{detailsAircraft.fuelOnBoardL ?? 0} L</span>
-                    </div>
-                    {detailsAircraft.fuelBurnLPerHour != null && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">
-                          {t("dispatch.setup.aircraft.fuelBurnLPerHour")}
-                        </span>
-                        <span>{detailsAircraft.fuelBurnLPerHour} L/h</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-              <DialogFooter className="sm:justify-between">
-                <Button
-                  variant="destructive"
-                  data-testid="delete-aircraft"
-                  disabled={deletingAircraft}
-                  aria-label={t("dispatch.setup.aircraft.delete")}
-                  onClick={() => void deleteAircraftConfirmed(detailsAircraft.id)}
-                >
-                  <Trash2 /> {t("dispatch.setup.aircraft.delete")}
-                </Button>
-                <Button
-                  data-testid="edit-aircraft"
-                  onClick={() => openEditAircraftDialog(detailsAircraft)}
-                >
-                  {t("dispatch.setup.aircraft.edit")}
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={aircraftDialogOpen} onOpenChange={setAircraftDialogOpen}>
         <DialogContent>
@@ -886,10 +766,22 @@ export function SetupPage() {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="sm:justify-between">
+            {editingAircraftId && (
+              <Button
+                variant="destructive"
+                data-testid="delete-aircraft"
+                disabled={deletingAircraft}
+                aria-label={t("dispatch.setup.aircraft.delete")}
+                onClick={() => void deleteAircraftConfirmed(editingAircraftId)}
+              >
+                <Trash2 /> {t("dispatch.setup.aircraft.delete")}
+              </Button>
+            )}
             <Button
               data-testid="add-aircraft"
               disabled={savingAircraft}
+              className="ml-auto"
               onClick={() => void saveAircraft()}
             >
               {editingAircraftId ? t("dispatch.setup.aircraft.save") : t("dispatch.setup.aircraft.add")}

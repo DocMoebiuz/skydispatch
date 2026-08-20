@@ -85,10 +85,20 @@ export function AssignableUnitCard({
       </div>
       {isCard && (
         <>
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            <div className="flex flex-wrap items-center justify-center gap-0.5">
+          {/* Fixed width, not shrink-to-content — so this column lines up
+              across every card in the pool regardless of group size.
+              Icons overlap (avatar-stack style, each with a card-colored
+              ring so they still read as separate people) instead of
+              spreading out, so 3 passengers barely take more room than 1. */}
+          <div className="flex w-14 shrink-0 flex-col items-center gap-1">
+            <div className="flex -space-x-2">
               {unit.members.map((m) => (
-                <UserRound key={m.id} className="size-3.5" aria-hidden />
+                <div
+                  key={m.id}
+                  className="bg-muted ring-card flex size-5 items-center justify-center rounded-full ring-2"
+                >
+                  <UserRound className="size-3" aria-hidden />
+                </div>
               ))}
             </div>
             <span className="text-muted-foreground text-xs whitespace-nowrap">
@@ -96,7 +106,7 @@ export function AssignableUnitCard({
             </span>
           </div>
           <div
-            className="shrink-0 text-2xl font-semibold tabular-nums"
+            className="w-16 shrink-0 text-right text-2xl font-semibold tabular-nums"
             data-testid="pool-unit-weight"
           >
             {unit.totalWeightKg}

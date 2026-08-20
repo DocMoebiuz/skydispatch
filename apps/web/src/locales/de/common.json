@@ -81,10 +81,10 @@
         "add": "Pilot hinzufügen",
         "edit": "Bearbeiten",
         "save": "Speichern",
-        "status": "Status",
         "empty": "Noch keine Piloten.",
-        "available": "frei",
         "unavailable": "Pause",
+        "takeBreak": "Pause machen",
+        "endBreak": "Pause beenden",
         "breakHint": "Pause empfohlen (3+ Std. geflogen)",
         "delete": "Pilot entfernen",
         "deleteConfirm": "Diesen Piloten wirklich entfernen?",
@@ -151,8 +151,8 @@
       "builder": {
         "seats": "Sitze",
         "weight": "Gewicht",
-        "weightFree": "kg frei",
-        "weightOver": "kg über Limit",
+        "weightFree": "frei",
+        "weightOver": "über Limit",
         "empty": "Noch niemand zugewiesen.",
         "rejected": "{{count}} Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen.",
         "unassign": "Entfernen",
@@ -238,9 +238,9 @@
       "filter": {
         "all": "Alle",
         "open": "Offen",
-        "ready": "Flugbereit",
+        "ready": "Gewogen",
         "flown": "Geflogen",
-        "noshow": "No-Show"
+        "noshow": "Nicht erschienen"
       },
       "searchPlaceholder": "Name oder ID suchen…",
       "noShow": "No-Show",
@@ -253,14 +253,15 @@
     "title": "Rundflug-Anmeldung",
     "lead": "Sichern Sie sich Ihren Platz für einen Rundflug. Bezahlt wird vor Ort am Check-in.",
     "steps": {
-      "contact": "Kontaktdaten",
+      "passenger": "Angaben zur Person",
       "address": "Adresse",
-      "weight": "Gewicht & Einverständnis"
+      "consent": "Einverständnis"
     },
     "form": {
       "name": "Vor- und Nachname",
+      "optionalSection": "Optional",
       "email": "E-Mail-Adresse",
-      "phone": "Telefon (optional)",
+      "phone": "Telefon",
       "next": "Weiter",
       "back": "Zurück",
       "dateOfBirth": "Geburtsdatum",

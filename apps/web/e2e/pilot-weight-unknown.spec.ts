@@ -110,11 +110,13 @@ test("a pilot with no weight on file blocks assign/lock until fixed", async ({ p
     await page.getByTestId("pool-unit").filter({ hasText: guestName }).click();
     await expect(flightCard).toHaveClass(/opacity-40/);
 
-    // --- Fix in place: open the pilot's details, then edit (same form as
-    // creation, prefilled) ---
+    // --- Fix in place: clicking the pilot's card opens the edit form
+    // directly (same form as creation, prefilled). Click the name text
+    // specifically, not the card's bounding-box center — that center can
+    // land on the trailing availability-toggle button instead (which
+    // stopPropagation()s and never opens the dialog). ---
     await page.goto("/dispatch/setup");
-    await pilotRow.click();
-    await page.getByTestId("edit-pilot").click();
+    await pilotRow.getByText(pilotName).click();
     await page.getByLabel("Gewicht (kg)").fill("85");
     await page.getByTestId("add-pilot").click();
     await expect(pilotRow.getByTestId("pilot-weight-cell")).toContainText("85 kg");
@@ -128,7 +130,7 @@ test("a pilot with no weight on file blocks assign/lock until fixed", async ({ p
     );
     await flightCard.click();
     await fixedAssignResponse;
-    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("140 kg frei"); // 300-(85 pilot+75 guest)
+    await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("140 kg"); // 300-(85 pilot+75 guest)
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { DEFAULT_FLIGHT_DAY_ID } from "shared";
-import { fillDateOfBirth } from "./helpers/dob";
+import { fillRegistrationForm } from "./helpers/register";
 import { selectByText } from "./helpers/select";
 import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
@@ -49,16 +49,7 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
 
     // --- Register, pay, weigh ---
     await page.goto("/register");
-    await page.getByLabel("Vor- und Nachname").fill(guestName);
-    await page.getByLabel("E-Mail-Adresse").fill(email);
-    await page.getByRole("button", { name: "Weiter" }).click();
-    await fillDateOfBirth(page, "1990-05-14");
-    await page.getByLabel("Straße und Hausnummer").fill("Musterstraße 1");
-    await page.getByLabel("PLZ").fill("71522");
-    await page.getByLabel("Ort").fill("Backnang");
-    await page.getByRole("button", { name: "Weiter" }).click();
-    await page.getByLabel("Ihr Gewicht (kg)").fill("75");
-    await page.getByLabel(/gelesen und stimme zu/).check();
+    await fillRegistrationForm(page, { name: guestName, email, weightKg: "75" });
     await page.getByRole("button", { name: "Anmelden" }).click();
     await expect(page.getByText("Anmeldung abgeschlossen!")).toBeVisible();
 

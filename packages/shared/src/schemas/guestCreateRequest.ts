@@ -10,13 +10,16 @@ import { z } from "zod";
 // docs/architecture.md § Data model & persistence.
 export const guestCreateRequestSchema = z.object({
   name: z.string().trim().min(1),
-  email: z.email(),
-  // No .min(1) — an untouched, optional text input's live DOM value is "" (an
-  // uncontrolled input can never actually hold `undefined`; react-hook-form's
-  // register() reads whatever's in the DOM, not the defaultValues object, once the
-  // form has rendered). "" IS "not provided" for an optional field, not a violation
-  // of it. Whoever consumes this treats a blank string as absent (see
-  // apps/web RegisterPage's submit payload, apps/api guests.ts's `?? null`).
+  // Only name/DOB/weight/address are actually obliged (see nfr.md) — email/
+  // phone are optional and, as of now, not even consumed anywhere (no email/
+  // SMS notifications exist yet). Empty string, not just undefined, has to
+  // validate here: an untouched, optional text input's live DOM value is ""
+  // (an uncontrolled input can never actually hold `undefined`;
+  // react-hook-form's register() reads whatever's in the DOM, not the
+  // defaultValues object, once the form has rendered). Whoever consumes this
+  // treats a blank string as absent (see apps/web RegisterPage's submit
+  // payload, apps/api guests.ts's `?? null`).
+  email: z.union([z.email(), z.literal("")]).optional(),
   phone: z.string().trim().optional(),
   declaredWeightKg: z.number().min(30).max(200),
   // "YYYY-MM-DD" — matches the native <input type="date"> value format directly, no
