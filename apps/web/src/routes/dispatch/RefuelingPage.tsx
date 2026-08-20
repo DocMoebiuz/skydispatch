@@ -64,6 +64,13 @@ export function RefuelingPage() {
     };
   }, []);
 
+  // Polling (not fetch-once) so another dispatcher's break start/end
+  // elsewhere — or another tab — shows up here without a manual refresh.
+  useEffect(() => {
+    const interval = setInterval(() => void reload(), 15_000);
+    return () => clearInterval(interval);
+    }, []);
+
   // A plane can't be refuelled while it's in the air — enforced server-side
   // too (nfr.md § Reliability & safety), see startRefuelBreak's
   // hasAirborneFlight check.

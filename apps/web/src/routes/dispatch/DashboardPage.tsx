@@ -97,6 +97,15 @@ export function DashboardPage() {
     };
   }, []);
 
+  // Polling (not fetch-once) so another dispatcher's action elsewhere — or
+  // another browser tab — shows up here without a manual refresh. Separate
+  // from the mount effect above (which owns initialLoading); reload() here
+  // just re-fetches, no loading-state flicker on every tick.
+  useEffect(() => {
+    const interval = setInterval(() => void reload(), 15_000);
+    return () => clearInterval(interval);
+    }, []);
+
   async function start(flightId: string) {
     setPending((prev) => new Set(prev).add(flightId));
     try {

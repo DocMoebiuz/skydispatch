@@ -205,6 +205,13 @@ export function PlanningPage() {
     };
   }, []);
 
+  // Polling (not fetch-once) so another dispatcher's assign/lock/create
+  // elsewhere — or another tab — shows up here without a manual refresh.
+  useEffect(() => {
+    const interval = setInterval(() => void reload(), 15_000);
+    return () => clearInterval(interval);
+    }, []);
+
   const pool = useMemo(
     () =>
       guests.filter(

@@ -94,21 +94,26 @@ export function SetupPage() {
   const [resetConfirmValue, setResetConfirmValue] = useState("");
   const [resettingDatabase, setResettingDatabase] = useState(false);
 
-  // `cancelled` guard on each fetch — required, not decorative: React
-  // StrictMode's dev-mode double mount/unmount/remount runs this effect
-  // twice, and a stale wave's .then() can fire after addPilot/addAircraft
-  // already appended a freshly-created entity, silently dropping it again
-  // (reproduced live on Planning's identical pattern, not hypothetical).
-  useEffect(() => {
-    let cancelled = false;
+  // Pilots/aircraft/flights refresh freely on every poll tick — Setup's
+  // create/edit dialogs prefill their own local form state once, when
+  // opened, from whichever entity was clicked (openEditPilotDialog etc.),
+  // never continuously bound to these lists, so a background refresh can't
+  // clobber an open dialog's in-progress input. The flight-day form fields
+  // below are different: they're an always-visible inline form directly
+  // bound to page state, not a dialog — so `prefillFlightDayForm` is only
+  // ever true on the very first load (see the mount effect below), never on
+  // a recurring poll, or a poll landing mid-edit would silently overwrite
+  // whatever the dispatcher is currently typing.
+  function reload(cancelledRef: { current: boolean } | undefined, prefillFlightDayForm: boolean) {
     // 404 means no flight day configured yet — not an error, just nothing to
     // prefill (see apps/api flightday.ts's getFlightDay for why this isn't a
     // 200+null body).
     fetch("/api/flightday")
       .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
       .then((d) => {
-        if (cancelled || !d) return;
+        if (cancelledRef?.current || !d) return;
         setFlightDay(d);
+        if (!prefillFlightDayForm) return;
         setDate(d.date);
         setAirfieldName(d.airfieldName);
         setAirfieldIcao(d.airfieldIcao);
@@ -125,23 +130,39 @@ export function SetupPage() {
     fetch("/api/pilots")
       .then((r) => r.json() as Promise<Pilot[]>)
       .then((p) => {
-        if (!cancelled) setPilots(p);
+        if (!cancelledRef?.current) setPilots(p);
       })
       .catch(() => undefined);
     fetch("/api/aircraft")
       .then((r) => r.json() as Promise<Aircraft[]>)
       .then((a) => {
-        if (!cancelled) setAircraft(a);
+        if (!cancelledRef?.current) setAircraft(a);
       })
       .catch(() => undefined);
     fetch("/api/flights")
       .then((r) => r.json() as Promise<Flight[]>)
       .then((f) => {
-        if (!cancelled) setFlights(f);
+        if (!cancelledRef?.current) setFlights(f);
       })
       .catch(() => undefined);
+  }
+
+  // `cancelled` guard on the initial call — required, not decorative: React
+  // StrictMode's dev-mode double mount/unmount/remount runs this effect
+  // twice, and a stale wave's .then() can fire after addPilot/addAircraft
+  // already appended a freshly-created entity, silently dropping it again
+  // (reproduced live on Planning's identical pattern, not hypothetical). The
+  // interval's own recurring reload() calls don't need it — each tick is
+  // already sequential/current by the time it fires. Polling (not
+  // fetch-once) so another dispatcher's action elsewhere — or another tab —
+  // shows up here without a manual refresh.
+  useEffect(() => {
+    const cancelledRef = { current: false };
+    reload(cancelledRef, true);
+    const interval = setInterval(() => reload(undefined, false), 15_000);
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
+      clearInterval(interval);
     };
   }, []);
 

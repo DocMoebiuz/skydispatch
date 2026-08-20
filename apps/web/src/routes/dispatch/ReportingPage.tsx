@@ -49,18 +49,14 @@ export function ReportingPage() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
 
-  // `cancelled` guard — see PlanningPage's identical effect for why this
-  // matters even on a read-only page (React StrictMode's dev-mode double
-  // mount can let a stale fetch wave resolve after a fresher one).
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
+  function reload(cancelledRef?: { current: boolean }) {
+    void Promise.all([
       fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
-      if (cancelled) return;
+      if (cancelledRef?.current) return;
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
@@ -70,13 +66,26 @@ export function ReportingPage() {
     fetch("/api/flightday")
       .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
       .then((d) => {
-        if (!cancelled) setFlightDay(d);
+        if (!cancelledRef?.current) setFlightDay(d);
       })
       .catch(() => undefined);
+  }
+
+  // `cancelled` guard on the initial call — see PlanningPage's identical
+  // effect for why this matters even on a read-only page (React
+  // StrictMode's dev-mode double mount can let a stale fetch wave resolve
+  // after a fresher one). Polling (not fetch-once) so figures stay current
+  // without a manual refresh — nothing here is user-editable, so there's no
+  // in-progress input a poll could ever clobber.
+  useEffect(() => {
+    const cancelledRef = { current: false };
+    reload(cancelledRef);
+    const interval = setInterval(() => reload(), 15_000);
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
+      clearInterval(interval);
     };
-  }, []);
+    }, []);
 
   const completed = flights.filter((f) => f.status === "completed");
   const flown = guests.filter((g) => g.flown).length;

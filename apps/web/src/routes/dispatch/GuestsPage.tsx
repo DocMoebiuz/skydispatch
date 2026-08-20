@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { UserPlus, Check, Banknote, UserX, Trash2 } from "lucide-react";
@@ -47,10 +47,16 @@ export function GuestsPage() {
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<Set<string>>(new Set());
   const [weighInputs, setWeighInputs] = useState<Record<string, string>>({});
+  // Only the very first load should ever show the full error state — a
+  // background poll (below) failing once shouldn't nuke an already-working
+  // page over a transient hiccup, it should just quietly retry next tick. A
+  // ref, not a state read inside reload() itself: reload's closure is fixed
+  // at the effect's first render (see its own comment), so reading `guests`
+  // there would always see its initial value, not the latest one.
+  const hasLoadedOnceRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
+  function reload(cancelledRef?: { current: boolean }) {
+    void Promise.all([
       fetch("/api/guests").then((res) => {
         if (!res.ok) throw new Error(`GET /api/guests failed: ${res.status}`);
         return res.json() as Promise<Guest[]>;
@@ -58,17 +64,37 @@ export function GuestsPage() {
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ])
       .then(([g, f]) => {
-        if (cancelled) return;
+        if (cancelledRef?.current) return;
         setGuests(g);
         setFlights(f);
+        setLoadError(false);
+        hasLoadedOnceRef.current = true;
       })
       .catch(() => {
-        if (!cancelled) setLoadError(true);
+        if (cancelledRef?.current) return;
+        if (!hasLoadedOnceRef.current) setLoadError(true);
       });
+  }
+
+  // `cancelled` guards only the initial call — React StrictMode's dev-mode
+  // double mount/unmount/remount runs this effect twice, and the two initial
+  // fetch waves can resolve out of order (reproduced live on Planning's
+  // identical pattern, not hypothetical). The interval's own recurring
+  // reload() calls don't need it — each tick is already sequential/current
+  // by the time it fires. Polling (not fetch-once) so a paid/weighed/
+  // assigned change made from another tablet — or another browser tab —
+  // shows up here without a manual refresh; the click-to-edit weight input
+  // (weighInputs) is its own separate state, untouched by a poll landing
+  // mid-edit.
+  useEffect(() => {
+    const cancelledRef = { current: false };
+    reload(cancelledRef);
+    const interval = setInterval(() => reload(), 15_000);
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
+      clearInterval(interval);
     };
-  }, []);
+    }, []);
 
   function markPending(guestId: string, on: boolean) {
     setPending((prev) => {

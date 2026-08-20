@@ -114,6 +114,15 @@ export function TrackingPage() {
     };
   }, []);
 
+  // Polling (not fetch-once) so another dispatcher's start/land elsewhere —
+  // or another tab — shows up here without a manual refresh. The inline
+  // takeoff/landing time editor (editingTime/timeEditValue) is its own
+  // separate state, untouched by a poll landing mid-edit.
+  useEffect(() => {
+    const interval = setInterval(() => void reload(), 15_000);
+    return () => clearInterval(interval);
+    }, []);
+
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
   // Computed from the FULL flight list (not sortedFlights below) — the
   // per-aircraft chain needs every "assigned"/"ready" flight for that

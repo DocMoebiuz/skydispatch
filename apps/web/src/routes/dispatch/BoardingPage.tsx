@@ -68,6 +68,13 @@ export function BoardingPage() {
     };
   }, []);
 
+  // Polling (not fetch-once) so another dispatcher's check-in/no-show
+  // elsewhere — or another tab — shows up here without a manual refresh.
+  useEffect(() => {
+    const interval = setInterval(() => void reload(), 15_000);
+    return () => clearInterval(interval);
+    }, []);
+
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
   // Only "assigned" — locked, boarding actively in progress. "created" isn't
   // locked yet (Planning's job, not boarding's); once every guest is checked
