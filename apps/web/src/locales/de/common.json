@@ -2,6 +2,12 @@
   "app": {
     "name": "SkyDispatch"
   },
+  "common": {
+    "theme": {
+      "toLight": "Zu hellem Design wechseln",
+      "toDark": "Zu dunklem Design wechseln"
+    }
+  },
   "home": {
     "intro": "Wählen Sie einen Bereich:"
   },

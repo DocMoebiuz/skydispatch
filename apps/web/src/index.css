@@ -3,66 +3,69 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Standard shadcn/ui theme-token setup (neutral base) — lets `npx shadcn add <component>`
-   work as-is in later increments without redoing this scaffolding. Adjust the palette
-   here, not per-component, when the real visual design is picked. */
+/* Brand palette: aviation blue primary, teal/purple/amber accents for KPI cards
+   and status badges (see FlightCard's STAGE_BADGE_CLASS and DashboardPage's
+   KPI_ACCENT — Tailwind's JIT can't see interpolated class names, so those stay
+   static lookup tables of literal classes, colors picked to match this palette,
+   not applied here). Dark mode is a real, user-toggled `.dark` class on <html>
+   (see src/lib/theme.ts), not just unused shadcn scaffolding anymore. */
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.99 0.003 240);
+  --foreground: oklch(0.2 0.03 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2 0.03 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.2 0.03 260);
+  --primary: oklch(0.546 0.215 262);
+  --primary-foreground: oklch(0.99 0.005 260);
+  --secondary: oklch(0.96 0.012 250);
+  --secondary-foreground: oklch(0.28 0.03 260);
+  --muted: oklch(0.96 0.012 250);
+  --muted-foreground: oklch(0.51 0.03 260);
+  --accent: oklch(0.93 0.03 245);
+  --accent-foreground: oklch(0.28 0.05 260);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --border: oklch(0.9 0.015 250);
+  --input: oklch(0.9 0.015 250);
+  --ring: oklch(0.6 0.15 262);
+  --sidebar: oklch(0.97 0.015 250);
+  --sidebar-foreground: oklch(0.28 0.03 260);
+  --sidebar-primary: oklch(0.546 0.215 262);
+  --sidebar-primary-foreground: oklch(0.99 0.005 260);
+  --sidebar-accent: oklch(0.92 0.03 245);
+  --sidebar-accent-foreground: oklch(0.28 0.05 260);
+  --sidebar-border: oklch(0.89 0.02 250);
+  --sidebar-ring: oklch(0.6 0.15 262);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.19 0.025 260);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.23 0.025 260);
+  --card-foreground: oklch(0.95 0.01 250);
+  --popover: oklch(0.23 0.025 260);
+  --popover-foreground: oklch(0.95 0.01 250);
+  --primary: oklch(0.68 0.17 260);
+  --primary-foreground: oklch(0.15 0.02 260);
+  --secondary: oklch(0.29 0.025 260);
+  --secondary-foreground: oklch(0.95 0.01 250);
+  --muted: oklch(0.29 0.025 260);
+  --muted-foreground: oklch(0.68 0.02 250);
+  --accent: oklch(0.32 0.05 260);
+  --accent-foreground: oklch(0.95 0.01 250);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --ring: oklch(0.62 0.15 262);
+  --sidebar: oklch(0.15 0.03 260);
+  --sidebar-foreground: oklch(0.9 0.01 250);
+  --sidebar-primary: oklch(0.68 0.17 260);
+  --sidebar-primary-foreground: oklch(0.15 0.02 260);
+  --sidebar-accent: oklch(0.27 0.04 260);
+  --sidebar-accent-foreground: oklch(0.95 0.01 250);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.62 0.15 262);
 }
 
 @theme inline {
@@ -104,5 +107,19 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Subtle brand wash for header/hero surfaces — never on `body` itself (would
+     fight scrolled content), applied per-section instead. Same tokens in both
+     themes so it stays subtle rather than muddy in dark mode. */
+  .bg-brand-gradient {
+    background-image: radial-gradient(
+        ellipse 80% 60% at 15% -10%,
+        color-mix(in oklch, var(--primary) 16%, transparent),
+        transparent
+      ),
+      radial-gradient(ellipse 60% 50% at 100% 0%, color-mix(in oklch, var(--primary) 10%, transparent), transparent);
   }
 }

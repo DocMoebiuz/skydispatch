@@ -22,6 +22,8 @@ import {
   SidebarInset,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 // Full dispatcher shell matching docs/static-html-app/SkyDispatch-UI-Mockup.html's
 // nav areas — Dashboard/Setup/Gäste/Planung/Check-in/Tracking/Reporting — so the
@@ -48,7 +50,10 @@ export function DispatchLayout() {
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader>
-          <span className="px-2 py-1 text-lg font-semibold">{t("app.name")}</span>
+          <span className="text-primary flex items-center gap-2 px-2 py-1 text-lg font-semibold">
+            <Logo className="size-6 shrink-0" />
+            {t("app.name")}
+          </span>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
@@ -75,9 +80,12 @@ export function DispatchLayout() {
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 items-center gap-2 border-b px-4">
+        <header className="bg-brand-gradient flex h-14 items-center gap-2 border-b px-4">
           <SidebarTrigger />
           <span className="font-medium">{t("dispatch.title")}</span>
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
         </header>
         <div className="flex flex-1 flex-col gap-6 p-8">
           <Outlet />

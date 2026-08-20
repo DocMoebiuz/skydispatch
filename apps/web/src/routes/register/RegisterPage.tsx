@@ -28,6 +28,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/Logo";
 
 // Increment 2 — two-step form (contact, then weight/consent/newsletter, matching
 // the prototype's step shape/card outline) plus the group registration loop: the
@@ -243,7 +244,7 @@ export function RegisterPage() {
 
   if (phase === "group-prompt") {
     return (
-      <main className="mx-auto max-w-md p-8">
+      <main className="bg-brand-gradient mx-auto min-h-screen max-w-md p-8">
         <Card>
           <CardHeader>
             <CardTitle>{t("register.group.prompt.title")}</CardTitle>
@@ -284,7 +285,7 @@ export function RegisterPage() {
 
   if (phase === "success" && guest) {
     return (
-      <main className="mx-auto max-w-md p-8">
+      <main className="bg-brand-gradient mx-auto min-h-screen max-w-md p-8">
         <Card>
           <CardHeader>
             <CardTitle>{t("register.success.title")}</CardTitle>
@@ -342,7 +343,7 @@ export function RegisterPage() {
 
   if (phase === "done" && guest) {
     return (
-      <main className="mx-auto max-w-md p-8">
+      <main className="bg-brand-gradient mx-auto min-h-screen max-w-md p-8">
         <Card>
           <CardHeader>
             <CardTitle>{t("register.done.title")}</CardTitle>
@@ -389,9 +390,12 @@ export function RegisterPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-md flex-col gap-6 p-8">
+    <main className="bg-brand-gradient mx-auto flex min-h-screen max-w-md flex-col gap-6 p-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">{t("register.title")}</h1>
+        <h1 className="text-primary flex items-center gap-2 text-2xl font-semibold">
+          <Logo className="size-7 shrink-0" />
+          {t("register.title")}
+        </h1>
         <p className="text-muted-foreground">{t("register.lead")}</p>
       </div>
 

@@ -9,6 +9,17 @@ import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
 import { cn } from "@/lib/utils";
 
+// Static lookup, not `` `border-l-${key}-500` `` — Tailwind's JIT can't see
+// interpolated class names (see docs/architecture.md), so each KPI's full
+// class string has to appear literally in source. One accent color per card
+// gives each metric its own identity instead of four identical grey tiles.
+const KPI_ACCENT: Record<string, string> = {
+  activeFlights: "border-l-4 border-l-sky-500",
+  guests: "border-l-4 border-l-purple-500",
+  waiting: "border-l-4 border-l-amber-500",
+  utilization: "border-l-4 border-l-emerald-500",
+};
+
 const ORDER: Record<Flight["status"], number> = {
   created: 0,
   assigned: 1,
@@ -214,12 +225,16 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("dispatch.nav.dashboard")}</h1>
+      <div className="bg-brand-gradient -m-8 mb-0 rounded-b-xl p-8 pb-0">
+        <h1 className="text-2xl font-semibold">{t("dispatch.nav.dashboard")}</h1>
+      </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {kpis.map(({ key, value, sub, to }) => {
           const card = (
-            <Card className={cn(to && "hover:bg-accent/50 transition-colors")}>
+            <Card
+              className={cn(KPI_ACCENT[key], to && "hover:bg-accent/50 transition-colors")}
+            >
               <CardHeader>
                 <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
                   {t(`dispatch.dashboard.kpi.${key}`)}

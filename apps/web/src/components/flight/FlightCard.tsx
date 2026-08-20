@@ -7,6 +7,28 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { cn } from "@/lib/utils";
 import type { FlightLoad } from "@/lib/flightLoad";
 
+// Static lookup, not `` `bg-${stage}-100` `` — Tailwind's JIT can't see
+// interpolated class names (see docs/architecture.md), so every stage's full
+// class string has to appear literally somewhere in source. One color per
+// stage gives the dispatcher an at-a-glance read of where a flight sits in the
+// pipeline without reading the label text; "airborne" also pulses gently since
+// it's the one stage actively in progress right now, not just waiting.
+const STAGE_BADGE_CLASS: Record<FlightStage, string> = {
+  new: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  planning:
+    "border-sky-300 bg-sky-100 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300",
+  assigned:
+    "border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300",
+  boarding:
+    "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  boarded:
+    "border-purple-300 bg-purple-100 text-purple-700 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-300",
+  airborne:
+    "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 animate-pulse",
+  landed:
+    "border-teal-300 bg-teal-100 text-teal-700 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-300",
+};
+
 interface FlightCardProps {
   flight: Flight;
   // The finer-grained "what's next" stage (see shared/src/status.ts), not the
@@ -59,7 +81,12 @@ export function FlightCard({
   const compact = size === "compact";
   return (
     <Card
-      className={cn(compact && "gap-2 py-3", onClick && "cursor-pointer", "flex flex-col", className)}
+      className={cn(
+        compact && "gap-2 py-3",
+        onClick && "cursor-pointer transition-shadow hover:shadow-md",
+        "flex flex-col transition-colors",
+        className,
+      )}
       data-testid="flight-card"
       data-flight-code={flight.code}
       onClick={onClick}
@@ -71,7 +98,11 @@ export function FlightCard({
           <Plane className={cn("shrink-0", compact ? "size-3.5" : "size-4")} aria-hidden />
           {flight.code}
           <span className="text-muted-foreground font-normal">— {aircraft?.reg ?? "—"}</span>
-          <Badge variant="outline" data-testid="flight-card-status">
+          <Badge
+            variant="outline"
+            className={STAGE_BADGE_CLASS[stage]}
+            data-testid="flight-card-status"
+          >
             {t(`dispatch.stage.${stage}`)}
           </Badge>
         </CardTitle>
