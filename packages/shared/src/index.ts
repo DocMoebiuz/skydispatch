@@ -1,6 +1,6 @@
 export type { Guest } from "./types/guest";
 export type { Pilot } from "./types/pilot";
-export type { Aircraft } from "./types/aircraft";
+export type { Aircraft, FuelType } from "./types/aircraft";
 export type { Flight, AssignRejectReason, AssignResult } from "./types/flight";
 export type { FlightDay } from "./types/flightDay";
 
@@ -26,5 +26,7 @@ export type { FlightCreateRequest } from "./schemas/flightCreateRequest";
 export { flightCreateRequestSchema } from "./schemas/flightCreateRequest";
 export type { AssignRequest } from "./schemas/assignRequest";
 export { assignRequestSchema } from "./schemas/assignRequest";
+export type { RefuelRequest } from "./schemas/refuelRequest";
+export { refuelRequestSchema } from "./schemas/refuelRequest";
 
-export { DEFAULT_FLIGHT_DAY_ID } from "./constants";
+export { DEFAULT_FLIGHT_DAY_ID, FUEL_DENSITY_KG_PER_L } from "./constants";

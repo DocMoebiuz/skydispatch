@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { FlightDay, Pilot, Aircraft, Flight } from "shared";
+import type { FlightDay, Pilot, Aircraft, Flight, FuelType } from "shared";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,7 +61,15 @@ export function SetupPage() {
   const [model, setModel] = useState("");
   const [seats, setSeats] = useState("");
   const [maxPayloadKg, setMaxPayloadKg] = useState("");
+  const [emptyWeightKg, setEmptyWeightKg] = useState("");
+  const [maxTakeoffMassKg, setMaxTakeoffMassKg] = useState("");
+  const [fuelType, setFuelType] = useState<FuelType | "">("");
+  const [fuelOnBoardL, setFuelOnBoardL] = useState("");
+  const [fuelBurnLPerHour, setFuelBurnLPerHour] = useState("");
   const [savingAircraft, setSavingAircraft] = useState(false);
+  const [editingFuelAircraftId, setEditingFuelAircraftId] = useState<string | null>(null);
+  const [fuelEditValue, setFuelEditValue] = useState("");
+  const [savingFuel, setSavingFuel] = useState(false);
 
   // `cancelled` guard on each fetch — required, not decorative: React
   // StrictMode's dev-mode double mount/unmount/remount runs this effect
@@ -209,7 +224,21 @@ export function SetupPage() {
       const response = await fetch("/api/aircraft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reg, model, seats: seatsNum, maxPayloadKg: payloadNum }),
+        body: JSON.stringify({
+          reg,
+          model,
+          seats: seatsNum,
+          maxPayloadKg: payloadNum,
+          // Fuel-tracking fields are all optional (see shared's
+          // aircraftCreateRequestSchema) — only sent when actually filled in,
+          // so an aircraft without known fuel figures yet just omits them
+          // rather than getting sent as 0/NaN.
+          ...(emptyWeightKg && { emptyWeightKg: Number(emptyWeightKg) }),
+          ...(maxTakeoffMassKg && { maxTakeoffMassKg: Number(maxTakeoffMassKg) }),
+          ...(fuelType && { fuelType }),
+          ...(fuelOnBoardL && { fuelOnBoardL: Number(fuelOnBoardL) }),
+          ...(fuelBurnLPerHour && { fuelBurnLPerHour: Number(fuelBurnLPerHour) }),
+        }),
       });
       if (response.ok) {
         const created = (await response.json()) as Aircraft;
@@ -218,10 +247,40 @@ export function SetupPage() {
         setModel("");
         setSeats("");
         setMaxPayloadKg("");
+        setEmptyWeightKg("");
+        setMaxTakeoffMassKg("");
+        setFuelType("");
+        setFuelOnBoardL("");
+        setFuelBurnLPerHour("");
         setAircraftDialogOpen(false);
       }
     } finally {
       setSavingAircraft(false);
+    }
+  }
+
+  function startEditFuel(a: Aircraft) {
+    setEditingFuelAircraftId(a.id);
+    setFuelEditValue(a.fuelOnBoardL != null ? String(a.fuelOnBoardL) : "");
+  }
+
+  async function saveFuel(aircraftId: string) {
+    const litersNum = Number(fuelEditValue);
+    if (!fuelEditValue || Number.isNaN(litersNum) || litersNum < 0) return;
+    setSavingFuel(true);
+    try {
+      const response = await fetch(`/api/aircraft/${aircraftId}/actions/refuel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fuelOnBoardL: litersNum }),
+      });
+      if (response.ok) {
+        const updated = (await response.json()) as Aircraft;
+        setAircraft((prev) => prev.map((a) => (a.id === aircraftId ? updated : a)));
+        setEditingFuelAircraftId(null);
+      }
+    } finally {
+      setSavingFuel(false);
     }
   }
 
@@ -465,9 +524,44 @@ export function SetupPage() {
                 className="flex items-center justify-between text-sm"
                 data-testid="aircraft-row"
               >
-                <span>
+                <span className="flex items-center gap-1">
                   {a.reg} — {a.model} ({a.seats} {t("dispatch.setup.aircraft.seats")},{" "}
                   {a.maxPayloadKg} kg)
+                  {/* Fuel is only shown/editable once a fuel type is on file —
+                      "dim, don't hide": aircraft without fuel tracking yet
+                      just don't get this bit, not a broken-looking 0 L. */}
+                  {a.fuelType &&
+                    (editingFuelAircraftId === a.id ? (
+                      <span className="ml-1 flex items-center gap-1">
+                        <Input
+                          type="number"
+                          className="h-7 w-16"
+                          data-testid="aircraft-fuel-input"
+                          value={fuelEditValue}
+                          onChange={(e) => setFuelEditValue(e.target.value)}
+                          autoFocus
+                        />
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          data-testid="aircraft-fuel-save"
+                          disabled={savingFuel}
+                          aria-label={t("dispatch.setup.aircraft.saveFuel")}
+                          onClick={() => void saveFuel(a.id)}
+                        >
+                          ✓
+                        </Button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-muted-foreground ml-1 underline decoration-dotted underline-offset-2"
+                        data-testid="aircraft-fuel-cell"
+                        onClick={() => startEditFuel(a)}
+                      >
+                        · {a.fuelOnBoardL ?? 0} L {t(`dispatch.setup.aircraft.fuelType.${a.fuelType}`)}
+                      </button>
+                    ))}
                 </span>
                 <Button
                   size="icon-sm"
@@ -519,6 +613,62 @@ export function SetupPage() {
                 type="number"
                 value={maxPayloadKg}
                 onChange={(e) => setMaxPayloadKg(e.target.value)}
+              />
+            </div>
+          </div>
+          {/* Fuel tracking — all optional, see aircraftCreateRequestSchema. A
+              separate, visually distinct group so it doesn't read as required
+              alongside reg/model/seats/payload above. */}
+          <p className="text-muted-foreground -mb-2 text-xs font-medium uppercase">
+            {t("dispatch.setup.aircraft.fuelSection")}
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="ac-empty">{t("dispatch.setup.aircraft.emptyWeightKg")}</Label>
+              <Input
+                id="ac-empty"
+                type="number"
+                value={emptyWeightKg}
+                onChange={(e) => setEmptyWeightKg(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ac-mtom">{t("dispatch.setup.aircraft.maxTakeoffMassKg")}</Label>
+              <Input
+                id="ac-mtom"
+                type="number"
+                value={maxTakeoffMassKg}
+                onChange={(e) => setMaxTakeoffMassKg(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ac-fuel-type">{t("dispatch.setup.aircraft.fuelType.label")}</Label>
+              <Select value={fuelType} onValueChange={(v) => setFuelType(v as FuelType)}>
+                <SelectTrigger id="ac-fuel-type" data-testid="ac-fuel-type">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="avgas">{t("dispatch.setup.aircraft.fuelType.avgas")}</SelectItem>
+                  <SelectItem value="diesel">{t("dispatch.setup.aircraft.fuelType.diesel")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ac-fuel-onboard">{t("dispatch.setup.aircraft.fuelOnBoardL")}</Label>
+              <Input
+                id="ac-fuel-onboard"
+                type="number"
+                value={fuelOnBoardL}
+                onChange={(e) => setFuelOnBoardL(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ac-fuel-burn">{t("dispatch.setup.aircraft.fuelBurnLPerHour")}</Label>
+              <Input
+                id="ac-fuel-burn"
+                type="number"
+                value={fuelBurnLPerHour}
+                onChange={(e) => setFuelBurnLPerHour(e.target.value)}
               />
             </div>
           </div>

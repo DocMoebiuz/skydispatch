@@ -427,6 +427,25 @@ export async function landFlight(
   };
   await container.item(flightId, flightDayId).replace(updated);
 
+  // Deduct fuel burned this leg (elapsed airborne time × burn rate) from the
+  // aircraft's tank — only when both figures are on file (see
+  // types/aircraft.ts § fuel fields); floors at 0 rather than going negative
+  // on a burn-rate estimate that runs a little hot. offBlock is guaranteed set
+  // here (startFlight sets it, and landFlight only runs on an "airborne"
+  // flight), so this is real elapsed time, not a placeholder.
+  const { resource: aircraft } = await container
+    .item(flight.aircraftId, flightDayId)
+    .read<Aircraft>();
+  if (aircraft && aircraft.fuelOnBoardL != null && aircraft.fuelBurnLPerHour != null && flight.offBlock) {
+    const hoursAirborne = (Date.parse(updated.onBlock!) - Date.parse(flight.offBlock)) / 3_600_000;
+    const burnedL = hoursAirborne * aircraft.fuelBurnLPerHour;
+    const updatedAircraft: Aircraft = {
+      ...aircraft,
+      fuelOnBoardL: Math.max(0, aircraft.fuelOnBoardL - burnedL),
+    };
+    await container.item(flight.aircraftId, flightDayId).replace(updatedAircraft);
+  }
+
   for (const guestId of flight.guestIds) {
     const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
     if (guest) {

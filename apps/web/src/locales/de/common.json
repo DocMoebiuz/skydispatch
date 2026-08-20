@@ -94,7 +94,18 @@
         "add": "Flugzeug hinzufügen",
         "empty": "Noch keine Flugzeuge.",
         "delete": "Flugzeug entfernen",
-        "deleteError": "Flugzeug ist einem aktiven Flug zugeordnet."
+        "deleteError": "Flugzeug ist einem aktiven Flug zugeordnet.",
+        "fuelSection": "Sprit (optional)",
+        "emptyWeightKg": "Leergewicht (kg)",
+        "maxTakeoffMassKg": "MTOM (kg)",
+        "fuelOnBoardL": "Sprit an Bord (L)",
+        "fuelBurnLPerHour": "Verbrauch (L/Std.)",
+        "saveFuel": "Sprit speichern",
+        "fuelType": {
+          "label": "Kraftstoff",
+          "avgas": "Avgas",
+          "diesel": "Diesel"
+        }
       }
     },
     "planning": {
@@ -130,7 +141,9 @@
         "unassign": "Entfernen",
         "setReady": "Fertigstellen",
         "unready": "Wieder öffnen",
-        "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Fertigstellen nicht möglich."
+        "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Fertigstellen nicht möglich.",
+        "mtom": "{{gross}} / {{max}} kg MTOM",
+        "fuelWeight": "({{fuel}} kg Sprit)"
       },
       "status": {
         "created": "geplant",

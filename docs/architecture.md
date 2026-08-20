@@ -284,6 +284,12 @@ interface Aircraft {
   id: string; type: "Aircraft"; flightDayId: string;
   reg: string; model: string; seats: number; maxPayloadKg: number;
   costPerHourEur?: number | null; imageUrl?: string | null;
+  // Fuel tracking — all optional, see § Open decisions #5 (now resolved) and
+  // FlightLoad.fuel in apps/web/src/lib/flightLoad.ts for how these combine
+  // into a gross-weight/MTOM check that's independent of maxPayloadKg above.
+  emptyWeightKg?: number | null; maxTakeoffMassKg?: number | null;
+  fuelType?: "avgas" | "diesel" | null;   // densities: avgas 0.72 kg/L, diesel 0.84 kg/L
+  fuelOnBoardL?: number | null; fuelBurnLPerHour?: number | null;
 }
 
 interface Pilot {
@@ -346,6 +352,7 @@ reporting), per the manual and `docs/static-html-app/`:
 | `POST /api/pilots/{id}/actions/set-weight` | Backfill/correct a pilot's weight after creation — real records created before `weightKg` existed had no other way to get one. `assign`/`set-ready` both refuse (409 `pilot-weight-unknown`) while a pilot with no weight on file is assigned to the flight, rather than silently treating it as 0kg |
 | `POST /api/aircraft`, `GET /api/aircraft` | Create/list aircraft |
 | `DELETE /api/aircraft/{id}` | Blocked (409) if on a non-completed flight |
+| `POST /api/aircraft/{id}/actions/refuel` | Dispatcher sets the absolute liters on board (read off the fuel truck's meter, not a delta) |
 | `POST /api/flightday`, `GET /api/flightday` | Upsert/read the one flight day's settings (date/airfield) — status untouched |
 | `POST /api/flightday/actions/start`, `.../end` | Flight day status transitions |
 | `POST /api/flights`, `GET /api/flights` | Create/list flights |
@@ -389,12 +396,19 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
    multiple flight days without a redesign, but no FlightDay-setup UI or
    day-switching logic exists yet — a hardcoded `DEFAULT_FLIGHT_DAY_ID` stands in for
    now.
-5. **Fuel tracking.** Not modeled at all yet — no fuel field on `Aircraft` or
-   `Flight`, no fuel weight/quantity counted toward payload, no per-flight fuel
-   state. Flagged by the user, no requirements gathered yet (per-flight fuel
-   burn? a fixed reserve subtracted from payload? refuel-between-flights
-   tracking for turnaround planning?). Revisit once the shape of the
-   requirement is clearer — don't guess a schema for it now.
+5. **Fuel tracking.** ~~Not modeled~~ — resolved: `Aircraft` gained optional
+   `emptyWeightKg`/`maxTakeoffMassKg`/`fuelType`/`fuelOnBoardL`/
+   `fuelBurnLPerHour` fields (all optional so pre-existing aircraft, or ones
+   whose figures aren't known yet, keep working). `landFlight` deducts burned
+   fuel (elapsed airborne time × `fuelBurnLPerHour`) automatically; the
+   dispatcher corrects the level after a real refuel via `actions/refuel`.
+   `FlightLoad.fuel` (apps/web/src/lib/flightLoad.ts) derives a gross-weight-
+   vs-MTOM figure shown on `FlightCard` as a second, independent gauge from
+   the existing payload/seats one — `maxPayloadKg` deliberately stays its own
+   static dispatcher-set field rather than being derived from MTOM, to limit
+   blast radius on the existing assign/lock hard-limit logic. Not yet done:
+   any UI warning/block tied to low fuel before dispatching a flight — fuel is
+   tracked and shown, not yet enforced.
 6. **EN/DE language rotation on timetable-style displays.** Flagged by the user
    as a future visual-refinement idea, not scoped yet: on a timetable/chart
    view of flights (e.g. a future Tracking timeline), rotate the flight-status

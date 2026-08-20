@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Plane, UserRound, Armchair } from "lucide-react";
+import { Plane, UserRound, Armchair, Fuel } from "lucide-react";
 import type { Aircraft, Flight, FlightStage, Pilot } from "shared";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
@@ -161,6 +161,28 @@ export function FlightCard({
           {pilot?.name ?? "—"}
           {!compact && aircraft?.model && <span>· {aircraft.model}</span>}
         </p>
+
+        {/* Secondary: gross weight vs. MTOM — only rendered when the aircraft
+            has fuel figures on file (see FlightLoad.fuel), independent of the
+            payload gauge above. */}
+        {load.fuel && !compact && (
+          <p
+            className={cn(
+              "flex items-center gap-1.5",
+              load.fuel.over ? "text-destructive font-semibold" : "text-muted-foreground",
+            )}
+            data-testid="flight-card-fuel"
+          >
+            <Fuel className="size-4 shrink-0" aria-hidden />
+            {t("dispatch.planning.builder.mtom", {
+              gross: load.fuel.grossWeightKg,
+              max: load.fuel.maxTakeoffMassKg,
+            })}
+            <span className="text-muted-foreground">
+              {t("dispatch.planning.builder.fuelWeight", { fuel: load.fuel.fuelWeightKg })}
+            </span>
+          </p>
+        )}
 
         {load.pilotWeightUnknown && (
           <p
