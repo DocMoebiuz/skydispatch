@@ -11,6 +11,13 @@ import { computeFlightLoad } from "@/lib/flightLoad";
 
 type TimeField = "offBlock" | "onBlock";
 
+// "active" (default) — only what still needs eyes on departure/landing times
+// (ready + airborne), landed flights excluded entirely, same reasoning as
+// Dashboard's Live lane dropping them. "landed"/"all" are on-demand-only, for
+// reviewing a flight that already came in.
+type FilterKey = "active" | "landed" | "all";
+const FILTER_KEYS: FilterKey[] = ["active", "landed", "all"];
+
 // Combines an edited "HH:MM" with the flight's existing date (falling back to
 // today if this timestamp was never set) — the dispatcher only ever adjusts
 // the time-of-day, not the date, so the input stays a plain <input
@@ -49,6 +56,7 @@ export function TrackingPage() {
   );
   const [timeEditValue, setTimeEditValue] = useState("");
   const [savingTime, setSavingTime] = useState(false);
+  const [filter, setFilter] = useState<FilterKey>("active");
 
   function reload(): Promise<void> {
     return Promise.all([
@@ -92,12 +100,12 @@ export function TrackingPage() {
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
   // "ready" (fully boarded, about to depart), "airborne", and "completed" —
   // not "created"/"assigned" (still Planning's/Boarding's concern, nothing
-  // to track yet). "completed" stays in (not just "ready"/"airborne") so a
-  // just-landed flight's card doesn't vanish out from under the dispatcher
-  // the instant they click "Landung erfassen" — it's still useful
-  // confirmation right after the action.
+  // to track yet). Within that, the filter above decides whether "completed"
+  // (landed) flights are actually shown — see FilterKey's own comment.
   const sortedFlights = flights
     .filter((f) => f.status === "ready" || f.status === "airborne" || f.status === "completed")
+    .filter((f) => (filter === "active" ? f.status !== "completed" : true))
+    .filter((f) => (filter === "landed" ? f.status === "completed" : true))
     .sort((a, b) => ORDER[a.status] - ORDER[b.status]);
 
   function markPending(flightId: string, on: boolean) {
@@ -212,6 +220,20 @@ export function TrackingPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.tracking")}</h1>
+
+      <div className="flex flex-wrap gap-2">
+        {FILTER_KEYS.map((key) => (
+          <Button
+            key={key}
+            size="sm"
+            variant={filter === key ? "default" : "outline"}
+            data-testid={`tracking-filter-${key}`}
+            onClick={() => setFilter(key)}
+          >
+            {t(`dispatch.tracking.filter.${key}`)}
+          </Button>
+        ))}
+      </div>
 
       {sortedFlights.length === 0 ? (
         <EmptyState

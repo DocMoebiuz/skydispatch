@@ -75,6 +75,18 @@ test("Tracking: departure and landing times can be corrected in place", async ({
 
     await page.goto("/dispatch/tracking");
     const card = page.getByTestId("flight-card").filter({ hasText: flight.code });
+
+    // This flight is already landed by the time we navigate here — the
+    // default "active" filter excludes completed flights entirely (same
+    // reasoning as Dashboard's Live lane). "landed"/"all" are on-demand.
+    await expect(card).toHaveCount(0);
+    await page.getByTestId("tracking-filter-landed").click();
+    await expect(card).toBeVisible();
+    await page.getByTestId("tracking-filter-active").click();
+    await expect(card).toHaveCount(0);
+    await page.getByTestId("tracking-filter-all").click();
+    await expect(card).toBeVisible();
+    await page.getByTestId("tracking-filter-landed").click();
     await expect(card.getByTestId("tracking-offBlock-cell")).toBeVisible();
 
     await card.getByTestId("tracking-offBlock-cell").click();

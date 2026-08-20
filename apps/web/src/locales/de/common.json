@@ -186,7 +186,12 @@
       "startBlocked": "Start nicht möglich",
       "saveTime": "Uhrzeit speichern",
       "completed": "Abgeschlossen",
-      "empty": "Noch keine Flüge angelegt."
+      "empty": "Noch keine Flüge angelegt.",
+      "filter": {
+        "active": "Aktiv",
+        "landed": "Gelandet",
+        "all": "Alle"
+      }
     },
     "reporting": {
       "kpi": {

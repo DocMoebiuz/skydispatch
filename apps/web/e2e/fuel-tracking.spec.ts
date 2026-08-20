@@ -116,7 +116,9 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     await trackingCard.getByTestId("start-button").click();
     await expect(trackingCard.getByTestId("flight-card-status")).toHaveText("In der Luft");
     await trackingCard.getByTestId("land-button").click();
-    await expect(trackingCard.getByTestId("flight-card-status")).toHaveText("Gelandet");
+    // Landed flights drop out of Tracking's default "active" filter (only
+    // ready/airborne stay relevant) — same reasoning as Dashboard's Live lane.
+    await expect(page.getByTestId("flight-card").filter({ hasText: flightCode })).toHaveCount(0);
 
     // Landing burns fuel (elapsed airborne time × 30 L/h) — real duration here
     // is a handful of seconds, so the drop is small, but it must have

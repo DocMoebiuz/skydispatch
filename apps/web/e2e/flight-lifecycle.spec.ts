@@ -121,7 +121,9 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     await card.getByTestId("start-button").click();
     await expect(card.getByTestId("flight-card-status")).toHaveText("In der Luft");
     await card.getByTestId("land-button").click();
-    await expect(card.getByTestId("flight-card-status")).toHaveText("Gelandet");
+    // Landed flights drop out of Tracking's default "active" filter (only
+    // ready/airborne stay relevant) — same reasoning as Dashboard's Live lane.
+    await expect(page.getByTestId("flight-card").filter({ hasText: flightCode })).toHaveCount(0);
 
     // --- Verify: guest flown, shows on board as completed ---
     // "Offen" (open/pending) is the default filter and hides fully-processed
