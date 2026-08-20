@@ -52,12 +52,26 @@ const ORDER: Record<Flight["status"], number> = {
   completed: 4,
 };
 
-function unitFits(unit: AssignableUnit, aircraft: Aircraft | undefined, load: FlightLoad): boolean {
-  if (!aircraft || load.pilotWeightUnknown) return false;
-  return (
+// "full" — the whole unit fits as one piece. "partial" — not all of it, but
+// at least its lightest member could still go (a seat is free and that one
+// guest's weight fits the remaining payload) — the assign endpoint already
+// greedily accepts what fits and rejects the rest per-guest (see
+// docs/architecture.md § API surface), the same way a drag-and-drop
+// assignment already could; this just lets the click-to-select flow reach
+// that same split instead of treating a not-fully-fitting group as a dead
+// end. "none" — nothing about this unit can go on this flight right now.
+type FitLevel = "full" | "partial" | "none";
+
+function unitFitLevel(unit: AssignableUnit, aircraft: Aircraft | undefined, load: FlightLoad): FitLevel {
+  if (!aircraft || load.pilotWeightUnknown) return "none";
+  const fitsFully =
     load.usedSeats + unit.members.length <= aircraft.seats &&
-    load.usedWeightKg + unit.totalWeightKg <= aircraft.maxPayloadKg
-  );
+    load.usedWeightKg + unit.totalWeightKg <= aircraft.maxPayloadKg;
+  if (fitsFully) return "full";
+  const hasSeat = load.usedSeats < aircraft.seats;
+  const lightestKg = Math.min(...unit.members.map((m) => m.weightKg ?? Infinity));
+  const fitsPartially = hasSeat && load.usedWeightKg + lightestKg <= aircraft.maxPayloadKg;
+  return fitsPartially ? "partial" : "none";
 }
 
 // Wraps a FlightCard as a dnd-kit drop target — kept local and separate from
@@ -219,18 +233,20 @@ export function PlanningPage() {
 
   const selectedUnit = selectedUnitKey ? poolUnits.find((u) => u.key === selectedUnitKey) : null;
   const selectedFlight = selectedFlightId ? plannedFlights.find((f) => f.id === selectedFlightId) : null;
-  // Dimmed, not hidden, when something can't fit the current selection —
-  // hiding outright would jump the grid around on every selection change,
-  // worse than just seeing (and ruling out) what won't work right now.
-  function flightFitsSelectedUnit(aircraft: Aircraft | undefined, load: FlightLoad): boolean {
-    return !selectedUnit || unitFits(selectedUnit, aircraft, load);
+  // Dimmed, not hidden, when nothing about this unit can fit the current
+  // selection — hiding outright would jump the grid around on every
+  // selection change, worse than just seeing (and ruling out) what won't
+  // work right now. "full" and "partial" render the same way otherwise
+  // clickable; see FitLevel's own comment for why a partial fit still is one.
+  function flightFitLevelForSelectedUnit(aircraft: Aircraft | undefined, load: FlightLoad): FitLevel {
+    return selectedUnit ? unitFitLevel(selectedUnit, aircraft, load) : "full";
   }
 
-  function unitFitsSelectedFlight(unit: AssignableUnit): boolean {
-    if (!selectedFlight) return true;
+  function unitFitLevelForSelectedFlight(unit: AssignableUnit): FitLevel {
+    if (!selectedFlight) return "full";
     const aircraft = aircraftList.find((a) => a.id === selectedFlight.aircraftId);
     const load = flightLoads.get(selectedFlight.id);
-    return !!load && unitFits(unit, aircraft, load);
+    return load ? unitFitLevel(unit, aircraft, load) : "none";
   }
 
   function selectUnit(key: string) {
@@ -455,7 +471,7 @@ export function PlanningPage() {
     const canLock = !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
     const isLocked = f.status === "assigned" || f.status === "ready";
     const dropDisabled = load.pilotWeightUnknown;
-    const fitsSelectedUnit = flightFitsSelectedUnit(aircraft, load);
+    const fitLevel = flightFitLevelForSelectedUnit(aircraft, load);
 
     const statusPending = pending.has(`status:${f.id}`);
     const actions = isLocked ? (
@@ -494,7 +510,7 @@ export function PlanningPage() {
             size={size}
             onClick={
               selectedUnit
-                ? fitsSelectedUnit
+                ? fitLevel !== "none"
                   ? () => {
                       void assignUnit(selectedUnit, f.id);
                       setSelectedUnitKey(null);
@@ -508,9 +524,11 @@ export function PlanningPage() {
               "h-full",
               isOver && "ring-primary ring-2 ring-offset-2",
               selectedUnit &&
-                (fitsSelectedUnit
+                (fitLevel === "full"
                   ? "border-primary ring-primary/50 ring-1"
-                  : "opacity-40 saturate-50"),
+                  : fitLevel === "partial"
+                    ? "border-amber-500 ring-1 ring-amber-500/50"
+                    : "opacity-40 saturate-50"),
               !selectedUnit && selectedFlightId === f.id && "border-primary ring-primary/50 ring-1",
             )}
           >
@@ -679,7 +697,7 @@ export function PlanningPage() {
               {poolUnits.map((unit) => {
                 const assigning = pending.has(`pool:${unit.key}`);
                 const selected = selectedUnitKey === unit.key;
-                const fitsSelectedFlight = unitFitsSelectedFlight(unit);
+                const fitLevel = unitFitLevelForSelectedFlight(unit);
                 return (
                   <AssignableUnitCard
                     key={unit.key}
@@ -690,14 +708,16 @@ export function PlanningPage() {
                     className={cn(
                       selected && "border-primary ring-primary/50 ring-1",
                       selectedFlight &&
-                        (fitsSelectedFlight
+                        (fitLevel === "full"
                           ? "border-primary ring-primary/50 ring-1"
-                          : "opacity-40 saturate-50"),
+                          : fitLevel === "partial"
+                            ? "border-amber-500 ring-1 ring-amber-500/50"
+                            : "opacity-40 saturate-50"),
                       assigning && "opacity-40",
                     )}
                     onClick={() => {
                       if (selectedFlight) {
-                        if (fitsSelectedFlight) {
+                        if (fitLevel !== "none") {
                           void assignUnit(unit, selectedFlight.id);
                           setSelectedFlightId(null);
                         }
