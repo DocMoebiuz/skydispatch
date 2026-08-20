@@ -139,14 +139,14 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     const flightCode = createdFlight!.code;
     const flightCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
 
-    // --- Assign solo guest: click the flight card to select it (pool filters
-    // to units that fit), then the pool row's assign button — fits (150/230 kg
-    // incl. pilot's 80kg, 1/2 seats). See docs/architecture.md § Shared flight
-    // components. ---
-    await flightCard.click();
-    await expect(page.getByTestId("pool-filter-note")).toContainText(flightCode);
+    // --- Assign solo guest: click the pool unit to select it (fitting flights
+    // highlight), then the highlighted flight card to assign there — fits
+    // (150/230 kg incl. pilot's 80kg, 1/2 seats). See docs/architecture.md §
+    // Shared flight components. ---
     const soloPoolUnit = page.getByTestId("pool-unit").filter({ hasText: nameSolo });
     await expect(soloPoolUnit).toBeVisible();
+    await soloPoolUnit.click();
+    await expect(page.getByTestId("pool-select-hint")).toBeVisible();
     // The UI updates optimistically (instantly, before the network call
     // resolves — see PlanningPage's assignUnit), so it alone doesn't prove the
     // server has this locked in yet; the next step (assigning the group) needs
@@ -154,7 +154,7 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     const soloAssignResponse = page.waitForResponse(
       (r) => r.url().includes("/actions/assign") && r.request().method() === "POST",
     );
-    await soloPoolUnit.getByTestId("pool-unit-assign-button").click();
+    await flightCard.click();
     await soloAssignResponse;
     await expect(flightCard.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "1");
     await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("80 kg frei"); // 230-150

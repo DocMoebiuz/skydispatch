@@ -89,7 +89,7 @@
       }
     },
     "planning": {
-      "dragHint": "Gruppe oder Einzelperson auf einen Flug ziehen, um sie zuzuweisen — oder einen Flug anklicken, um passende Gäste zu sehen und per ✚ zuzuweisen.",
+      "dragHint": "Gruppe oder Einzelperson auf einen Flug ziehen, um sie zuzuweisen — oder anklicken, um passende Flüge hervorzuheben und dort zuzuweisen.",
       "lanes": {
         "planning": "In Planung",
         "ready": "Fertig",
@@ -107,8 +107,8 @@
       },
       "pool": {
         "title": "Verfügbare Gäste",
-        "assign": "Zuweisen",
-        "filteredFor": "Gäste, die noch in {{code}} passen, sind hervorgehoben.",
+        "pax": "{{count}} Pers.",
+        "assignHint": "Passende Flüge sind hervorgehoben — anklicken zum Zuweisen.",
         "empty": "Kein flugbereiter Gast verfügbar."
       },
       "builder": {

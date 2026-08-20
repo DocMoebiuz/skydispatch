@@ -103,10 +103,11 @@ export function PlanningPage() {
   );
   const [activeUnit, setActiveUnit] = useState<AssignableUnit | null>(null);
   const [activeWidth, setActiveWidth] = useState<number | null>(null);
-  // Click a flight card to select it — filters the pool to units that fit and
-  // gives the pool's assign button a target. Purely a UI convenience; drag
-  // ignores this and can target any flight directly.
-  const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
+  // Click a pool unit to select it — flight cards that could fit it highlight,
+  // ones that can't dim; clicking a highlighted flight then assigns it there.
+  // Purely a UI convenience; drag ignores this and can target any flight
+  // directly regardless of what's selected.
+  const [selectedUnitKey, setSelectedUnitKey] = useState<string | null>(null);
   // "Finished" (airborne + completed) flights have zero planning actions
   // available — collapsed by default, on demand only, so screen space goes to
   // what's actually actionable right now. See docs/architecture.md § Shared
@@ -213,17 +214,12 @@ export function PlanningPage() {
     (f) => f.status === "airborne" || f.status === "completed",
   );
 
-  const selectedFlight = selectedFlightId ? flights.find((f) => f.id === selectedFlightId) : null;
-  const selectedAircraft = selectedFlight
-    ? aircraftList.find((a) => a.id === selectedFlight.aircraftId)
-    : undefined;
-  const selectedLoad = selectedFlightId ? flightLoads.get(selectedFlightId) : undefined;
-  // Dimmed + disabled, not hidden, when they don't fit the selected flight's
-  // remaining seats/weight — hiding them outright would jump the whole pool's
-  // layout around on every selection change, which is worse than just seeing
-  // (and being able to rule out) who won't fit right now.
-  function poolUnitFits(unit: AssignableUnit): boolean {
-    return !selectedFlight || !selectedLoad || unitFits(unit, selectedAircraft, selectedLoad);
+  const selectedUnit = selectedUnitKey ? poolUnits.find((u) => u.key === selectedUnitKey) : null;
+  // Dimmed, not hidden, when a flight can't fit the selected unit — hiding
+  // outright would jump the flight grid around on every selection change,
+  // worse than just seeing (and ruling out) what won't work right now.
+  function flightFitsSelectedUnit(aircraft: Aircraft | undefined, load: FlightLoad): boolean {
+    return !selectedUnit || unitFits(selectedUnit, aircraft, load);
   }
 
   function markPending(key: string, on: boolean) {
@@ -437,6 +433,7 @@ export function PlanningPage() {
     const canLock = !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
     const isLocked = f.status === "assigned" || f.status === "ready";
     const dropDisabled = load.pilotWeightUnknown;
+    const fitsSelectedUnit = flightFitsSelectedUnit(aircraft, load);
 
     const statusPending = pending.has(`status:${f.id}`);
     const actions = isLocked ? (
@@ -473,11 +470,18 @@ export function PlanningPage() {
             load={load}
             actions={actions}
             size={size}
-            onClick={() => setSelectedFlightId((prev) => (prev === f.id ? null : f.id))}
+            onClick={
+              selectedUnit && fitsSelectedUnit
+                ? () => {
+                    void assignUnit(selectedUnit, f.id);
+                    setSelectedUnitKey(null);
+                  }
+                : undefined
+            }
             className={cn(
               "h-full",
               isOver && "ring-primary ring-2 ring-offset-2",
-              selectedFlightId === f.id && "border-primary ring-primary/50 ring-1",
+              selectedUnit && (fitsSelectedUnit ? "border-primary ring-primary/50 ring-1" : "opacity-40"),
             )}
           >
             {size === "compact" ? (
@@ -640,38 +644,27 @@ export function PlanningPage() {
             <h2 className="text-lg font-medium">
               {t("dispatch.planning.pool.title")} ({poolUnits.length})
             </h2>
-            {selectedFlight && (
-              <p className="text-muted-foreground text-xs" data-testid="pool-filter-note">
-                {t("dispatch.planning.pool.filteredFor", { code: selectedFlight.code })}
+            {selectedUnit && (
+              <p className="text-muted-foreground text-xs" data-testid="pool-select-hint">
+                {t("dispatch.planning.pool.assignHint")}
               </p>
             )}
             <div className="flex flex-col">
               {poolUnits.map((unit) => {
-                const fits = poolUnitFits(unit);
                 const assigning = pending.has(`pool:${unit.key}`);
+                const selected = selectedUnitKey === unit.key;
                 return (
                   <AssignableUnitCard
                     key={unit.key}
                     unit={unit}
                     draggableId={`pool:${unit.key}`}
                     dataTestId="pool-unit"
-                    className={cn(!fits && "opacity-40")}
-                    actions={
-                      <Button
-                        size="icon-sm"
-                        variant="outline"
-                        data-testid="pool-unit-assign-button"
-                        aria-label={t("dispatch.planning.pool.assign")}
-                        disabled={!selectedFlightId || !fits || assigning}
-                        onClick={() => selectedFlightId && void assignUnit(unit, selectedFlightId)}
-                      >
-                        {assigning ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Plus className="size-3.5" />
-                        )}
-                      </Button>
-                    }
+                    className={cn(
+                      selected && "border-primary ring-primary/50 ring-1",
+                      assigning && "opacity-40",
+                    )}
+                    onClick={() => setSelectedUnitKey((prev) => (prev === unit.key ? null : unit.key))}
+                    actions={assigning ? <Loader2 className="size-3.5 animate-spin" /> : undefined}
                   />
                 );
               })}

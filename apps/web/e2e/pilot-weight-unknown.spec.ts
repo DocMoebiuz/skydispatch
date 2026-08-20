@@ -100,17 +100,15 @@ test("a pilot with no weight on file blocks assign/lock until fixed", async ({ p
     await expect(pilotRow.getByTestId("pilot-weight-cell")).toContainText("Gewicht fehlt");
 
     // --- UI: Planning shows the warning and won't offer this flight for
-    // assignment at all — selecting it dims + disables every pool unit's
-    // assign button (nothing can fit a flight whose payload can't be
-    // verified; dimmed rather than hidden so the pool's layout doesn't jump),
-    // and drag refuses the drop outright (DroppableFlightCard's disabled prop). ---
+    // assignment at all — selecting a pool unit dims (not hides) any flight
+    // that can't fit it, and nothing can fit a flight whose payload can't be
+    // verified; drag refuses the drop outright too (DroppableFlightCard's
+    // disabled prop). ---
     await page.goto("/dispatch/planning");
     const flightCard = page.getByTestId("flight-card").filter({ hasText: flight.code });
     await expect(flightCard.getByTestId("pilot-weight-unknown-warning")).toBeVisible();
-    await flightCard.click();
-    await expect(
-      page.getByTestId("pool-unit").filter({ hasText: guestName }).getByTestId("pool-unit-assign-button"),
-    ).toBeDisabled();
+    await page.getByTestId("pool-unit").filter({ hasText: guestName }).click();
+    await expect(flightCard).toHaveClass(/opacity-40/);
 
     // --- Fix in place: Setup's click-to-edit weight cell ---
     await page.goto("/dispatch/setup");
@@ -122,15 +120,11 @@ test("a pilot with no weight on file blocks assign/lock until fixed", async ({ p
     // --- Now assignment works and the gauge includes the pilot's weight ---
     await page.goto("/dispatch/planning");
     await expect(flightCard.getByTestId("pilot-weight-unknown-warning")).not.toBeVisible();
-    await flightCard.click();
+    await page.getByTestId("pool-unit").filter({ hasText: guestName }).click();
     const fixedAssignResponse = page.waitForResponse(
       (r) => r.url().includes("/actions/assign") && r.request().method() === "POST",
     );
-    await page
-      .getByTestId("pool-unit")
-      .filter({ hasText: guestName })
-      .getByTestId("pool-unit-assign-button")
-      .click();
+    await flightCard.click();
     await fixedAssignResponse;
     await expect(flightCard.getByTestId("flight-card-weight")).toHaveText("140 kg frei"); // 300-(85 pilot+75 guest)
   } finally {

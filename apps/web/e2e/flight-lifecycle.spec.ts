@@ -86,10 +86,10 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     const flightCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
 
     // Assignment is unit-level (a group, or a solo guest as a group-of-one):
-    // click the flight card to select it (the pool filters to units that fit),
-    // then the pool row's assign button — see docs/architecture.md § Shared
-    // flight components. A dedicated spec covers the actual drag gesture.
-    await flightCard.click();
+    // click the pool unit to select it (fitting flights highlight), then the
+    // highlighted flight card to assign there — see docs/architecture.md §
+    // Shared flight components. A dedicated spec covers the actual drag gesture.
+    await page.getByTestId("pool-unit").filter({ hasText: guestName }).click();
     // The UI updates optimistically (instantly, before the network call
     // resolves — see PlanningPage's assignUnit), so it alone doesn't prove the
     // server has this locked in yet, and the very next step (set-ready) is a
@@ -97,11 +97,7 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     const assignResponse = page.waitForResponse(
       (r) => r.url().includes("/actions/assign") && r.request().method() === "POST",
     );
-    await page
-      .getByTestId("pool-unit")
-      .filter({ hasText: guestName })
-      .getByTestId("pool-unit-assign-button")
-      .click();
+    await flightCard.click();
     await assignResponse;
     await expect(flightCard.getByTestId("assigned-unit")).toContainText(guestName);
 
