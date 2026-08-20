@@ -280,20 +280,30 @@ export function RegisterPage() {
   // registering for," matching the static prototype's own header chip. A
   // plain JSX value, not a nested component function (that would remount
   // and reset on every render — see react-hooks/static-components).
+  //
+  // flightDayUpsertRequestSchema now requires "YYYY-MM-DD", but a
+  // flight day saved before that validation existed could still hold an
+  // unparseable value in Cosmos — guard against literally rendering
+  // "Invalid Date" to a guest (reproduced live: an admin had typed a
+  // German-formatted date into what was a free-text field on Setup).
+  const flightDayDate = flightDay ? new Date(flightDay.date) : null;
+  const flightDayDateValid = !!flightDayDate && !Number.isNaN(flightDayDate.getTime());
   const flightDayChip = flightDay && (
     <div
       className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
       data-testid="register-flightday"
     >
-      <span className="flex items-center gap-1.5">
-        <CalendarDays className="size-4 shrink-0" aria-hidden />
-        {new Date(flightDay.date).toLocaleDateString("de-DE", {
-          weekday: "long",
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        })}
-      </span>
+      {flightDayDateValid && (
+        <span className="flex items-center gap-1.5">
+          <CalendarDays className="size-4 shrink-0" aria-hidden />
+          {flightDayDate!.toLocaleDateString("de-DE", {
+            weekday: "long",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })}
+        </span>
+      )}
       <span className="flex items-center gap-1.5">
         <MapPin className="size-4 shrink-0" aria-hidden />
         {flightDay.airfieldName} · {flightDay.airfieldIcao}
@@ -301,9 +311,26 @@ export function RegisterPage() {
     </div>
   );
 
+  // Same title/lead/flightDayChip block on every phase — it was previously
+  // only on the main passenger/address/consent form, so switching to the
+  // group-name prompt or landing on the success screen after submitting
+  // made it look like the page had lost its own header. Not a nested
+  // component function, same reasoning as flightDayChip above.
+  const pageHeader = (
+    <div className="flex flex-col gap-2">
+      <h1 className="text-primary flex items-center gap-2 text-2xl font-semibold">
+        <Logo className="size-7 shrink-0" />
+        {t("register.title")}
+      </h1>
+      <p className="text-muted-foreground">{t("register.lead")}</p>
+      {flightDayChip}
+    </div>
+  );
+
   if (phase === "group-prompt") {
     return (
-      <main className="bg-brand-gradient mx-auto min-h-screen max-w-md p-8">
+      <main className="bg-brand-gradient mx-auto flex min-h-screen max-w-md flex-col gap-6 p-8">
+        {pageHeader}
         <Card>
           <CardHeader>
             <CardTitle>{t("register.group.prompt.title")}</CardTitle>
@@ -344,7 +371,8 @@ export function RegisterPage() {
 
   if (phase === "success" && guest) {
     return (
-      <main className="bg-brand-gradient mx-auto min-h-screen max-w-md p-8">
+      <main className="bg-brand-gradient mx-auto flex min-h-screen max-w-md flex-col gap-6 p-8">
+        {pageHeader}
         <Card>
           <CardHeader>
             <CardTitle>{t("register.success.title")}</CardTitle>
@@ -402,7 +430,8 @@ export function RegisterPage() {
 
   if (phase === "done" && guest) {
     return (
-      <main className="bg-brand-gradient mx-auto min-h-screen max-w-md p-8">
+      <main className="bg-brand-gradient mx-auto flex min-h-screen max-w-md flex-col gap-6 p-8">
+        {pageHeader}
         <Card>
           <CardHeader>
             <CardTitle>{t("register.done.title")}</CardTitle>
@@ -452,14 +481,7 @@ export function RegisterPage() {
 
   return (
     <main className="bg-brand-gradient mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-primary flex items-center gap-2 text-2xl font-semibold">
-          <Logo className="size-7 shrink-0" />
-          {t("register.title")}
-        </h1>
-        <p className="text-muted-foreground">{t("register.lead")}</p>
-        {flightDayChip}
-      </div>
+      {pageHeader}
 
       <Card>
         <CardHeader className="border-b pb-6">

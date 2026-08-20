@@ -32,7 +32,7 @@ test("clicking a planned flight highlights fitting pool units, assigns on click"
     const aircraft = await fetch("http://localhost:4280/api/aircraft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reg, model: "Cessna 172", seats: 4, maxPayloadKg: 300 }),
+      body: JSON.stringify({ reg, model: "Cessna 172", seats: 4, emptyWeightKg: 500, maxTakeoffMassKg: 800, fuelType: "avgas", fuelOnBoardL: 0 }),
     }).then((r) => r.json());
     aircraftId = aircraft.id;
 

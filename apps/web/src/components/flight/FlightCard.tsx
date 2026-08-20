@@ -170,7 +170,9 @@ export function FlightCard({
                 (load.over || (freeKg >= 0 && freeKg < 5)) && "text-destructive",
               )}
             >
-              {load.over ? load.usedWeightKg - load.maxPayloadKg : freeKg} kg
+              {/* Fuel not known yet means maxPayloadKg is a meaningless 0,
+                  not "no room" — show a dash instead of a misleading 0kg. */}
+              {load.fuelUnknown ? "—" : `${load.over ? load.usedWeightKg - load.maxPayloadKg : freeKg} kg`}
             </span>
           </div>
         </div>
@@ -232,6 +234,20 @@ export function FlightCard({
               onClick={(e) => e.stopPropagation()}
             >
               {compact ? "⚠" : t("dispatch.planning.builder.pilotWeightUnknown")}
+            </Link>
+          </p>
+        )}
+
+        {load.fuelUnknown && (
+          <p className="text-amber-600 dark:text-amber-500" data-testid="fuel-unknown-warning">
+            {/* Same reasoning as the pilot-weight warning above — the fix
+                (a refuel reading) lives on Setup, link straight there. */}
+            <Link
+              to="/dispatch/setup"
+              className="underline underline-offset-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {compact ? "⚠" : t("dispatch.planning.builder.fuelUnknown")}
             </Link>
           </p>
         )}

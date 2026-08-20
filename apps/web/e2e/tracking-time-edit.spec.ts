@@ -31,7 +31,10 @@ test("Tracking: departure and landing times can be corrected in place", async ({
         reg: `E2E-TIME-${stamp}`,
         model: "Cessna 172",
         seats: 4,
-        maxPayloadKg: 300,
+        emptyWeightKg: 500,
+        maxTakeoffMassKg: 800,
+        fuelType: "avgas",
+        fuelOnBoardL: 0,
       }),
     }).then((r) => r.json());
     aircraftId = aircraft.id;

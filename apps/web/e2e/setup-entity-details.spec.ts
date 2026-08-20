@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { selectByText } from "./helpers/select";
 
 // Setup's pilot/aircraft card click opens the same create/edit form directly,
 // prefilled — no separate read-only "details" step. Delete lives in that
@@ -60,7 +61,10 @@ test("aircraft: card opens the edit form prefilled, delete lives in its footer",
   await page.getByLabel("Kennzeichen").fill(reg);
   await page.getByLabel("Typ").fill("Cessna 172");
   await page.getByLabel("Sitze").fill("4");
-  await page.getByLabel("Max. Zuladung (kg)").fill("300");
+  await page.getByLabel("Leergewicht (kg)").fill("500");
+  await page.getByLabel("MTOM (kg)").fill("800");
+  await selectByText(page, "ac-fuel-type", "Avgas");
+  await page.getByLabel("Sprit an Bord (L)").fill("0");
   await page.getByTestId("add-aircraft").click();
   // See the pilot test above for why this wait exists — the dialog's own
   // closing animation leaves a click-catching overlay up for ~200ms.

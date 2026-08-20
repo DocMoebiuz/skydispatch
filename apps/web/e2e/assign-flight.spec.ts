@@ -75,10 +75,14 @@ test("setup entities, then assign a solo guest and a group with hard limits enfo
     await page.getByLabel("Kennzeichen").fill(reg);
     await page.getByLabel("Typ").fill("Cessna 172");
     await page.getByLabel("Sitze").fill("2");
-    // 230 = pilot (80) + solo guest (70) + group member G One (80), exactly at the
-    // limit once the group's first member is assigned — matches the narrative below
+    // Available payload (MTOM - empty - fuel) works out to 230 = pilot (80) +
+    // solo guest (70) + group member G One (80), exactly at the limit once
+    // the group's first member is assigned — matches the narrative below
     // where G Two (90kg) is rejected by the 2-seat cap regardless of weight headroom.
-    await page.getByLabel("Max. Zuladung (kg)").fill("230");
+    await page.getByLabel("Leergewicht (kg)").fill("500");
+    await page.getByLabel("MTOM (kg)").fill("730");
+    await selectByText(page, "ac-fuel-type", "Avgas");
+    await page.getByLabel("Sprit an Bord (L)").fill("0");
     await page.getByTestId("add-aircraft").click();
     await expect(page.getByTestId("aircraft-list")).toContainText(reg);
     aircraftId = await fetch("http://localhost:4280/api/aircraft")

@@ -34,7 +34,10 @@ test("dashboard shows a flight card and lands an airborne flight via a quick act
         reg: `E2E-DASH-${stamp}`,
         model: "Cessna 172",
         seats: 4,
-        maxPayloadKg: 300,
+        emptyWeightKg: 500,
+        maxTakeoffMassKg: 800,
+        fuelType: "avgas",
+        fuelOnBoardL: 0,
       }),
     }).then((r) => r.json());
     aircraftId = aircraft.id;

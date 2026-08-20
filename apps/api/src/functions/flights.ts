@@ -10,6 +10,7 @@ import {
   flightCreateRequestSchema,
   assignRequestSchema,
   adjustFlightTimesRequestSchema,
+  availablePayloadKg,
   type Flight,
   type Aircraft,
   type Guest,
@@ -215,6 +216,13 @@ export async function assignToFlight(
     // Reliability & safety). Whole-flight-level, not a per-guest rejection reason.
     return { status: 409, jsonBody: { error: "pilot-weight-unknown" } };
   }
+  const payloadKg = availablePayloadKg(aircraft);
+  if (payloadKg === null) {
+    // Fuel on board not known yet (nobody's dipped the tank since this
+    // aircraft was created/last refueled) — same reasoning as an unknown
+    // pilot weight, never silently assume any particular payload.
+    return { status: 409, jsonBody: { error: "fuel-unknown" } };
+  }
 
   const currentGuests = await Promise.all(
     flight.guestIds.map((id) =>
@@ -251,7 +259,7 @@ export async function assignToFlight(
       rejected.push({ guestId, reason: "seats" });
       return;
     }
-    if (usedWeightKg + guest.weightKg > aircraft.maxPayloadKg) {
+    if (usedWeightKg + guest.weightKg > payloadKg) {
       rejected.push({ guestId, reason: "weight" });
       return;
     }
@@ -321,6 +329,10 @@ export async function lockFlight(
     // refuse rather than silently pass on an undercounted total.
     return { status: 409, jsonBody: { error: "pilot-weight-unknown" } };
   }
+  const payloadKg = availablePayloadKg(aircraft);
+  if (payloadKg === null) {
+    return { status: 409, jsonBody: { error: "fuel-unknown" } };
+  }
 
   const guests = await Promise.all(
     flight.guestIds.map((id) =>
@@ -331,7 +343,7 @@ export async function lockFlight(
     ),
   );
   const weightKg = pilotWeightKg + guests.reduce((sum, g) => sum + (g?.weightKg ?? 0), 0);
-  if (flight.guestIds.length === 0 || weightKg > aircraft.maxPayloadKg) {
+  if (flight.guestIds.length === 0 || weightKg > payloadKg) {
     return { status: 409, jsonBody: { error: "not-ready" } };
   }
 
@@ -464,8 +476,7 @@ export async function landFlight(
 // recompute the fuel deduction landFlight already made off the original
 // offBlock/onBlock pair (see landFlight above) — this is a display/record
 // correction tool, not a re-run of the landing transition; recomputing fuel
-// retroactively is real complexity this doesn't need yet (limits blast
-// radius, matches the same call made for fuel vs. maxPayloadKg elsewhere).
+// retroactively is real complexity this doesn't need yet.
 export async function adjustFlightTimes(
   request: HttpRequest,
   _context: InvocationContext,

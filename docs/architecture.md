@@ -282,14 +282,17 @@ interface Flight {
 
 interface Aircraft {
   id: string; type: "Aircraft"; flightDayId: string;
-  reg: string; model: string; seats: number; maxPayloadKg: number;
+  reg: string; model: string; seats: number;
   costPerHourEur?: number | null; imageUrl?: string | null;
-  // Fuel tracking — all optional, see § Open decisions #5 (now resolved) and
-  // FlightLoad.fuel in apps/web/src/lib/flightLoad.ts for how these combine
-  // into a gross-weight/MTOM check that's independent of maxPayloadKg above.
-  emptyWeightKg?: number | null; maxTakeoffMassKg?: number | null;
-  fuelType?: "avgas" | "diesel" | null;   // densities: avgas 0.72 kg/L, diesel 0.84 kg/L
-  fuelOnBoardL?: number | null; fuelBurnLPerHour?: number | null;
+  // Weight-and-balance-sheet figures — required, not optional (see § Open
+  // decisions #5). Available payload for pilot+pax is derived from these,
+  // not set directly: maxTakeoffMassKg - emptyWeightKg - fuel weight, see
+  // packages/shared/src/weightAndBalance.ts's availablePayloadKg.
+  emptyWeightKg: number; maxTakeoffMassKg: number;
+  fuelType: "avgas" | "diesel";   // densities: avgas 0.72 kg/L, diesel 0.84 kg/L
+  // Genuinely unknown at creation until dipped — null blocks assign/lock the
+  // same way an unknown pilot weight does.
+  fuelOnBoardL: number | null; fuelBurnLPerHour?: number | null;
 }
 
 interface Pilot {
@@ -400,19 +403,36 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
    multiple flight days without a redesign, but no FlightDay-setup UI or
    day-switching logic exists yet — a hardcoded `DEFAULT_FLIGHT_DAY_ID` stands in for
    now.
-5. **Fuel tracking.** ~~Not modeled~~ — resolved: `Aircraft` gained optional
-   `emptyWeightKg`/`maxTakeoffMassKg`/`fuelType`/`fuelOnBoardL`/
-   `fuelBurnLPerHour` fields (all optional so pre-existing aircraft, or ones
-   whose figures aren't known yet, keep working). `landFlight` deducts burned
+5. **Fuel tracking.** ~~Not modeled~~ — resolved, then revised: `Aircraft`
+   gained `emptyWeightKg`/`maxTakeoffMassKg`/`fuelType`/`fuelOnBoardL`/
+   `fuelBurnLPerHour` fields. The first cut kept a separately dispatcher-set
+   `maxPayloadKg` field as the hard assign/lock limit, with fuel shown only as
+   a second, independent gross-weight/MTOM gauge — deliberately not
+   subtracted from payload, to limit blast radius on the existing hard-limit
+   logic. That undercounted real available payload as fuel increased (a full
+   tank genuinely means less room for people) and was reported as a real bug,
+   so `maxPayloadKg` was removed entirely: available payload is now always
+   `maxTakeoffMassKg - emptyWeightKg - fuelWeightKg` (`packages/shared/src/
+   weightAndBalance.ts`'s `availablePayloadKg`), the same one figure used by
+   the payload gauge and the gross-weight/MTOM gauge (they're now
+   mathematically equivalent, kept as two displays since a dispatcher may
+   want the absolute gross-weight/MTOM numbers, not just a derived
+   remainder). `emptyWeightKg`/`maxTakeoffMassKg`/`fuelType` are required on
+   Setup's aircraft form now (there's no meaningful payload without them);
+   `fuelOnBoardL` stays nullable — genuinely unknown until dipped — and
+   `null` blocks assign/lock the same way an unknown pilot weight does
+   (`FlightLoad.fuelUnknown`, mirrors `pilotWeightUnknown`).
+   `availablePayloadKg`/`fuelWeightKg` also guard `== null` on the
+   now-required fields at runtime despite the stricter type, since a real
+   aircraft document saved before this change can still lack them — treated
+   the same as unknown fuel, not a crash. `landFlight` still deducts burned
    fuel (elapsed airborne time × `fuelBurnLPerHour`) automatically; the
-   dispatcher corrects the level after a real refuel via `actions/refuel`.
-   `FlightLoad.fuel` (apps/web/src/lib/flightLoad.ts) derives a gross-weight-
-   vs-MTOM figure shown on `FlightCard` as a second, independent gauge from
-   the existing payload/seats one — `maxPayloadKg` deliberately stays its own
-   static dispatcher-set field rather than being derived from MTOM, to limit
-   blast radius on the existing assign/lock hard-limit logic. Not yet done:
-   any UI warning/block tied to low fuel before dispatching a flight — fuel is
-   tracked and shown, not yet enforced.
+   dispatcher corrects the level after a real refuel via `actions/refuel`
+   (absolute liters only so far). Not yet done, tracked as immediate
+   follow-ups: a delta ("+N liters picked up") refuel option alongside the
+   absolute one, a 30-minute-reserve low-fuel warning, and projecting
+   expected weight for a future flight from an estimated flight duration
+   (ties into the not-yet-built Scheduling item below).
 6. **EN/DE language rotation on timetable-style displays.** Flagged by the user
    as a future visual-refinement idea, not scoped yet: on a timetable/chart
    view of flights (e.g. a future Tracking timeline), rotate the flight-status

@@ -63,14 +63,14 @@ const ORDER: Record<Flight["status"], number> = {
 type FitLevel = "full" | "partial" | "none";
 
 function unitFitLevel(unit: AssignableUnit, aircraft: Aircraft | undefined, load: FlightLoad): FitLevel {
-  if (!aircraft || load.pilotWeightUnknown) return "none";
+  if (!aircraft || load.pilotWeightUnknown || load.fuelUnknown) return "none";
   const fitsFully =
     load.usedSeats + unit.members.length <= aircraft.seats &&
-    load.usedWeightKg + unit.totalWeightKg <= aircraft.maxPayloadKg;
+    load.usedWeightKg + unit.totalWeightKg <= load.maxPayloadKg;
   if (fitsFully) return "full";
   const hasSeat = load.usedSeats < aircraft.seats;
   const lightestKg = Math.min(...unit.members.map((m) => m.weightKg ?? Infinity));
-  const fitsPartially = hasSeat && load.usedWeightKg + lightestKg <= aircraft.maxPayloadKg;
+  const fitsPartially = hasSeat && load.usedWeightKg + lightestKg <= load.maxPayloadKg;
   return fitsPartially ? "partial" : "none";
 }
 
@@ -542,9 +542,9 @@ export function PlanningPage() {
     const load = flightLoads.get(f.id)!;
     const stage = deriveFlightStage(f, flightGuests);
     const assignedUnits = groupIntoUnits(flightGuests);
-    const canLock = !load.pilotWeightUnknown && load.usedSeats > 0 && !load.over;
+    const canLock = !load.pilotWeightUnknown && !load.fuelUnknown && load.usedSeats > 0 && !load.over;
     const isLocked = f.status === "assigned" || f.status === "ready";
-    const dropDisabled = load.pilotWeightUnknown;
+    const dropDisabled = load.pilotWeightUnknown || load.fuelUnknown;
     const fitLevel = flightFitLevelForSelectedUnit(aircraft, load);
 
     const statusPending = pending.has(`status:${f.id}`);

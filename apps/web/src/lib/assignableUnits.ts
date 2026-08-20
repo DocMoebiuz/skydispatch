@@ -1,4 +1,4 @@
-import type { Aircraft, Flight, Guest } from "shared";
+import { availablePayloadKg, type Aircraft, type Flight, type Guest } from "shared";
 import type { FlightLoad } from "./flightLoad";
 
 // A group (or a solo guest, acting as a "group of one") — the whole thing
@@ -63,7 +63,12 @@ export function unitFitsAnywhereWhole(
     }
   }
   for (const a of aircraftList) {
-    if (unit.members.length <= a.seats && unit.totalWeightKg <= a.maxPayloadKg) {
+    // Unknown fuel (nobody's dipped the tank yet) means capacity can't be
+    // verified for this aircraft — same "never assume, never silently
+    // undercount" rule as everywhere else, so it's skipped, not treated as
+    // if it could take anything.
+    const payloadKg = availablePayloadKg(a);
+    if (payloadKg !== null && unit.members.length <= a.seats && unit.totalWeightKg <= payloadKg) {
       return true;
     }
   }

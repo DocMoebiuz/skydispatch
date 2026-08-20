@@ -47,12 +47,18 @@ These are hard product requirements carried over from the manual, not aspiration
 - The assigned pilot's own weight counts toward the aircraft's max payload, the same
   as any guest's — payload checks are never guest-weight-only. Every pilot has a
   required `weightKg` (Setup); flight assignment and the ready-status gate both sum
-  pilot + assigned-guest weight against `aircraft.maxPayloadKg` server-side.
+  pilot + assigned-guest weight against the aircraft's available payload
+  (`maxTakeoffMassKg - emptyWeightKg - fuelWeightKg`, see
+  `packages/shared/src/weightAndBalance.ts`) server-side — fuel weight counts
+  against it too, the same as pilot/guest weight; it isn't a separate,
+  informational-only figure.
 - A flight whose assigned pilot has **no weight on file** (real pilot records
   created before `weightKg` existed) refuses assign/lock outright — an unknown
   weight is never silently treated as 0kg, which would undercount payload and let
   an over-limit flight through unnoticed. Fixable in place via Setup's pilot list
-  (`POST /api/pilots/{id}/actions/set-weight`).
+  (`POST /api/pilots/{id}/actions/set-weight`). An aircraft whose **fuel on board
+  isn't known yet** (nobody's dipped the tank since it was created) refuses
+  assign/lock the same way, for the same reason.
 - Critical, hard-to-undo actions require explicit confirmation: recording takeoff/
   landing, marking a guest No-Show, ending the flight day.
 - Only guests who are both paid and weighed can be assigned to a flight.

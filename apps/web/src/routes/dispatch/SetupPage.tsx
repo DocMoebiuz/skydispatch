@@ -68,7 +68,6 @@ export function SetupPage() {
   const [reg, setReg] = useState("");
   const [model, setModel] = useState("");
   const [seats, setSeats] = useState("");
-  const [maxPayloadKg, setMaxPayloadKg] = useState("");
   const [emptyWeightKg, setEmptyWeightKg] = useState("");
   const [maxTakeoffMassKg, setMaxTakeoffMassKg] = useState("");
   const [fuelType, setFuelType] = useState<FuelType | "">("");
@@ -234,7 +233,6 @@ export function SetupPage() {
     setReg("");
     setModel("");
     setSeats("");
-    setMaxPayloadKg("");
     setEmptyWeightKg("");
     setMaxTakeoffMassKg("");
     setFuelType("");
@@ -248,7 +246,9 @@ export function SetupPage() {
     setReg(a.reg);
     setModel(a.model);
     setSeats(String(a.seats));
-    setMaxPayloadKg(String(a.maxPayloadKg));
+    // A legacy aircraft saved before these fields became required can still
+    // lack them in the real document, despite the type — blank, not
+    // "undefined", so the admin fills them in fresh.
     setEmptyWeightKg(a.emptyWeightKg != null ? String(a.emptyWeightKg) : "");
     setMaxTakeoffMassKg(a.maxTakeoffMassKg != null ? String(a.maxTakeoffMassKg) : "");
     setFuelType(a.fuelType ?? "");
@@ -258,23 +258,24 @@ export function SetupPage() {
 
   async function saveAircraft() {
     const seatsNum = Number(seats);
-    const payloadNum = Number(maxPayloadKg);
-    if (!reg.trim() || !model.trim() || !seatsNum || !payloadNum) return;
+    const emptyNum = Number(emptyWeightKg);
+    const mtomNum = Number(maxTakeoffMassKg);
+    if (!reg.trim() || !model.trim() || !seatsNum || !emptyNum || !mtomNum || !fuelType) return;
     setSavingAircraft(true);
     try {
       const body = JSON.stringify({
         reg,
         model,
         seats: seatsNum,
-        maxPayloadKg: payloadNum,
-        // Fuel-tracking fields are all optional (see shared's
-        // aircraftCreateRequestSchema) — only sent when actually filled in,
-        // so an aircraft without known fuel figures yet just omits them
-        // rather than getting sent as 0/NaN. fuelOnBoardL is create-only —
-        // editing never touches it, see openEditAircraftDialog/updateAircraft.
-        ...(emptyWeightKg && { emptyWeightKg: Number(emptyWeightKg) }),
-        ...(maxTakeoffMassKg && { maxTakeoffMassKg: Number(maxTakeoffMassKg) }),
-        ...(fuelType && { fuelType }),
+        // Weight-and-balance-sheet figures — required (see shared's
+        // aircraftCreateRequestSchema), available payload is derived from
+        // these, not set directly any more.
+        emptyWeightKg: emptyNum,
+        maxTakeoffMassKg: mtomNum,
+        fuelType,
+        // fuelOnBoardL is genuinely unknown at creation until dipped, and
+        // create-only here — editing never touches it, see
+        // openEditAircraftDialog/updateAircraft; use the refuel action instead.
         ...(!editingAircraftId && fuelOnBoardL && { fuelOnBoardL: Number(fuelOnBoardL) }),
         ...(fuelBurnLPerHour && { fuelBurnLPerHour: Number(fuelBurnLPerHour) }),
       });
@@ -381,7 +382,16 @@ export function SetupPage() {
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="grid gap-2">
             <Label htmlFor="fd-date">{t("dispatch.setup.flightDay.date")}</Label>
-            <Input id="fd-date" value={date} onChange={(e) => setDate(e.target.value)} />
+            {/* type="date" guarantees an ISO "YYYY-MM-DD" value (HTML spec) —
+                a free-text field here once let a German-formatted date
+                ("20.08.2026") through, which /register's new Date(...) can't
+                parse, showing up live as "Invalid Date". */}
+            <Input
+              id="fd-date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="fd-name">{t("dispatch.setup.flightDay.airfieldName")}</Label>
@@ -614,7 +624,13 @@ export function SetupPage() {
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate font-medium">{a.reg}</span>
                       <span className="text-muted-foreground truncate text-xs">
-                        {a.model} · {a.seats} {t("dispatch.setup.aircraft.seats")} · {a.maxPayloadKg} kg
+                        {a.model} · {a.seats} {t("dispatch.setup.aircraft.seats")} ·{" "}
+                        {/* A legacy aircraft saved before emptyWeightKg/MTOM became
+                            required can still lack them — the edit dialog will ask
+                            for them again the first time it's opened. */}
+                        {a.maxTakeoffMassKg != null
+                          ? t("dispatch.setup.aircraft.mtomShort", { mtom: a.maxTakeoffMassKg })
+                          : t("dispatch.setup.aircraft.weightDataMissing")}
                       </span>
                       {/* Fuel is only shown/editable once a fuel type is on
                           file — "dim, don't hide": aircraft without fuel
@@ -696,23 +712,6 @@ export function SetupPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="ac-payload">{t("dispatch.setup.aircraft.maxPayloadKg")}</Label>
-              <Input
-                id="ac-payload"
-                type="number"
-                value={maxPayloadKg}
-                onChange={(e) => setMaxPayloadKg(e.target.value)}
-              />
-            </div>
-          </div>
-          {/* Fuel tracking — all optional, see aircraftCreateRequestSchema. A
-              separate, visually distinct group so it doesn't read as required
-              alongside reg/model/seats/payload above. */}
-          <p className="text-muted-foreground -mb-2 text-xs font-medium uppercase">
-            {t("dispatch.setup.aircraft.fuelSection")}
-          </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
               <Label htmlFor="ac-empty">{t("dispatch.setup.aircraft.emptyWeightKg")}</Label>
               <Input
                 id="ac-empty"
@@ -742,9 +741,20 @@ export function SetupPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          {/* Fuel *level* stays its own group below the weight-and-balance-
+              sheet figures above — it's operational/dynamic data (changes
+              every refuel), not a spec you'd read off the aircraft's
+              paperwork, so it reads differently even though fuelType above
+              is now required alongside it. */}
+          <p className="text-muted-foreground -mb-2 text-xs font-medium uppercase">
+            {t("dispatch.setup.aircraft.fuelSection")}
+          </p>
+          <div className="grid grid-cols-2 gap-4">
             {/* Initial fuel is create-only — editing an existing aircraft
                 never touches fuelOnBoardL, see updateAircraft; use the
-                card's own refuel quick-action for that instead. */}
+                card's own refuel quick-action for that instead. Genuinely
+                optional: nobody's dipped the tank yet at creation time. */}
             {!editingAircraftId && (
               <div className="grid gap-2">
                 <Label htmlFor="ac-fuel-onboard">{t("dispatch.setup.aircraft.fuelOnBoardL")}</Label>

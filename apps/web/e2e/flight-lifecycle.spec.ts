@@ -40,7 +40,10 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     await page.getByLabel("Kennzeichen").fill(reg);
     await page.getByLabel("Typ").fill("Cessna 172");
     await page.getByLabel("Sitze").fill("4");
-    await page.getByLabel("Max. Zuladung (kg)").fill("300");
+    await page.getByLabel("Leergewicht (kg)").fill("500");
+    await page.getByLabel("MTOM (kg)").fill("800");
+    await selectByText(page, "ac-fuel-type", "Avgas");
+    await page.getByLabel("Sprit an Bord (L)").fill("0");
     await page.getByTestId("add-aircraft").click();
     await expect(page.getByTestId("aircraft-list")).toContainText(reg);
     aircraftId = await fetch("http://localhost:4280/api/aircraft")

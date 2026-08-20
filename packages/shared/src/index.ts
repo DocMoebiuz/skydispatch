@@ -33,3 +33,4 @@ export { refuelRequestSchema } from "./schemas/refuelRequest";
 
 export { DEFAULT_FLIGHT_DAY_ID, FUEL_DENSITY_KG_PER_L } from "./constants";
 export { ageFromDateOfBirth, isMinor, MINOR_AGE_THRESHOLD } from "./age";
+export { fuelWeightKg, availablePayloadKg } from "./weightAndBalance";

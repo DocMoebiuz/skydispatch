@@ -35,7 +35,10 @@ test("finished flights stay hidden until asked for, ready flights render compact
         reg: `E2E-LANES-${stamp}`,
         model: "Cessna 172",
         seats: 4,
-        maxPayloadKg: 300,
+        emptyWeightKg: 500,
+        maxTakeoffMassKg: 800,
+        fuelType: "avgas",
+        fuelOnBoardL: 0,
       }),
     }).then((r) => r.json());
     aircraftId = aircraft.id;
@@ -143,7 +146,10 @@ test("a ready flight renders in the compact secondary lane and can go back to pl
         reg: `E2E-LANESR-${stamp}`,
         model: "Cessna 172",
         seats: 4,
-        maxPayloadKg: 300,
+        emptyWeightKg: 500,
+        maxTakeoffMassKg: 800,
+        fuelType: "avgas",
+        fuelOnBoardL: 0,
       }),
     }).then((r) => r.json());
     aircraftId = aircraft.id;

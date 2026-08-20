@@ -32,7 +32,10 @@ test("dragging a pool unit onto a flight card assigns it", async ({ page }) => {
         reg: `E2E-DRAG-${stamp}`,
         model: "Cessna 172",
         seats: 4,
-        maxPayloadKg: 300,
+        emptyWeightKg: 500,
+        maxTakeoffMassKg: 800,
+        fuelType: "avgas",
+        fuelOnBoardL: 0,
       }),
     }).then((r) => r.json());
     aircraftId = aircraft.id;

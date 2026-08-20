@@ -36,7 +36,10 @@ test("removing a group from a flight removes every member, not just one", async 
         reg: `E2E-RACE-${stamp}`,
         model: "Cessna 172",
         seats: 4,
-        maxPayloadKg: 300,
+        emptyWeightKg: 500,
+        maxTakeoffMassKg: 800,
+        fuelType: "avgas",
+        fuelOnBoardL: 0,
       }),
     }).then((r) => r.json());
     aircraftId = aircraft.id;

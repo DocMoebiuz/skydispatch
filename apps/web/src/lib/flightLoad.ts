@@ -1,4 +1,4 @@
-import { FUEL_DENSITY_KG_PER_L, type Aircraft, type Flight, type Guest, type Pilot } from "shared";
+import { availablePayloadKg, fuelWeightKg, type Aircraft, type Flight, type Guest, type Pilot } from "shared";
 
 export interface FlightLoad {
   usedSeats: number;
@@ -12,12 +12,16 @@ export interface FlightLoad {
   // API refuses assign/lock in this state (see apps/api flights.ts's
   // pilotWeightKgFor) rather than silently treating it as 0kg.
   pilotWeightUnknown: boolean;
-  // Gross weight (empty + fuel + pilot + pax) vs. MTOM — a SECOND, independent
-  // check from the payload gauge above, not a replacement (see
-  // types/aircraft.ts's comment on why maxPayloadKg stays its own static
-  // field). Only present when the aircraft has all the fuel-tracking fields
-  // set; omitted (not zeroed) otherwise so callers can hide the gauge
-  // entirely rather than show a misleading 0kg one.
+  // Fuel on board hasn't been set yet (nobody's dipped the tank since this
+  // aircraft was created) — maxPayloadKg above is meaningless (0) in this
+  // state; the API refuses assign/lock the same way it does for an unknown
+  // pilot weight. See shared/weightAndBalance.ts's availablePayloadKg.
+  fuelUnknown: boolean;
+  // Gross weight (empty + fuel + pilot + pax) vs. MTOM — the same hard limit
+  // as the payload gauge above, restated in absolute terms instead of "kg
+  // free"; kept as its own display since a dispatcher may want the actual
+  // gross-weight/MTOM figures, not just the derived remainder. Only present
+  // once fuel on board is known (see fuelUnknown).
   fuel: { fuelWeightKg: number; grossWeightKg: number; maxTakeoffMassKg: number; over: boolean } | null;
 }
 
@@ -36,26 +40,26 @@ export function computeFlightLoad(
   const totalSeats = aircraft?.seats ?? 0;
   const usedWeightKg =
     (pilot?.weightKg ?? 0) + flightGuests.reduce((sum, g) => sum + (g.weightKg ?? 0), 0);
-  const maxPayloadKg = aircraft?.maxPayloadKg ?? 0;
+
+  const payloadKg = aircraft ? availablePayloadKg(aircraft) : null;
+  const fuelUnknown = !!aircraft && payloadKg === null;
+  const maxPayloadKg = payloadKg ?? 0;
   const pct = maxPayloadKg > 0 ? Math.round((usedWeightKg / maxPayloadKg) * 100) : 0;
   const over = maxPayloadKg > 0 && usedWeightKg > maxPayloadKg;
 
   let fuel: FlightLoad["fuel"] = null;
-  if (
-    aircraft?.emptyWeightKg != null &&
-    aircraft.maxTakeoffMassKg != null &&
-    aircraft.fuelOnBoardL != null &&
-    aircraft.fuelType != null
-  ) {
-    const fuelWeightKg = Math.round(aircraft.fuelOnBoardL * FUEL_DENSITY_KG_PER_L[aircraft.fuelType]);
-    const grossWeightKg = aircraft.emptyWeightKg + fuelWeightKg + usedWeightKg;
-    fuel = {
-      fuelWeightKg,
-      grossWeightKg,
-      maxTakeoffMassKg: aircraft.maxTakeoffMassKg,
-      over: grossWeightKg > aircraft.maxTakeoffMassKg,
-    };
+  if (aircraft) {
+    const fuelKg = fuelWeightKg(aircraft);
+    if (fuelKg != null) {
+      const grossWeightKg = aircraft.emptyWeightKg + fuelKg + usedWeightKg;
+      fuel = {
+        fuelWeightKg: fuelKg,
+        grossWeightKg,
+        maxTakeoffMassKg: aircraft.maxTakeoffMassKg,
+        over: grossWeightKg > aircraft.maxTakeoffMassKg,
+      };
+    }
   }
 
-  return { usedSeats, totalSeats, usedWeightKg, maxPayloadKg, pct, over, pilotWeightUnknown, fuel };
+  return { usedSeats, totalSeats, usedWeightKg, maxPayloadKg, pct, over, pilotWeightUnknown, fuelUnknown, fuel };
 }

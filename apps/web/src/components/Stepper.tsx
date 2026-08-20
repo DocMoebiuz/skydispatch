@@ -10,11 +10,19 @@ interface StepperProps {
 // "1. Foo  2. Bar" text row with something that actually reads as progress:
 // completed steps get a filled circle + checkmark, the current one an
 // outlined circle in the brand color, upcoming ones stay muted.
+//
+// Every step gets an equal-width column (flex-1), including the last one —
+// giving the last step its own narrower, content-sized column instead (as
+// it briefly was) makes its circle sit closer to its neighbor than the
+// others are to theirs, so the connecting segments end up visibly uneven
+// lengths. Equal columns keep every segment the same length and give both
+// outer edges a matching inset, at the cost of a little unused space past
+// the last circle — the standard tradeoff for this component shape.
 export function Stepper({ steps, currentIndex }: StepperProps) {
   return (
     <ol className="flex items-start" data-testid="stepper">
       {steps.map((step, i) => (
-        <li key={step.key} className="flex flex-1 flex-col items-center last:flex-none">
+        <li key={step.key} className="flex flex-1 flex-col items-center">
           <div className="flex w-full items-center">
             <div className={cn("h-0.5 flex-1", i === 0 && "invisible", i <= currentIndex ? "bg-primary" : "bg-muted")} />
             <div

@@ -4,9 +4,9 @@ import { fillRegistrationForm } from "./helpers/register";
 import { selectByText } from "./helpers/select";
 import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
-// Item 19 from the overnight punch list: an aircraft with fuel figures on file
-// shows a gross-weight/MTOM gauge (independent of the existing seats/payload
-// one) and landing a flight deducts the fuel it burned. See
+// An aircraft with fuel figures on file shows a gross-weight/MTOM gauge
+// (the same hard limit as the payload gauge, just restated in absolute
+// terms) and landing a flight deducts the fuel it burned. See
 // docs/architecture.md § Open decisions #5 and apps/web/src/lib/flightLoad.ts.
 
 test("fuel: aircraft with fuel figures shows gross weight and burns fuel on landing", async ({
@@ -39,7 +39,6 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     await page.getByLabel("Kennzeichen").fill(reg);
     await page.getByLabel("Typ").fill("Cessna 172");
     await page.getByLabel("Sitze").fill("4");
-    await page.getByLabel("Max. Zuladung (kg)").fill("300");
     await page.getByLabel("Leergewicht (kg)").fill("700");
     await page.getByLabel("MTOM (kg)").fill("1200");
     await selectByText(page, "ac-fuel-type", "Avgas");

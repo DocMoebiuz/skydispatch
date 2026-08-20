@@ -17,6 +17,10 @@ const flight: Flight = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
+// emptyWeightKg 500 + maxTakeoffMassKg 800, no fuel on board (0L) — available
+// payload works out to exactly 300kg, the same figure the old fixed
+// maxPayloadKg field used to be, so the pre-existing test expectations below
+// didn't need to change, only where the number comes from.
 const aircraft: Aircraft = {
   id: "a1",
   type: "Aircraft",
@@ -24,7 +28,10 @@ const aircraft: Aircraft = {
   reg: "D-TEST",
   model: "Cessna 172",
   seats: 4,
-  maxPayloadKg: 300,
+  emptyWeightKg: 500,
+  maxTakeoffMassKg: 800,
+  fuelType: "avgas",
+  fuelOnBoardL: 0,
 };
 
 const pilot: Pilot = {
@@ -96,5 +103,26 @@ describe("computeFlightLoad", () => {
     expect(load.totalSeats).toBe(0);
     expect(load.maxPayloadKg).toBe(0);
     expect(load.over).toBe(false); // maxPayloadKg 0 means "unknown," not "always over"
+  });
+
+  it("fuelUnknown, not 0, when fuel on board hasn't been set yet", () => {
+    // Nobody's dipped the tank since this aircraft was created — never
+    // silently assume 0L, same reasoning as an unknown pilot weight.
+    const noFuel: Aircraft = { ...aircraft, fuelOnBoardL: null };
+    const load = computeFlightLoad(flight, noFuel, pilot, [guest(70)]);
+    expect(load.fuelUnknown).toBe(true);
+    expect(load.maxPayloadKg).toBe(0);
+  });
+
+  it("fuel weight actually reduces available payload — the bug this replaced", () => {
+    // 100L avgas @ 0.72 kg/L = 72kg of fuel. Available payload is now
+    // 800 - 500 - 72 = 228kg, not the full 300kg an empty-tank aircraft has.
+    // Previously fuel was tracked and shown but never actually subtracted
+    // from the payload figure that gates assign/lock.
+    const fueled: Aircraft = { ...aircraft, fuelOnBoardL: 100 };
+    const load = computeFlightLoad(flight, fueled, pilot, [guest(150)]);
+    expect(load.maxPayloadKg).toBe(228);
+    expect(load.usedWeightKg).toBe(80 + 150); // 230
+    expect(load.over).toBe(true); // would have read "under" against a flat 300kg
   });
 });
