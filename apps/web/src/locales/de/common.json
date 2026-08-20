@@ -372,9 +372,22 @@
       "submit": "Anzeigen",
       "notFound": "ID nicht gefunden.",
       "flown": "{{name}} – Ihr Rundflug ist abgeschlossen.",
-      "assigned": "{{name}} – Flug {{flight}} ({{status}}).",
-      "assignedWithEstimate": "{{name}} – Flug {{flight}} ({{status}}), vorauss. Abflug ca. {{time}} Uhr. Bitte spätestens 15 Min. vorher am Treffpunkt sein.",
+      "noShow": "{{name}} wurde als nicht erschienen markiert. Bitte am Check-in melden.",
       "waiting": "{{name}} – noch keinem Flug zugewiesen.",
+      "waitingHint": "Status: {{items}}",
+      "needsPayment": "Zahlung offen",
+      "needsWeight": "noch nicht gewogen",
+      "airborne": "{{name}} – Ihr Flug {{flight}} ist in der Luft.",
+      "departedAt": "Startzeit war {{time}} Uhr.",
+      "boarding": "JETZT BOARDING – {{name}}",
+      "boardingHint": "Bitte begeben Sie sich jetzt zu Ihrem Flugzeug.",
+      "scheduled": "{{name}} – Ihr Flug ist eingeplant",
+      "arriveHint": "Bitte spätestens 15 Minuten vor dem Start einfinden. Zeiten können sich kurzfristig ändern.",
+      "kv": {
+        "flight": "Flug",
+        "estimatedDeparture": "vorauss. Abflug",
+        "beThereBy": "Bitte da sein bis"
+      },
       "groupHeading": "Gruppe {{group}} – Status Ihrer Mitreisenden:"
     }
   }

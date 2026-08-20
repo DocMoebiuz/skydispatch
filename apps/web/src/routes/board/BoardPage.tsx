@@ -69,10 +69,42 @@ function fmtTime(iso: string | null): string {
   return iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—";
 }
 
+// Guest-lookup card styling, matching the static prototype's four-color
+// result states (docs/static-html-app/SkyDispatch-Terminal.html's
+// .result.go/.wait/.info/.bad) plus a fifth "muted" state for no-show, which
+// the prototype didn't handle at all.
+type LookupVariant = "go" | "wait" | "info" | "bad" | "muted";
+
+const LOOKUP_VARIANT_CLASS: Record<LookupVariant, string> = {
+  go: "border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5",
+  wait: "border-amber-500/35 bg-amber-500/10",
+  info: "border-sky-500/35 bg-sky-500/10",
+  bad: "border-red-500/40 bg-red-500/10",
+  muted: "border-slate-700 bg-slate-900/40",
+};
+
+interface LookupKv {
+  label: string;
+  value: string;
+  muted?: boolean;
+}
+
+interface LookupPresentation {
+  variant: LookupVariant;
+  icon: string;
+  headline: string;
+  detail?: string;
+  kv?: LookupKv[];
+  hint?: string;
+}
+
 // Public departure board (matches the manual's Abflugtafel) + "when am I up" lookup
 // by guest code, matching docs/static-html-app/SkyDispatch-Terminal.html in
-// behavior. Polls every 15s — a public kiosk display, not worth websockets for a
-// single-airfield low-concurrency event (see docs/architecture.md § Open decisions).
+// structure and information (flight/aircraft/time/status table; a color-coded,
+// icon-led lookup result card with a key-value block for flight/estimated
+// departure/arrive-by). Polls every 15s — a public kiosk display, not worth
+// websockets for a single-airfield low-concurrency event (see
+// docs/architecture.md § Open decisions).
 //
 // Registration links here with ?code=<4-char code> (see RegisterPage's "done"
 // screen) so a guest can check their own boarding status without retyping their ID
@@ -208,6 +240,134 @@ export function BoardPage() {
     (a, b) => Date.parse(b.flight.onBlock!) - Date.parse(a.flight.onBlock!),
   );
 
+  // Departures show a real offBlock once airborne, otherwise the projected
+  // estimate (or "—" if the aircraft's queue can't place it yet, e.g. still
+  // unlocked). Recently-landed rows always show the real onBlock.
+  function departureTimeOf(f: Flight): { iso: string | null; isEstimate: boolean } {
+    if (f.offBlock) return { iso: f.offBlock, isEstimate: false };
+    const estimate = departureEstimates.get(f.id);
+    return estimate ? { iso: estimate, isEstimate: true } : { iso: null, isEstimate: false };
+  }
+  function landedTimeOf(f: Flight): { iso: string | null; isEstimate: boolean } {
+    return { iso: f.onBlock, isEstimate: false };
+  }
+
+  function timeCell(iso: string | null, isEstimate: boolean, testIds: boolean) {
+    if (!iso) return "—";
+    if (!isEstimate) return fmtTime(iso);
+    return (
+      <span
+        className="text-slate-400 italic"
+        data-testid={testIds ? "board-estimated-time" : undefined}
+      >
+        ca. {fmtTime(iso)}
+      </span>
+    );
+  }
+
+  function statusBadge(status: BoardStatus) {
+    return (
+      <Badge variant="outline" className={cn("font-sans", BOARD_STATUS_CLASS[status])}>
+        {t(`board.status.${status}`)}
+      </Badge>
+    );
+  }
+
+  // Desktop table + mobile card list for one section (departures or recently
+  // landed) — same dual-layout convention as GuestsPage: both are in the DOM
+  // at once (CSS `hidden`/`sm:hidden` picks which one renders), and only the
+  // desktop copy carries `data-testid`s, since Playwright's default viewport
+  // is desktop-sized and duplicate testids would be a strict-mode violation.
+  function renderBoardSection(
+    entries: { flight: Flight; status: BoardStatus }[],
+    timeOf: (f: Flight) => { iso: string | null; isEstimate: boolean },
+    options: { showHeader: boolean; emptyMessage?: string },
+  ) {
+    return (
+      <>
+        <div className="hidden overflow-x-auto sm:block">
+          <Table>
+            {options.showHeader && (
+              <TableHeader>
+                <TableRow className="border-slate-800 hover:bg-transparent">
+                  <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
+                    {t("board.table.flight")}
+                  </TableHead>
+                  <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
+                    {t("board.table.aircraft")}
+                  </TableHead>
+                  <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
+                    {t("board.table.time")}
+                  </TableHead>
+                  <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
+                    {t("board.table.status")}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+            )}
+            <TableBody>
+              {entries.map(({ flight: f, status }) => {
+                const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+                const { iso, isEstimate } = timeOf(f);
+                return (
+                  <TableRow
+                    key={f.id}
+                    data-testid="board-flight-row"
+                    className="border-slate-800 font-mono text-lg hover:bg-slate-900/60"
+                  >
+                    <TableCell className="font-bold tracking-wide text-amber-300">{f.code}</TableCell>
+                    <TableCell className="text-slate-300">{aircraft?.reg ?? "—"}</TableCell>
+                    <TableCell className="tabular-nums text-slate-300">
+                      {timeCell(iso, isEstimate, true)}
+                    </TableCell>
+                    <TableCell>{statusBadge(status)}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {entries.length === 0 && options.emptyMessage && (
+                <TableRow className="border-slate-800">
+                  <TableCell colSpan={4} className="text-slate-500">
+                    {options.emptyMessage}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Mobile — a 4-column table doesn't fit a narrow screen without
+            either squeezing text unreadably or forcing horizontal scroll, so
+            this stacks each flight as its own card: code+aircraft up top,
+            time+status below, same information the table shows. */}
+        <div className="flex flex-col gap-2 sm:hidden">
+          {entries.map(({ flight: f, status }) => {
+            const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+            const { iso, isEstimate } = timeOf(f);
+            return (
+              <div key={f.id} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="font-mono text-lg font-bold tracking-wide text-amber-300">
+                      {f.code}
+                    </span>
+                    <span className="font-mono text-sm text-slate-400">{aircraft?.reg ?? "—"}</span>
+                  </div>
+                  <span className="font-mono text-base tabular-nums text-slate-300">
+                    {timeCell(iso, isEstimate, false)}
+                  </span>
+                </div>
+                <div className="mt-2">{statusBadge(status)}</div>
+              </div>
+            );
+          })}
+          {entries.length === 0 && options.emptyMessage && (
+            <p className="text-sm text-slate-500">{options.emptyMessage}</p>
+          )}
+        </div>
+      </>
+    );
+  }
+
   const groupMembers =
     lookupResult && lookupResult !== "not-found"
       ? lookupResult.groupId
@@ -216,36 +376,79 @@ export function BoardPage() {
       : [];
 
   // Manual §4.2 "Wann bin ich an der Reihe?": flight number, estimated
-  // departure, and "be at the stand 15 min before departure" — shown once a
-  // real estimate exists (not airborne/completed, which get their own
-  // branches above and don't need one).
-  function statusLine(g: Guest): string {
-    if (g.flown) return t("board.lookup.flown", { name: g.name });
-    const flight = flights.find((f) => f.guestIds.includes(g.id));
-    if (!flight) return t("board.lookup.waiting", { name: g.name });
-    const estimate = departureEstimates.get(flight.id);
-    if (estimate) {
-      return t("board.lookup.assignedWithEstimate", {
-        name: g.name,
-        flight: flight.code,
-        status: t(`dispatch.planning.status.${flight.status}`),
-        time: fmtTime(estimate),
-      });
+  // departure, "be at the stand 15 min before departure" (stand tracking
+  // itself is out of scope, see docs/architecture.md § Open decisions) — plus
+  // the prototype's other lookup states (waiting/airborne/flown/not-found),
+  // extended with a no-show state the prototype never handled. Priority
+  // mirrors deriveGuestStatus's own (status.ts): no-show, then flown, before
+  // falling through to whatever flight the guest is actually on.
+  function presentGuest(g: Guest): LookupPresentation {
+    if (g.noShow) {
+      return { variant: "muted", icon: "🚫", headline: t("board.lookup.noShow", { name: g.name }) };
     }
-    return t("board.lookup.assigned", {
-      name: g.name,
-      flight: flight.code,
-      status: t(`dispatch.planning.status.${flight.status}`),
-    });
+    if (g.flown) {
+      return { variant: "info", icon: "✅", headline: t("board.lookup.flown", { name: g.name }) };
+    }
+    const flight = flights.find((f) => f.status !== "completed" && f.guestIds.includes(g.id));
+    if (!flight) {
+      const needs = [
+        !g.paid && t("board.lookup.needsPayment"),
+        g.weightKg == null && t("board.lookup.needsWeight"),
+      ].filter((x): x is string => !!x);
+      return {
+        variant: "wait",
+        icon: "🕓",
+        headline: t("board.lookup.waiting", { name: g.name }),
+        hint: needs.length > 0 ? t("board.lookup.waitingHint", { items: needs.join(" · ") }) : undefined,
+      };
+    }
+    if (flight.status === "airborne") {
+      return {
+        variant: "info",
+        icon: "🛫",
+        headline: t("board.lookup.airborne", { name: g.name, flight: flight.code }),
+        detail: flight.offBlock
+          ? t("board.lookup.departedAt", { time: fmtTime(flight.offBlock) })
+          : undefined,
+      };
+    }
+    const estimate = departureEstimates.get(flight.id) ?? null;
+    // "ready" (boarded, about to depart) — matching the prototype, this
+    // drops the estimate/arrive-by fields entirely: boarding is happening
+    // NOW, so a "be there by" time earlier than the current clock would
+    // just read as already-late. "assigned"/"created" (still ahead) keeps
+    // the full projected-departure + 15-min-before reminder instead.
+    if (flight.status === "ready") {
+      return {
+        variant: "go",
+        icon: "🟢",
+        headline: t("board.lookup.boarding", { name: g.name }),
+        kv: [{ label: t("board.lookup.kv.flight"), value: flight.code }],
+        hint: t("board.lookup.boardingHint"),
+      };
+    }
+    const boardBy = estimate ? new Date(Date.parse(estimate) - 15 * 60_000).toISOString() : null;
+    const kv: LookupKv[] = [
+      { label: t("board.lookup.kv.flight"), value: flight.code },
+      { label: t("board.lookup.kv.estimatedDeparture"), value: estimate ? fmtTime(estimate) : "—" },
+    ];
+    if (boardBy) kv.push({ label: t("board.lookup.kv.beThereBy"), value: fmtTime(boardBy), muted: true });
+    return {
+      variant: "wait",
+      icon: "🎫",
+      headline: t("board.lookup.scheduled", { name: g.name }),
+      kv,
+      hint: t("board.lookup.arriveHint"),
+    };
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 p-8 text-slate-100">
+    <main className="min-h-screen bg-slate-950 p-4 text-slate-100 sm:p-8">
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
-        <div className="flex items-end justify-between border-b border-slate-800 pb-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-wide text-amber-300">
-              <PlaneTakeoff className="size-8 shrink-0" aria-hidden />
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-800 pb-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="flex items-center gap-2 text-xl font-semibold tracking-wide text-amber-300 sm:text-2xl">
+              <PlaneTakeoff className="size-6 shrink-0 sm:size-8" aria-hidden />
               {t("board.title")}
             </h1>
             {flightDay && (
@@ -259,7 +462,7 @@ export function BoardPage() {
               the right edge away from where the eye lands first. */}
           <div className="flex flex-col items-start gap-1">
             <span
-              className="font-mono text-2xl tabular-nums text-amber-300"
+              className="font-mono text-xl tabular-nums text-amber-300 sm:text-2xl"
               data-testid="board-clock"
             >
               {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
@@ -270,62 +473,10 @@ export function BoardPage() {
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow className="border-slate-800 hover:bg-transparent">
-              <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
-                {t("board.table.flight")}
-              </TableHead>
-              <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
-                {t("board.table.aircraft")}
-              </TableHead>
-              <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
-                {t("board.table.time")}
-              </TableHead>
-              <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
-                {t("board.table.status")}
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {departures.map(({ flight: f, status }) => {
-              const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
-              return (
-                <TableRow
-                  key={f.id}
-                  data-testid="board-flight-row"
-                  className="border-slate-800 font-mono text-lg hover:bg-slate-900/60"
-                >
-                  <TableCell className="font-bold tracking-wide text-amber-300">{f.code}</TableCell>
-                  <TableCell className="text-slate-300">{aircraft?.reg ?? "—"}</TableCell>
-                  <TableCell className="tabular-nums text-slate-300">
-                    {f.offBlock ? (
-                      fmtTime(f.offBlock)
-                    ) : departureEstimates.get(f.id) ? (
-                      <span className="text-slate-400 italic" data-testid="board-estimated-time">
-                        ca. {fmtTime(departureEstimates.get(f.id)!)}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={cn("font-sans", BOARD_STATUS_CLASS[status])}>
-                      {t(`board.status.${status}`)}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {departures.length === 0 && (
-              <TableRow className="border-slate-800">
-                <TableCell colSpan={4} className="text-slate-500">
-                  {t("board.empty")}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+        {renderBoardSection(departures, departureTimeOf, {
+          showHeader: true,
+          emptyMessage: t("board.empty"),
+        })}
 
         {/* Separate section, not interleaved with departures above — and
             capped to one row per aircraft (the most recent landing), not
@@ -335,41 +486,15 @@ export function BoardPage() {
             <h2 className="text-sm font-medium tracking-wide text-slate-400 uppercase">
               {t("board.recentlyLanded")}
             </h2>
-            <Table>
-              <TableBody>
-                {recentlyLanded.map(({ flight: f, status }) => {
-                  const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
-                  return (
-                    <TableRow
-                      key={f.id}
-                      data-testid="board-flight-row"
-                      className="border-slate-800 font-mono text-lg hover:bg-slate-900/60"
-                    >
-                      <TableCell className="font-bold tracking-wide text-amber-300">
-                        {f.code}
-                      </TableCell>
-                      <TableCell className="text-slate-300">{aircraft?.reg ?? "—"}</TableCell>
-                      <TableCell className="tabular-nums text-slate-300">
-                        {fmtTime(f.onBlock)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn("font-sans", BOARD_STATUS_CLASS[status])}>
-                          {t(`board.status.${status}`)}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            {renderBoardSection(recentlyLanded, landedTimeOf, { showHeader: false })}
           </div>
         )}
 
-        <div className="flex flex-col gap-2 border-t border-slate-800 pt-6">
+        <div className="flex flex-col gap-3 border-t border-slate-800 pt-6">
           <h2 className="text-lg font-medium text-slate-200">{t("board.lookup.title")}</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
-              className="max-w-40 border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-600"
+              className="w-full border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-600 sm:w-40"
               placeholder="z. B. 7K3Q"
               data-testid="board-lookup-input"
               value={lookupCode}
@@ -384,22 +509,61 @@ export function BoardPage() {
             </Button>
           </div>
           {lookupResult === "not-found" && (
-            <p className="text-destructive text-sm" data-testid="board-lookup-result">
-              {t("board.lookup.notFound")}
-            </p>
+            <div
+              className={cn("rounded-xl border p-4", LOOKUP_VARIANT_CLASS.bad)}
+              data-testid="board-lookup-result"
+            >
+              <p className="text-base font-bold text-slate-100">
+                <span aria-hidden>❌</span> {t("board.lookup.notFound")}
+              </p>
+            </div>
           )}
           {lookupResult && lookupResult !== "not-found" && (
-            <div className="flex flex-col gap-1" data-testid="board-lookup-result">
+            <div className="flex flex-col gap-2" data-testid="board-lookup-result">
               {lookupResult.groupName && groupMembers.length > 1 && (
                 <p className="text-sm font-medium text-slate-200">
                   {t("board.lookup.groupHeading", { group: lookupResult.groupName })}
                 </p>
               )}
-              {groupMembers.map((g) => (
-                <p key={g.id} className="text-sm text-slate-300" data-testid="board-lookup-member">
-                  {statusLine(g)}
-                </p>
-              ))}
+              {groupMembers.map((g) => {
+                const presentation = presentGuest(g);
+                return (
+                  <div
+                    key={g.id}
+                    className={cn("rounded-xl border p-4", LOOKUP_VARIANT_CLASS[presentation.variant])}
+                    data-testid="board-lookup-member"
+                  >
+                    <p className="text-base font-bold text-slate-100 sm:text-lg">
+                      <span aria-hidden>{presentation.icon}</span> {presentation.headline}
+                    </p>
+                    {presentation.detail && (
+                      <p className="mt-1 text-sm text-slate-300">{presentation.detail}</p>
+                    )}
+                    {presentation.kv && presentation.kv.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+                        {presentation.kv.map((item) => (
+                          <div key={item.label}>
+                            <div className="text-[11px] tracking-wide text-slate-400 uppercase">
+                              {item.label}
+                            </div>
+                            <div
+                              className={cn(
+                                "text-lg font-bold tabular-nums",
+                                item.muted ? "text-slate-200" : "text-amber-300",
+                              )}
+                            >
+                              {item.value}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {presentation.hint && (
+                      <p className="mt-3 text-xs text-slate-400">{presentation.hint}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

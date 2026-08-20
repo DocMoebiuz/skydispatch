@@ -132,11 +132,22 @@ test("a boarded flight shows a projected departure on Tracking and the Board, an
     // the user's own fixed rule (packages/shared/src/constants.ts).
     expect(minutesApart).toBe(20);
 
-    // --- Guest lookup: flight A's guest gets the estimate + "15 min before" reminder ---
+    // --- Guest lookup: flight A's guest (already "ready"/boarding) gets a
+    // "board now" call, no estimate/arrive-by (that'd read as already-late
+    // once boarding's underway) — matching the static prototype's own split. ---
     const guest1 = await fetch("http://localhost:4280/api/guests")
       .then((r) => r.json() as Promise<{ id: string; code: string }[]>)
       .then((list) => list.find((g) => g.id === guest1Id));
     await page.goto(`/board?code=${guest1!.code}`);
+    await expect(page.getByTestId("board-lookup-member")).toContainText("JETZT BOARDING");
+    await expect(page.getByTestId("board-lookup-member")).not.toContainText("vorauss. Abflug");
+
+    // --- Guest lookup: flight B's guest (still "assigned", not yet ready)
+    // gets the full estimate + "15 min before" reminder instead. ---
+    const guest2 = await fetch("http://localhost:4280/api/guests")
+      .then((r) => r.json() as Promise<{ id: string; code: string }[]>)
+      .then((list) => list.find((g) => g.id === guest2Id));
+    await page.goto(`/board?code=${guest2!.code}`);
     await expect(page.getByTestId("board-lookup-member")).toContainText("vorauss. Abflug");
     await expect(page.getByTestId("board-lookup-member")).toContainText("15 Min");
   } finally {
