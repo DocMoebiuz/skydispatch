@@ -35,6 +35,7 @@ const aircraft: Aircraft = {
   fuelBurnedSinceReportL: 0,
   refuelBreakActive: false,
   refuelBreakStartedAt: null,
+  refuelBreakEstimatedMinutes: null,
 };
 
 const pilot: Pilot = {

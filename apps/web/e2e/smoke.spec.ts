@@ -22,6 +22,7 @@ const routes: { path: string; heading: string }[] = [
   { path: "/dispatch/planning", heading: "Planung" },
   { path: "/dispatch/boarding", heading: "Boarding" },
   { path: "/dispatch/tracking", heading: "Tracking" },
+  { path: "/dispatch/refueling", heading: "Betankung" },
   { path: "/dispatch/reporting", heading: "Reporting" },
   { path: "/board", heading: "Abflugtafel" },
 ];

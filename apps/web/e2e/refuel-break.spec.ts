@@ -3,10 +3,12 @@ import { DEFAULT_FLIGHT_DAY_ID } from "shared";
 import { selectByText } from "./helpers/select";
 import { deleteGuestByEmail, deleteById } from "./helpers/cosmos";
 
-// A refuel break is the deliberate path (vs. the quick one-click refuel
-// action, which stays as a separate fallback): start it, the aircraft can't
-// dispatch a flight while it's open, and it can only be closed by reporting
-// a real fuel level — never left open with stale data. See
+// A refuel break is its own operational event, on its own page (not Setup —
+// starting/ending it isn't really "setup"): start it (with an estimated
+// duration, for the not-yet-built departure-time projection), the aircraft
+// can't dispatch a flight while it's open, and it can only be closed by
+// reporting a real fuel level — either a delta ("N liters added," tested
+// here) or an absolute reading — never left open with stale data. See
 // docs/architecture.md § Open decisions #5.
 
 test("a refuel break blocks starting a flight until it's ended with a reported fuel level", async ({
@@ -82,12 +84,13 @@ test("a refuel break blocks starting a flight until it's ended with a reported f
     await fetch(`http://localhost:4280/api/flights/${flightId}/actions/lock`, { method: "POST" });
     await fetch(`http://localhost:4280/api/guests/${guest.id}/actions/check-in`, { method: "POST" });
 
-    // --- Start the break on Setup ---
-    const aircraftRow = page.getByTestId("aircraft-row").filter({ hasText: reg });
-    await aircraftRow.getByTestId("aircraft-start-refuel-break").click();
-    // Starting a break drops straight into the reporting UI — nothing else
-    // useful to show for this aircraft until a number comes in.
-    await expect(aircraftRow.getByTestId("aircraft-end-refuel-break")).toBeVisible();
+    // --- Start the break on its own page ---
+    await page.goto("/dispatch/refueling");
+    const aircraftCard = page.getByTestId("refueling-aircraft-card").filter({ hasText: reg });
+    await aircraftCard.getByTestId("refueling-open-start-form").click();
+    await aircraftCard.getByTestId("refueling-start-minutes").fill("20");
+    await aircraftCard.getByTestId("refueling-start-confirm").click();
+    await expect(aircraftCard.getByTestId("refueling-status-active")).toContainText("20");
 
     // --- Tracking: start is blocked while the break is open ---
     await page.goto("/dispatch/tracking");
@@ -102,26 +105,36 @@ test("a refuel break blocks starting a flight until it's ended with a reported f
     });
     expect(blockedStart.status).toBe(409);
 
-    // --- End the break with a new reported level ---
-    await page.goto("/dispatch/setup");
-    const aircraftRowAgain = page.getByTestId("aircraft-row").filter({ hasText: reg });
-    await aircraftRowAgain.getByTestId("aircraft-refuel-break-active").click();
-    await aircraftRowAgain.getByTestId("aircraft-fuel-input").fill("130");
-    await aircraftRowAgain.getByTestId("aircraft-end-refuel-break").click();
-    await expect(aircraftRowAgain.getByTestId("aircraft-fuel-cell")).toContainText("130 L Avgas");
-    await expect(aircraftRowAgain.getByTestId("aircraft-refuel-break-active")).toHaveCount(0);
+    // --- End the break by reporting a delta ("30L added"), not an
+    // absolute level — the other half of EndRefuelBreakRequest's union ---
+    await page.goto("/dispatch/refueling");
+    const aircraftCardAgain = page.getByTestId("refueling-aircraft-card").filter({ hasText: reg });
+    await aircraftCardAgain.getByTestId("refueling-open-end-form").click();
+    // "Menge nachgetankt (L)" (delta) is the default mode — no need to
+    // switch the select for this test.
+    await aircraftCardAgain.getByTestId("refueling-end-value").fill("30");
+    await aircraftCardAgain.getByTestId("refueling-end-confirm").click();
+    await expect(aircraftCardAgain.getByTestId("refueling-status-active")).toHaveCount(0);
+    await expect(aircraftCardAgain).toContainText("130 L");
 
     const aircraftAfter = await fetch("http://localhost:4280/api/aircraft")
       .then(
         (r) =>
           r.json() as Promise<
-            { id: string; refuelBreakActive: boolean; fuelOnBoardL: number; fuelBurnedSinceReportL: number }[]
+            {
+              id: string;
+              refuelBreakActive: boolean;
+              fuelOnBoardL: number;
+              fuelBurnedSinceReportL: number;
+              refuelBreakEstimatedMinutes: number | null;
+            }[]
           >,
       )
       .then((list) => list.find((a) => a.id === aircraftId));
     expect(aircraftAfter?.refuelBreakActive).toBe(false);
-    expect(aircraftAfter?.fuelOnBoardL).toBe(130);
+    expect(aircraftAfter?.fuelOnBoardL).toBe(130); // 100 reported + 30 delta
     expect(aircraftAfter?.fuelBurnedSinceReportL).toBe(0);
+    expect(aircraftAfter?.refuelBreakEstimatedMinutes).toBeNull();
 
     // --- Tracking: start now works ---
     await page.goto("/dispatch/tracking");

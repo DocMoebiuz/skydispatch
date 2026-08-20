@@ -8,7 +8,8 @@ import { randomUUID } from "node:crypto";
 import {
   DEFAULT_FLIGHT_DAY_ID,
   aircraftCreateRequestSchema,
-  refuelRequestSchema,
+  startRefuelBreakRequestSchema,
+  endRefuelBreakRequestSchema,
   type Aircraft,
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
@@ -45,19 +46,23 @@ export async function createAircraft(
     fuelBurnLPerHour: parsed.data.fuelBurnLPerHour ?? null,
     refuelBreakActive: false,
     refuelBreakStartedAt: null,
+    refuelBreakEstimatedMinutes: null,
   };
   const container = await getOperationsContainer();
   await container.items.create(aircraft);
   return { status: 201, jsonBody: aircraft };
 }
 
-// Full-field edit from Setup's aircraft details dialog — a plain PUT, not
-// another /actions/ endpoint, since there's no branching server logic here
-// (see pilots.ts's updatePilot for the same reasoning). Kept as a *separate*
-// endpoint from refuelAircraft below, even though PUT could theoretically
-// carry fuelOnBoardL too — refueling is a distinct, frequent real-world
-// action (the fuel truck visits between flights) that shouldn't require
-// reopening the full edit form and resubmitting every other field.
+// Full-field edit from Setup's aircraft form — a plain PUT, not another
+// /actions/ endpoint, since there's no branching server logic here (see
+// pilots.ts's updatePilot for the same reasoning). fuelOnBoardL is editable
+// here too — e.g. an aircraft arrives for the day already carrying fuel, or
+// a dispatcher just corrects a typo — distinct from a refuel break, which is
+// the deliberate "this aircraft is out of service being fuelled right now"
+// event (start/end-refuel-break below). Only resets fuelBurnedSinceReportL
+// when the submitted level actually differs from what's on file, so opening
+// this form to fix an unrelated field (e.g. the model name) without
+// touching fuel doesn't silently wipe out real accumulated burn data.
 export async function updateAircraft(
   request: HttpRequest,
   _context: InvocationContext,
@@ -79,6 +84,8 @@ export async function updateAircraft(
     .item(aircraftId, DEFAULT_FLIGHT_DAY_ID)
     .read<Aircraft>();
   if (!aircraft) return { status: 404, jsonBody: { error: "not-found" } };
+  const newFuelOnBoardL = parsed.data.fuelOnBoardL ?? aircraft.fuelOnBoardL;
+  const fuelChanged = newFuelOnBoardL !== aircraft.fuelOnBoardL;
   const updated: Aircraft = {
     ...aircraft,
     reg: parsed.data.reg,
@@ -89,19 +96,20 @@ export async function updateAircraft(
     maxTakeoffMassKg: parsed.data.maxTakeoffMassKg,
     fuelType: parsed.data.fuelType,
     fuelBurnLPerHour: parsed.data.fuelBurnLPerHour ?? null,
-    // fuelOnBoardL deliberately untouched — see refuelAircraft below.
+    fuelOnBoardL: newFuelOnBoardL,
+    fuelBurnedSinceReportL: fuelChanged ? 0 : aircraft.fuelBurnedSinceReportL,
   };
   await container.item(aircraftId, DEFAULT_FLIGHT_DAY_ID).replace(updated);
   return { status: 200, jsonBody: updated };
 }
 
-// Dispatcher records a refuel (sets the absolute liters on board, read off the
-// fuel truck's meter) — same shape as pilots' actions/weigh. Quick path, kept
-// alongside the start/end-refuel-break flow below rather than replaced by it
-// (e.g. a minor top-up that doesn't warrant the full break ceremony) — either
-// path is "a real number is now on file", so both reset
-// fuelBurnedSinceReportL the same way.
-export async function refuelAircraft(
+// Marks the aircraft as mid-refuel — actions/start on any flight using it
+// refuses while this is true (nfr.md § Reliability & safety), see
+// flights.ts's startFlight. The estimated duration feeds the departure-time
+// projection for this aircraft's next flight (Scheduling, not yet built).
+// Refuses if a break is already open rather than silently restarting the
+// clock.
+export async function startRefuelBreak(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
@@ -113,34 +121,10 @@ export async function refuelAircraft(
   } catch {
     return { status: 400, jsonBody: { error: "invalid-json" } };
   }
-  const parsed = refuelRequestSchema.safeParse(body);
+  const parsed = startRefuelBreakRequestSchema.safeParse(body);
   if (!parsed.success) {
     return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
   }
-  const container = await getOperationsContainer();
-  const { resource: aircraft } = await container
-    .item(aircraftId, DEFAULT_FLIGHT_DAY_ID)
-    .read<Aircraft>();
-  if (!aircraft) return { status: 404, jsonBody: { error: "not-found" } };
-  const updated: Aircraft = {
-    ...aircraft,
-    fuelOnBoardL: parsed.data.fuelOnBoardL,
-    fuelBurnedSinceReportL: 0,
-  };
-  await container.item(aircraftId, DEFAULT_FLIGHT_DAY_ID).replace(updated);
-  return { status: 200, jsonBody: updated };
-}
-
-// Marks the aircraft as mid-refuel — actions/start on any flight using it
-// refuses while this is true (nfr.md § Reliability & safety), see
-// flights.ts's startFlight. Refuses if a break is already open rather than
-// silently restarting the clock.
-export async function startRefuelBreak(
-  request: HttpRequest,
-  _context: InvocationContext,
-): Promise<HttpResponseInit> {
-  const aircraftId = request.params.id;
-  if (!aircraftId) return { status: 400, jsonBody: { error: "missing-id" } };
   const container = await getOperationsContainer();
   const { resource: aircraft } = await container
     .item(aircraftId, DEFAULT_FLIGHT_DAY_ID)
@@ -153,15 +137,16 @@ export async function startRefuelBreak(
     ...aircraft,
     refuelBreakActive: true,
     refuelBreakStartedAt: new Date().toISOString(),
+    refuelBreakEstimatedMinutes: parsed.data.estimatedMinutes,
   };
   await container.item(aircraftId, DEFAULT_FLIGHT_DAY_ID).replace(updated);
   return { status: 200, jsonBody: updated };
 }
 
-// Ends a refuel break — the new fuel level is required, not optional: a
-// plane can't come out of a refuel break without reporting what's actually
-// on board (this is the whole point of the break, not a formality). Refuses
-// if no break is currently open.
+// Ends a refuel break — the new fuel level is required, not optional (as
+// either an absolute reading or a delta, see EndRefuelBreakRequest): a plane
+// can't come out of a refuel break without reporting what's actually on
+// board. Refuses if no break is currently open.
 export async function endRefuelBreak(
   request: HttpRequest,
   _context: InvocationContext,
@@ -174,7 +159,7 @@ export async function endRefuelBreak(
   } catch {
     return { status: 400, jsonBody: { error: "invalid-json" } };
   }
-  const parsed = refuelRequestSchema.safeParse(body);
+  const parsed = endRefuelBreakRequestSchema.safeParse(body);
   if (!parsed.success) {
     return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
   }
@@ -186,12 +171,15 @@ export async function endRefuelBreak(
   if (!aircraft.refuelBreakActive) {
     return { status: 409, jsonBody: { error: "no-refuel-break-active" } };
   }
+  const newFuelOnBoardL =
+    "deltaL" in parsed.data ? (aircraft.fuelOnBoardL ?? 0) + parsed.data.deltaL : parsed.data.fuelOnBoardL;
   const updated: Aircraft = {
     ...aircraft,
-    fuelOnBoardL: parsed.data.fuelOnBoardL,
+    fuelOnBoardL: newFuelOnBoardL,
     fuelBurnedSinceReportL: 0,
     refuelBreakActive: false,
     refuelBreakStartedAt: null,
+    refuelBreakEstimatedMinutes: null,
   };
   await container.item(aircraftId, DEFAULT_FLIGHT_DAY_ID).replace(updated);
   return { status: 200, jsonBody: updated };
@@ -251,13 +239,6 @@ app.http("deleteAircraft", {
   route: "aircraft/{id}",
   authLevel: "anonymous",
   handler: deleteAircraft,
-});
-
-app.http("refuelAircraft", {
-  methods: ["POST"],
-  route: "aircraft/{id}/actions/refuel",
-  authLevel: "anonymous",
-  handler: refuelAircraft,
 });
 
 app.http("startRefuelBreak", {

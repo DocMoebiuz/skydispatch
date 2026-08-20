@@ -10,6 +10,7 @@ import {
   ScanLine,
   Radar,
   BarChart3,
+  Fuel,
 } from "lucide-react";
 import {
   SidebarProvider,
@@ -43,6 +44,7 @@ const NAV_ITEMS = [
   { to: "/dispatch/planning", icon: Map, key: "planning", end: false },
   { to: "/dispatch/boarding", icon: ScanLine, key: "boarding", end: false },
   { to: "/dispatch/tracking", icon: Radar, key: "tracking", end: false },
+  { to: "/dispatch/refueling", icon: Fuel, key: "refueling", end: false },
   { to: "/dispatch/reporting", icon: BarChart3, key: "reporting", end: false },
   { to: "/dispatch/setup", icon: Settings, key: "setup", end: false },
 ] as const;

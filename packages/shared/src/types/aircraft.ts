@@ -20,12 +20,13 @@ export interface Aircraft {
   fuelType: FuelType;
   // Static — fuel on board exactly as of the last explicit report, in
   // liters. Genuinely unknown at aircraft creation (nobody's dipped the tank
-  // yet); set by either the quick POST /api/aircraft/{id}/actions/refuel
-  // (absolute liters) or ending a refuel break (actions/end-refuel-break) —
-  // both also reset fuelBurnedSinceReportL to 0, since either one means a
-  // real, current number is now on file. null blocks assign/lock the same
-  // way an unknown pilot weight does — see weightAndBalance.ts's
-  // availablePayloadKg.
+  // yet); set either directly via Setup's create/edit form (PUT
+  // /api/aircraft/{id} — e.g. "this aircraft just arrived for the day with
+  // X liters already on board") or by ending a refuel break
+  // (actions/end-refuel-break) — both reset fuelBurnedSinceReportL to 0
+  // *when the value actually changes*, since either one means a real,
+  // current number is now on file. null blocks assign/lock the same way an
+  // unknown pilot weight does — see weightAndBalance.ts's availablePayloadKg.
   fuelOnBoardL: number | null;
   // Dynamic delta — accumulated burn (elapsed airborne time ×
   // fuelBurnLPerHour) since fuelOnBoardL was last reported, added to by
@@ -43,7 +44,13 @@ export interface Aircraft {
   // A refuel break in progress — actions/start blocks on this aircraft while
   // true (nfr.md § Reliability & safety: you can't dispatch a flight on a
   // plane mid-refuel), and it can only be cleared by actions/end-refuel-break
-  // reporting the new fuelOnBoardL, never left open-ended.
+  // reporting the new fuel level (either an absolute reading or a delta —
+  // see EndRefuelBreakRequest), never left open-ended.
   refuelBreakActive: boolean;
   refuelBreakStartedAt: string | null;
+  // Provided when the break starts — feeds the departure-time projection for
+  // this aircraft's next flight while it's out of service (Scheduling, not
+  // yet built — see docs/architecture.md § Open decisions). null whenever
+  // refuelBreakActive is false.
+  refuelBreakEstimatedMinutes: number | null;
 }

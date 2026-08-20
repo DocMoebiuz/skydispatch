@@ -28,8 +28,10 @@ export type { AssignRequest } from "./schemas/assignRequest";
 export { assignRequestSchema } from "./schemas/assignRequest";
 export type { AdjustFlightTimesRequest } from "./schemas/adjustFlightTimesRequest";
 export { adjustFlightTimesRequestSchema } from "./schemas/adjustFlightTimesRequest";
-export type { RefuelRequest } from "./schemas/refuelRequest";
-export { refuelRequestSchema } from "./schemas/refuelRequest";
+export type { StartRefuelBreakRequest } from "./schemas/startRefuelBreakRequest";
+export { startRefuelBreakRequestSchema } from "./schemas/startRefuelBreakRequest";
+export type { EndRefuelBreakRequest } from "./schemas/endRefuelBreakRequest";
+export { endRefuelBreakRequestSchema } from "./schemas/endRefuelBreakRequest";
 
 export { DEFAULT_FLIGHT_DAY_ID, FUEL_DENSITY_KG_PER_L } from "./constants";
 export { ageFromDateOfBirth, isMinor, MINOR_AGE_THRESHOLD } from "./age";

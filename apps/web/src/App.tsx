@@ -7,6 +7,7 @@ import { GuestsPage } from "@/routes/dispatch/GuestsPage";
 import { PlanningPage } from "@/routes/dispatch/PlanningPage";
 import { BoardingPage } from "@/routes/dispatch/BoardingPage";
 import { TrackingPage } from "@/routes/dispatch/TrackingPage";
+import { RefuelingPage } from "@/routes/dispatch/RefuelingPage";
 import { ReportingPage } from "@/routes/dispatch/ReportingPage";
 import { RegisterPage } from "@/routes/register/RegisterPage";
 import { BoardPage } from "@/routes/board/BoardPage";
@@ -25,6 +26,7 @@ export function App() {
           <Route path="planning" element={<PlanningPage />} />
           <Route path="boarding" element={<BoardingPage />} />
           <Route path="tracking" element={<TrackingPage />} />
+          <Route path="refueling" element={<RefuelingPage />} />
           <Route path="reporting" element={<ReportingPage />} />
         </Route>
         <Route path="/register" element={<RegisterPage />} />

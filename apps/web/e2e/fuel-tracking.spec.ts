@@ -47,7 +47,7 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     await page.getByTestId("add-aircraft").click();
     await expect(page.getByTestId("aircraft-list")).toContainText(reg);
     const aircraftRow = page.getByTestId("aircraft-row").filter({ hasText: reg });
-    await expect(aircraftRow.getByTestId("aircraft-fuel-cell")).toContainText("100 L Avgas");
+    await expect(aircraftRow.getByTestId("aircraft-fuel-display")).toContainText("100 L Avgas");
     aircraftId = await fetch("http://localhost:4280/api/aircraft")
       .then((r) => r.json() as Promise<{ id: string; reg: string }[]>)
       .then((list) => list.find((a) => a.reg === reg)?.id);
@@ -137,16 +137,19 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     expect(aircraftAfter?.fuelOnBoardL).toBe(100);
     expect(aircraftAfter!.fuelBurnedSinceReportL).toBeGreaterThan(0);
 
-    // --- Refuel action: dispatcher sets the absolute liters after refueling ---
+    // --- Correction: fuel level is a plain editable field on the aircraft
+    // form itself now, not a separate quick-refuel action ---
     await page.goto("/dispatch/setup");
     const row = page.getByTestId("aircraft-row").filter({ hasText: reg });
-    await row.getByTestId("aircraft-fuel-cell").click();
-    await row.getByTestId("aircraft-fuel-input").fill("150");
-    await row.getByTestId("aircraft-fuel-save").click();
-    await expect(row.getByTestId("aircraft-fuel-cell")).toContainText("150 L Avgas");
+    await row.getByText(reg).click();
+    await expect(page.getByTestId("ac-fuel-onboard")).toHaveValue("100");
+    await page.getByTestId("ac-fuel-onboard").fill("150");
+    await page.getByTestId("add-aircraft").click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(row.getByTestId("aircraft-fuel-display")).toContainText("150 L Avgas");
 
-    // Any real report — quick refuel or ending a break — resets the burn
-    // accumulator, since a fresh number is now on file.
+    // Any real report — a form edit or ending a refuel break — resets the
+    // burn accumulator, since a fresh number is now on file.
     const aircraftRefueled = await fetch("http://localhost:4280/api/aircraft")
       .then((r) => r.json() as Promise<{ id: string; fuelBurnedSinceReportL: number }[]>)
       .then((list) => list.find((a) => a.id === aircraftId));

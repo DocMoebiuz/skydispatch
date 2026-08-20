@@ -75,9 +75,6 @@ export function SetupPage() {
   const [fuelBurnLPerHour, setFuelBurnLPerHour] = useState("");
   const [savingAircraft, setSavingAircraft] = useState(false);
   const [deletingAircraft, setDeletingAircraft] = useState(false);
-  const [editingFuelAircraftId, setEditingFuelAircraftId] = useState<string | null>(null);
-  const [fuelEditValue, setFuelEditValue] = useState("");
-  const [savingFuel, setSavingFuel] = useState(false);
 
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirmValue, setResetConfirmValue] = useState("");
@@ -252,6 +249,7 @@ export function SetupPage() {
     setEmptyWeightKg(a.emptyWeightKg != null ? String(a.emptyWeightKg) : "");
     setMaxTakeoffMassKg(a.maxTakeoffMassKg != null ? String(a.maxTakeoffMassKg) : "");
     setFuelType(a.fuelType ?? "");
+    setFuelOnBoardL(a.fuelOnBoardL != null ? String(a.fuelOnBoardL) : "");
     setFuelBurnLPerHour(a.fuelBurnLPerHour != null ? String(a.fuelBurnLPerHour) : "");
     setAircraftDialogOpen(true);
   }
@@ -273,10 +271,11 @@ export function SetupPage() {
         emptyWeightKg: emptyNum,
         maxTakeoffMassKg: mtomNum,
         fuelType,
-        // fuelOnBoardL is genuinely unknown at creation until dipped, and
-        // create-only here — editing never touches it, see
-        // openEditAircraftDialog/updateAircraft; use the refuel action instead.
-        ...(!editingAircraftId && fuelOnBoardL && { fuelOnBoardL: Number(fuelOnBoardL) }),
+        // Editable at creation (aircraft arrives for the day already
+        // carrying fuel) and when editing (a correction) — distinct from a
+        // refuel break, which is the deliberate "out of service being
+        // fuelled right now" event, see the Refueling page.
+        ...(fuelOnBoardL && { fuelOnBoardL: Number(fuelOnBoardL) }),
         ...(fuelBurnLPerHour && { fuelBurnLPerHour: Number(fuelBurnLPerHour) }),
       });
       const response = editingAircraftId
@@ -315,57 +314,6 @@ export function SetupPage() {
       }
     } finally {
       setDeletingAircraft(false);
-    }
-  }
-
-  function startEditFuel(a: Aircraft) {
-    setEditingFuelAircraftId(a.id);
-    setFuelEditValue(a.fuelOnBoardL != null ? String(a.fuelOnBoardL) : "");
-  }
-
-  // Same input+save affordance either way — which endpoint it hits depends
-  // on whether a refuel break is open. Ending a break *requires* the number
-  // (it's how the break closes at all); the plain quick action is just a
-  // minor top-up/correction that doesn't warrant starting a break first.
-  async function saveFuel(aircraft: Aircraft) {
-    const litersNum = Number(fuelEditValue);
-    if (!fuelEditValue || Number.isNaN(litersNum) || litersNum < 0) return;
-    setSavingFuel(true);
-    try {
-      const path = aircraft.refuelBreakActive ? "end-refuel-break" : "refuel";
-      const response = await fetch(`/api/aircraft/${aircraft.id}/actions/${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fuelOnBoardL: litersNum }),
-      });
-      if (response.ok) {
-        const updated = (await response.json()) as Aircraft;
-        setAircraft((prev) => prev.map((a) => (a.id === aircraft.id ? updated : a)));
-        setEditingFuelAircraftId(null);
-        setFuelEditValue("");
-      }
-    } finally {
-      setSavingFuel(false);
-    }
-  }
-
-  async function startRefuelBreak(aircraftId: string) {
-    setSavingFuel(true);
-    try {
-      const response = await fetch(`/api/aircraft/${aircraftId}/actions/start-refuel-break`, {
-        method: "POST",
-      });
-      if (response.ok) {
-        const updated = (await response.json()) as Aircraft;
-        setAircraft((prev) => prev.map((a) => (a.id === aircraftId ? updated : a)));
-        // Straight into the reporting UI — the whole point of a break is
-        // that it can't close without a number, so there's nothing else
-        // useful to show for this aircraft right now.
-        setEditingFuelAircraftId(aircraftId);
-        setFuelEditValue("");
-      }
-    } finally {
-      setSavingFuel(false);
     }
   }
 
@@ -658,93 +606,30 @@ export function SetupPage() {
                           ? t("dispatch.setup.aircraft.mtomShort", { mtom: a.maxTakeoffMassKg })
                           : t("dispatch.setup.aircraft.weightDataMissing")}
                       </span>
-                      {/* Fuel is only shown/editable once a fuel type is on
-                          file — "dim, don't hide": aircraft without fuel
-                          tracking yet just don't get this bit. The quick
-                          refuel action stays right on the card (unlike
-                          delete) — it's a frequent, non-destructive,
-                          real-world correction. A refuel break is the more
-                          deliberate path: started explicitly, and can only
-                          be closed by reporting a number through this same
-                          input — never left open with stale fuel data. */}
-                      {a.fuelType &&
-                        (editingFuelAircraftId === a.id ? (
-                          <span
-                            className="mt-0.5 flex items-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Input
-                              type="number"
-                              className="h-7 w-16"
-                              data-testid="aircraft-fuel-input"
-                              value={fuelEditValue}
-                              onChange={(e) => setFuelEditValue(e.target.value)}
-                              placeholder={
-                                a.refuelBreakActive
-                                  ? t("dispatch.setup.aircraft.fuelOnBoardL")
-                                  : undefined
-                              }
-                              autoFocus
-                            />
-                            <Button
-                              size="icon-sm"
-                              variant="ghost"
-                              data-testid={
-                                a.refuelBreakActive ? "aircraft-end-refuel-break" : "aircraft-fuel-save"
-                              }
-                              disabled={savingFuel}
-                              aria-label={
-                                a.refuelBreakActive
-                                  ? t("dispatch.setup.aircraft.endRefuelBreak")
-                                  : t("dispatch.setup.aircraft.saveFuel")
-                              }
-                              onClick={() => void saveFuel(a)}
+                      {/* Read-only here — editing fuel is either the full
+                          form (this card's own click-to-edit, for a
+                          correction or the day's starting level) or a
+                          deliberate refuel break (its own page now, not
+                          Setup — starting/ending it isn't really "setup").
+                          "Dim, don't hide": aircraft without fuel tracking
+                          yet just don't get this bit. */}
+                      {a.fuelType && (
+                        <span
+                          className="text-muted-foreground mt-0.5 flex w-fit items-center gap-1 text-xs"
+                          data-testid="aircraft-fuel-display"
+                        >
+                          {a.fuelOnBoardL ?? 0} L {t(`dispatch.setup.aircraft.fuelType.${a.fuelType}`)}
+                          {a.refuelBreakActive && (
+                            <span
+                              className="flex items-center gap-1 text-amber-600 dark:text-amber-500"
+                              data-testid="aircraft-refuel-break-active"
                             >
-                              ✓
-                            </Button>
-                          </span>
-                        ) : a.refuelBreakActive ? (
-                          <button
-                            type="button"
-                            className="mt-0.5 flex w-fit items-center gap-1 text-xs text-amber-600 dark:text-amber-500"
-                            data-testid="aircraft-refuel-break-active"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingFuelAircraftId(a.id);
-                              setFuelEditValue("");
-                            }}
-                          >
-                            <Fuel className="size-3.5 shrink-0" aria-hidden />
-                            {t("dispatch.setup.aircraft.refuelBreakActive")}
-                          </button>
-                        ) : (
-                          <span className="mt-0.5 flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              className="text-muted-foreground w-fit text-xs underline decoration-dotted underline-offset-2"
-                              data-testid="aircraft-fuel-cell"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditFuel(a);
-                              }}
-                            >
-                              {a.fuelOnBoardL ?? 0} L{" "}
-                              {t(`dispatch.setup.aircraft.fuelType.${a.fuelType}`)}
-                            </button>
-                            <button
-                              type="button"
-                              className="text-muted-foreground w-fit text-xs underline decoration-dotted underline-offset-2"
-                              data-testid="aircraft-start-refuel-break"
-                              disabled={savingFuel}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void startRefuelBreak(a.id);
-                              }}
-                            >
-                              {t("dispatch.setup.aircraft.startRefuelBreak")}
-                            </button>
-                          </span>
-                        ))}
+                              <Fuel className="size-3.5 shrink-0" aria-hidden />
+                              {t("dispatch.setup.aircraft.refuelBreakActive")}
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -819,21 +704,22 @@ export function SetupPage() {
             {t("dispatch.setup.aircraft.fuelSection")}
           </p>
           <div className="grid grid-cols-2 gap-4">
-            {/* Initial fuel is create-only — editing an existing aircraft
-                never touches fuelOnBoardL, see updateAircraft; use the
-                card's own refuel quick-action for that instead. Genuinely
-                optional: nobody's dipped the tank yet at creation time. */}
-            {!editingAircraftId && (
-              <div className="grid gap-2">
-                <Label htmlFor="ac-fuel-onboard">{t("dispatch.setup.aircraft.fuelOnBoardL")}</Label>
-                <Input
-                  id="ac-fuel-onboard"
-                  type="number"
-                  value={fuelOnBoardL}
-                  onChange={(e) => setFuelOnBoardL(e.target.value)}
-                />
-              </div>
-            )}
+            {/* Editable at both creation (an aircraft arrives for the day
+                already carrying fuel) and later (a correction) — distinct
+                from a refuel break, the deliberate "out of service being
+                fuelled right now" event, which lives on its own page now.
+                Genuinely optional: nobody's dipped the tank yet at creation
+                time. */}
+            <div className="grid gap-2">
+              <Label htmlFor="ac-fuel-onboard">{t("dispatch.setup.aircraft.fuelOnBoardL")}</Label>
+              <Input
+                id="ac-fuel-onboard"
+                type="number"
+                data-testid="ac-fuel-onboard"
+                value={fuelOnBoardL}
+                onChange={(e) => setFuelOnBoardL(e.target.value)}
+              />
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="ac-fuel-burn">{t("dispatch.setup.aircraft.fuelBurnLPerHour")}</Label>
               <Input

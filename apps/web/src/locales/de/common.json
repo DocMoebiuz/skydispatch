@@ -20,6 +20,7 @@
       "planning": "Planung",
       "boarding": "Boarding",
       "tracking": "Tracking",
+      "refueling": "Betankung",
       "reporting": "Reporting"
     },
     "common": {
@@ -110,9 +111,6 @@
         "weightDataMissing": "Gewichtsdaten fehlen",
         "fuelOnBoardL": "Sprit an Bord (L)",
         "fuelBurnLPerHour": "Verbrauch (L/Std.)",
-        "saveFuel": "Sprit speichern",
-        "startRefuelBreak": "Sprit-Pause starten",
-        "endRefuelBreak": "Sprit-Pause beenden",
         "refuelBreakActive": "Wird betankt",
         "fuelType": {
           "label": "Kraftstoff",
@@ -204,6 +202,18 @@
         "landed": "Gelandet",
         "all": "Alle"
       }
+    },
+    "refueling": {
+      "empty": "Noch keine Flugzeuge angelegt.",
+      "active": "Wird betankt (~{{minutes}} Min. geschätzt)",
+      "startBreak": "Sprit-Pause starten",
+      "endBreak": "Sprit-Pause beenden",
+      "cancel": "Abbrechen",
+      "estimatedMinutes": "Geschätzte Dauer (Min.)",
+      "modeDelta": "Menge nachgetankt (L)",
+      "modeAbsolute": "Neuer Sprit-Stand (L)",
+      "deltaLabel": "Nachgetankte Menge (L)",
+      "absoluteLabel": "Neuer Sprit-Stand (L)"
     },
     "reporting": {
       "kpi": {
