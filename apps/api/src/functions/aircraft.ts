@@ -13,7 +13,7 @@ import {
   type Aircraft,
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
-import { isReferencedByActiveFlight } from "../lib/activeFlightGuard";
+import { isReferencedByActiveFlight, hasAirborneFlight } from "../lib/activeFlightGuard";
 
 export async function createAircraft(
   request: HttpRequest,
@@ -132,6 +132,12 @@ export async function startRefuelBreak(
   if (!aircraft) return { status: 404, jsonBody: { error: "not-found" } };
   if (aircraft.refuelBreakActive) {
     return { status: 409, jsonBody: { error: "refuel-break-already-active" } };
+  }
+  // Can't refuel a plane that's in the air — see hasAirborneFlight's own
+  // comment. Enforced server-side, not just withheld in the UI (nfr.md §
+  // Reliability & safety), same pattern as startFlight's refuelBreakActive check.
+  if (await hasAirborneFlight(aircraftId)) {
+    return { status: 409, jsonBody: { error: "aircraft-airborne" } };
   }
   const updated: Aircraft = {
     ...aircraft,

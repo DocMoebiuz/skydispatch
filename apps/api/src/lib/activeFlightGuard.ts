@@ -19,3 +19,21 @@ export async function isReferencedByActiveFlight(
     .fetchAll();
   return (resources[0] ?? 0) > 0;
 }
+
+// Narrower than isReferencedByActiveFlight above — specifically "is this
+// aircraft in the air right now," not just "does it have any open flight
+// plan." Used to refuse starting a refuel break: you can't refuel a plane
+// that's airborne (startRefuelBreak, apps/api aircraft.ts).
+export async function hasAirborneFlight(aircraftId: string): Promise<boolean> {
+  const container = await getOperationsContainer();
+  const { resources } = await container.items
+    .query<number>({
+      query: `SELECT VALUE COUNT(1) FROM c WHERE c.type = 'Flight' AND c.flightDayId = @flightDayId AND c.aircraftId = @aircraftId AND c.status = 'airborne'`,
+      parameters: [
+        { name: "@flightDayId", value: DEFAULT_FLIGHT_DAY_ID },
+        { name: "@aircraftId", value: aircraftId },
+      ],
+    })
+    .fetchAll();
+  return (resources[0] ?? 0) > 0;
+}

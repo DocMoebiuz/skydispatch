@@ -149,3 +149,109 @@ test("a refuel break blocks starting a flight until it's ended with a reported f
     if (pilotId) await deleteById(pilotId, DEFAULT_FLIGHT_DAY_ID);
   }
 });
+
+// Can't refuel a plane that's in the air, however tempting the queue on the
+// ground might make it look — the reverse of the test above (that one's
+// aircraft was always on the ground). See hasAirborneFlight in
+// apps/api/src/lib/activeFlightGuard.ts.
+test("a refuel break can't be started while the aircraft's flight is airborne", async ({ page }) => {
+  const stamp = Date.now();
+  const pilotName = `E2E Refuel Airborne Pilot ${stamp}`;
+  const reg = `E2E-REFUEL-AIR-${stamp}`;
+  const email = `e2e-refuel-air-${stamp}@example.test`;
+
+  let pilotId: string | undefined;
+  let aircraftId: string | undefined;
+  let flightId: string | undefined;
+
+  try {
+    const pilot = await fetch("http://localhost:4280/api/pilots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: pilotName, license: "PPL", weightKg: 80 }),
+    }).then((r) => r.json());
+    pilotId = pilot.id;
+
+    const aircraft = await fetch("http://localhost:4280/api/aircraft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reg,
+        model: "Cessna 172",
+        seats: 4,
+        emptyWeightKg: 500,
+        maxTakeoffMassKg: 800,
+        fuelType: "avgas",
+        fuelOnBoardL: 100,
+      }),
+    }).then((r) => r.json());
+    aircraftId = aircraft.id;
+
+    const guest = await fetch("http://localhost:4280/api/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `E2E Refuel Airborne Guest ${stamp}`,
+        email,
+        declaredWeightKg: 75,
+        dateOfBirth: "1990-05-14",
+        address: { street: "Musterstraße 1", zipCode: "71522", city: "Backnang" },
+        consent: true,
+        newsletter: false,
+      }),
+    }).then((r) => r.json());
+    await fetch(`http://localhost:4280/api/guests/${guest.id}/actions/mark-paid`, { method: "POST" });
+    await fetch(`http://localhost:4280/api/guests/${guest.id}/actions/weigh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weightKg: 75 }),
+    });
+
+    const flight = await fetch("http://localhost:4280/api/flights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aircraftId, pilotId }),
+    }).then((r) => r.json());
+    flightId = flight.id;
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guestIds: [guest.id] }),
+    });
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/lock`, { method: "POST" });
+    await fetch(`http://localhost:4280/api/guests/${guest.id}/actions/check-in`, { method: "POST" });
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/start`, { method: "POST" });
+
+    // --- UI: the start-break button is replaced by a warning while airborne ---
+    await page.goto("/dispatch/refueling");
+    const aircraftCard = page.getByTestId("refueling-aircraft-card").filter({ hasText: reg });
+    await expect(aircraftCard.getByTestId("refueling-airborne-warning")).toBeVisible();
+    await expect(aircraftCard.getByTestId("refueling-open-start-form")).toHaveCount(0);
+
+    // Server-side enforcement, not just the UI not offering it (nfr.md §
+    // Reliability & safety) — a direct API call must refuse too.
+    const blockedStart = await fetch(
+      `http://localhost:4280/api/aircraft/${aircraftId}/actions/start-refuel-break`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimatedMinutes: 20 }),
+      },
+    );
+    expect(blockedStart.status).toBe(409);
+    const blockedBody = await blockedStart.json();
+    expect(blockedBody.error).toBe("aircraft-airborne");
+
+    // --- Once landed, the break can start normally again ---
+    await fetch(`http://localhost:4280/api/flights/${flightId}/actions/land`, { method: "POST" });
+    await page.goto("/dispatch/refueling");
+    const aircraftCardAfter = page.getByTestId("refueling-aircraft-card").filter({ hasText: reg });
+    await expect(aircraftCardAfter.getByTestId("refueling-airborne-warning")).toHaveCount(0);
+    await expect(aircraftCardAfter.getByTestId("refueling-open-start-form")).toBeVisible();
+  } finally {
+    await deleteGuestByEmail(email);
+    if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);
+    if (aircraftId) await deleteById(aircraftId, DEFAULT_FLIGHT_DAY_ID);
+    if (pilotId) await deleteById(pilotId, DEFAULT_FLIGHT_DAY_ID);
+  }
+});

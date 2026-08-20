@@ -208,6 +208,7 @@
     },
     "refueling": {
       "empty": "Noch keine Flugzeuge angelegt.",
+      "airborne": "Flugzeug ist in der Luft – Sprit-Pause erst nach der Landung möglich.",
       "active": "Wird betankt (~{{minutes}} Min. geschätzt)",
       "startBreak": "Sprit-Pause starten",
       "endBreak": "Sprit-Pause beenden",

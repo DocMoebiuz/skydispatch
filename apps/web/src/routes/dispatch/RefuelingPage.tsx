@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { Aircraft } from "shared";
-import { Fuel, Loader2 } from "lucide-react";
+import type { Aircraft, Flight } from "shared";
+import { Fuel, Loader2, PlaneTakeoff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 export function RefuelingPage() {
   const { t } = useTranslation();
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
+  const [flights, setFlights] = useState<Flight[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [pending, setPending] = useState<Set<string>>(new Set());
 
@@ -38,24 +39,37 @@ export function RefuelingPage() {
   const [endValue, setEndValue] = useState("");
 
   function reload(): Promise<void> {
-    return fetch("/api/aircraft")
-      .then((r) => r.json() as Promise<Aircraft[]>)
-      .then((a) => setAircraftList(a));
+    return Promise.all([
+      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+    ]).then(([a, f]) => {
+      setAircraftList(a);
+      setFlights(f);
+    });
   }
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/aircraft")
-      .then((r) => r.json() as Promise<Aircraft[]>)
-      .then((a) => {
-        if (cancelled) return;
-        setAircraftList(a);
-        setInitialLoading(false);
-      });
+    Promise.all([
+      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+    ]).then(([a, f]) => {
+      if (cancelled) return;
+      setAircraftList(a);
+      setFlights(f);
+      setInitialLoading(false);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // A plane can't be refuelled while it's in the air — enforced server-side
+  // too (nfr.md § Reliability & safety), see startRefuelBreak's
+  // hasAirborneFlight check.
+  const airborneAircraftIds = new Set(
+    flights.filter((f) => f.status === "airborne").map((f) => f.aircraftId),
+  );
 
   function markPending(id: string, on: boolean) {
     setPending((prev) => {
@@ -135,6 +149,7 @@ export function RefuelingPage() {
           {aircraftList.map((a) => {
             const isPending = pending.has(a.id);
             const formOpen = openFormAircraftId === a.id;
+            const isAirborne = airborneAircraftIds.has(a.id);
             return (
               <Card key={a.id} data-testid="refueling-aircraft-card">
                 <CardContent className="flex flex-col gap-3">
@@ -251,6 +266,14 @@ export function RefuelingPage() {
                         </Button>
                       </div>
                     </div>
+                  ) : isAirborne ? (
+                    <p
+                      className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-500"
+                      data-testid="refueling-airborne-warning"
+                    >
+                      <PlaneTakeoff className="size-4 shrink-0" aria-hidden />
+                      {t("dispatch.refueling.airborne")}
+                    </p>
                   ) : (
                     <Button
                       size="sm"
