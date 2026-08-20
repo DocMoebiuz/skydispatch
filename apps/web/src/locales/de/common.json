@@ -146,6 +146,7 @@
         "pax": "{{count}} Pers.",
         "assignHint": "Passende Flüge sind hervorgehoben — anklicken zum Zuweisen.",
         "assignHintGroups": "Passende Gruppen/Gäste sind hervorgehoben — anklicken zum Zuweisen.",
+        "membersHint": "Passt nicht als Ganzes — einzelne Gäste einzeln ziehen oder anklicken, um sie separat zuzuweisen.",
         "empty": "Kein flugbereiter Gast verfügbar."
       },
       "builder": {

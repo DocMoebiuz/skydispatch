@@ -38,10 +38,10 @@ import {
 import { Plus, X, ChevronDown, ChevronRight, Loader2, CircleAlert } from "lucide-react";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { EmptyState } from "@/components/ui/empty-state";
-import { AssignableUnitCard } from "@/components/flight/AssignableUnitCard";
+import { AssignableUnitCard, AssignableMemberRow } from "@/components/flight/AssignableUnitCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { computeFlightLoad, type FlightLoad } from "@/lib/flightLoad";
-import { groupIntoUnits, type AssignableUnit } from "@/lib/assignableUnits";
+import { groupIntoUnits, unitFitsAnywhereWhole, type AssignableUnit } from "@/lib/assignableUnits";
 import { cn } from "@/lib/utils";
 
 const ORDER: Record<Flight["status"], number> = {
@@ -121,10 +121,18 @@ export function PlanningPage() {
   // highlight, non-fitting dim) OR click a planned flight (fitting pool units
   // highlight, non-fitting dim) — then click the highlighted counterpart to
   // assign. Mutually exclusive: selecting one side always clears the other,
-  // see selectUnit/selectFlight below. Purely a UI convenience; drag ignores
-  // this and can target any flight directly regardless of what's selected.
-  const [selectedUnitKey, setSelectedUnitKey] = useState<string | null>(null);
+  // see selectGroupCard/selectFlight below. Purely a UI convenience; drag
+  // ignores this and can target any flight directly regardless of what's
+  // selected. Holds the actual unit object, not just a key — a selection can
+  // be a whole pool group OR a single member pulled out of an expanded one
+  // (a synthetic one-member AssignableUnit, see selectMemberRow), and both
+  // need to drive the exact same fit-level/highlight/assign logic below.
+  const [selectedUnit, setSelectedUnit] = useState<AssignableUnit | null>(null);
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
+  // Which pool group currently has its member breakdown open — independent
+  // of `selectedUnit` (you can expand a group, then select one of its
+  // members, and the group stays visibly expanded). Only one at a time.
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
   // "Finished" (airborne + completed) flights have zero planning actions
   // available — collapsed by default, on demand only, so screen space goes to
   // what's actually actionable right now. See docs/architecture.md § Shared
@@ -231,7 +239,6 @@ export function PlanningPage() {
     (f) => f.status === "airborne" || f.status === "completed",
   );
 
-  const selectedUnit = selectedUnitKey ? poolUnits.find((u) => u.key === selectedUnitKey) : null;
   const selectedFlight = selectedFlightId ? plannedFlights.find((f) => f.id === selectedFlightId) : null;
   // Dimmed, not hidden, when nothing about this unit can fit the current
   // selection — hiding outright would jump the grid around on every
@@ -249,14 +256,82 @@ export function PlanningPage() {
     return load ? unitFitLevel(unit, aircraft, load) : "none";
   }
 
-  function selectUnit(key: string) {
+  // The pool group card's own 3-click cycle: select the whole group -> (2nd
+  // click) expand to show its members -> (3rd click) collapse but stay
+  // selected. Deselecting entirely only happens by clicking outside any
+  // card, or selecting something else — see the document-level effect below.
+  function selectGroupCard(unit: AssignableUnit) {
     setSelectedFlightId(null);
-    setSelectedUnitKey((prev) => (prev === key ? null : key));
+    if (selectedUnit?.key !== unit.key) {
+      setSelectedUnit(unit);
+      setExpandedGroupKey(null);
+    } else if (expandedGroupKey !== unit.key) {
+      setExpandedGroupKey(unit.key);
+    } else {
+      setExpandedGroupKey(null);
+    }
+  }
+
+  // A single passenger row inside an expanded group — its own simple toggle,
+  // no expand step (there's nothing further to drill into). The group stays
+  // expanded regardless, so another member can be picked right after.
+  function selectMemberRow(memberUnit: AssignableUnit) {
+    setSelectedFlightId(null);
+    setSelectedUnit((prev) => (prev?.key === memberUnit.key ? null : memberUnit));
   }
 
   function selectFlight(id: string) {
-    setSelectedUnitKey(null);
+    setSelectedUnit(null);
     setSelectedFlightId((prev) => (prev === id ? null : id));
+  }
+
+  function clearSelection() {
+    setSelectedUnit(null);
+    setSelectedFlightId(null);
+    setExpandedGroupKey(null);
+  }
+
+  // Clicking anywhere that isn't a pool-unit card or a flight card clears
+  // whatever's currently selected — those two element kinds handle their own
+  // clicks (select/switch/assign) via their own onClick already; this only
+  // catches clicks that land nowhere in particular (blank page area,
+  // headings, gaps between cards).
+  useEffect(() => {
+    if (!selectedUnit && !selectedFlightId) return;
+    function handlePointerDown(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-testid="pool-unit"]') || target.closest('[data-testid="flight-card"]')) {
+        return;
+      }
+      clearSelection();
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [selectedUnit, selectedFlightId]);
+
+  function memberDraggableId(groupKey: string, guestId: string): string {
+    return `member:${groupKey}:${guestId}`;
+  }
+
+  // Resolves a dnd-kit drag id back to the AssignableUnit it represents —
+  // either a whole pool group/solo guest ("pool:<unitKey>") or a single
+  // passenger pulled out of an expanded group ("member:<groupKey>:<guestId>",
+  // built as a synthetic one-member unit on the fly).
+  function resolveDraggedUnit(activeId: string): AssignableUnit | null {
+    if (activeId.startsWith("pool:")) {
+      const key = activeId.slice("pool:".length);
+      return poolUnits.find((u) => u.key === key) ?? null;
+    }
+    if (activeId.startsWith("member:")) {
+      const rest = activeId.slice("member:".length);
+      const sep = rest.lastIndexOf(":");
+      const groupKey = rest.slice(0, sep);
+      const guestId = rest.slice(sep + 1);
+      const guest = poolUnits.find((u) => u.key === groupKey)?.members.find((m) => m.id === guestId);
+      if (!guest) return null;
+      return { key: activeId, label: guest.name, members: [guest], totalWeightKg: guest.weightKg ?? 0 };
+    }
+    return null;
   }
 
   function markPending(key: string, on: boolean) {
@@ -439,8 +514,7 @@ export function PlanningPage() {
   }
 
   function handleDragStart(event: DragStartEvent) {
-    const unit = poolUnits.find((u) => `pool:${u.key}` === event.active.id);
-    setActiveUnit(unit ?? null);
+    setActiveUnit(resolveDraggedUnit(String(event.active.id)));
     setActiveWidth(event.active.rect.current.initial?.width ?? null);
   }
 
@@ -449,7 +523,7 @@ export function PlanningPage() {
     setActiveWidth(null);
     const { active, over } = event;
     if (!over) return;
-    const unit = poolUnits.find((u) => `pool:${u.key}` === active.id);
+    const unit = resolveDraggedUnit(String(active.id));
     if (!unit) return;
     void assignUnit(unit, String(over.id).replace(/^flight:/, ""));
   }
@@ -510,10 +584,17 @@ export function PlanningPage() {
             size={size}
             onClick={
               selectedUnit
-                ? fitLevel !== "none"
+                ? // "full" only — a group that only partially fits no longer
+                  // bulk-assigns-whatever-fits-and-drops-the-rest on click;
+                  // the dispatcher expands it and moves people out one at a
+                  // time instead (drag, or click-select a member row). A
+                  // single member's own fitLevel is always "full" or "none",
+                  // never "partial" (see unitFitLevel's own comment), so this
+                  // condition only actually changes behavior for groups.
+                  fitLevel === "full"
                   ? () => {
                       void assignUnit(selectedUnit, f.id);
-                      setSelectedUnitKey(null);
+                      setSelectedUnit(null);
                     }
                   : undefined
                 : !isLocked
@@ -696,8 +777,10 @@ export function PlanningPage() {
             <div className="flex flex-col gap-4">
               {poolUnits.map((unit) => {
                 const assigning = pending.has(`pool:${unit.key}`);
-                const selected = selectedUnitKey === unit.key;
+                const selected = selectedUnit?.key === unit.key;
                 const fitLevel = unitFitLevelForSelectedFlight(unit);
+                const expanded = expandedGroupKey === unit.key;
+                const overCapacity = !unitFitsAnywhereWhole(unit, aircraftList, flights, flightLoads);
                 return (
                   <AssignableUnitCard
                     key={unit.key}
@@ -705,6 +788,8 @@ export function PlanningPage() {
                     variant="card"
                     draggableId={`pool:${unit.key}`}
                     dataTestId="pool-unit"
+                    overCapacity={overCapacity}
+                    expanded={expanded}
                     className={cn(
                       selected && "border-primary ring-primary/50 ring-1",
                       selectedFlight &&
@@ -717,15 +802,64 @@ export function PlanningPage() {
                     )}
                     onClick={() => {
                       if (selectedFlight) {
-                        if (fitLevel !== "none") {
+                        // "full" only — see the flight card's own onClick for
+                        // why partial no longer bulk-assigns on click.
+                        if (fitLevel === "full") {
                           void assignUnit(unit, selectedFlight.id);
                           setSelectedFlightId(null);
                         }
                         return;
                       }
-                      selectUnit(unit.key);
+                      selectGroupCard(unit);
                     }}
                     actions={assigning ? <Loader2 className="size-3.5 animate-spin" /> : undefined}
+                    expandedContent={
+                      unit.members.length > 1 ? (
+                        <>
+                          <p className="text-muted-foreground px-3 pt-2 text-xs">
+                            {t("dispatch.planning.pool.membersHint")}
+                          </p>
+                          {unit.members.map((m) => {
+                            const memberUnit: AssignableUnit = {
+                              key: memberDraggableId(unit.key, m.id),
+                              label: m.name,
+                              members: [m],
+                              totalWeightKg: m.weightKg ?? 0,
+                            };
+                            const memberSelected = selectedUnit?.key === memberUnit.key;
+                            const memberFitLevel = selectedFlight
+                              ? unitFitLevelForSelectedFlight(memberUnit)
+                              : "full";
+                            const memberAssigning = pending.has(`pool:${memberUnit.key}`);
+                            return (
+                              <AssignableMemberRow
+                                key={m.id}
+                                guest={m}
+                                draggableId={memberUnit.key}
+                                className={cn(
+                                  memberSelected && "bg-accent",
+                                  selectedFlight &&
+                                    (memberFitLevel === "full"
+                                      ? "bg-primary/10"
+                                      : "text-muted-foreground opacity-50"),
+                                  memberAssigning && "opacity-40",
+                                )}
+                                onClick={() => {
+                                  if (selectedFlight) {
+                                    if (memberFitLevel === "full") {
+                                      void assignUnit(memberUnit, selectedFlight.id);
+                                      setSelectedFlightId(null);
+                                    }
+                                    return;
+                                  }
+                                  selectMemberRow(memberUnit);
+                                }}
+                              />
+                            );
+                          })}
+                        </>
+                      ) : undefined
+                    }
                   />
                 );
               })}

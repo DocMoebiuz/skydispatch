@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useDraggable } from "@dnd-kit/core";
-import { UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, UserRound } from "lucide-react";
+import type { Guest } from "shared";
 import { cn } from "@/lib/utils";
 import type { AssignableUnit } from "@/lib/assignableUnits";
 
@@ -21,6 +22,23 @@ interface AssignableUnitCardProps {
   // card-within-a-card would be too heavy.
   variant?: "card" | "row";
   className?: string;
+  // Weight can never fit on any flight — existing or brand-new — as one
+  // piece; see assignableUnits.ts's unitFitsAnywhereWhole. Rendered in red as
+  // a standing warning, independent of selection state.
+  overCapacity?: boolean;
+  // Whether the member breakdown below is currently shown (second click on a
+  // selected group card — see PlanningPage's click cycle). Only meaningful
+  // for multi-member groups; a chevron affordance only renders for those.
+  expanded?: boolean;
+  // Per-member draggable+clickable rows, rendered when `expanded` — lets a
+  // single passenger be moved out of a group individually instead of the
+  // whole group at once. Built by the caller (PlanningPage), since it needs
+  // per-member fit-level/selection state this component doesn't have. Kept
+  // as a sibling of the header below (not a descendant of it) so each
+  // member's own drag listeners never sit inside the group's own drag
+  // handle's DOM subtree — nesting them would fire both drags on one
+  // pointerdown.
+  expandedContent?: ReactNode;
 }
 
 // One item per assignable unit (group or solo guest) — draggable onto a
@@ -34,6 +52,9 @@ export function AssignableUnitCard({
   onClick,
   variant = "row",
   className,
+  overCapacity,
+  expanded,
+  expandedContent,
 }: AssignableUnitCardProps) {
   const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -41,29 +62,49 @@ export function AssignableUnitCard({
     disabled: !draggableId,
   });
   const isCard = variant === "card";
+  const expandable = isCard && unit.members.length > 1;
+  const dragStyle = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 10 }
+    : undefined;
 
-  return (
+  const header = (
     <div
       ref={setNodeRef}
       {...(draggableId ? { ...attributes, ...listeners } : {})}
-      data-testid={dataTestId}
+      // Only when this header IS the whole card — when expandable, the
+      // outer wrapper carries the testid instead, so a single "pool-unit"
+      // locator's bounding box covers the member rows too, not just the
+      // header half. See the outside-click-clears-selection effect, which
+      // relies on the same element to tell "inside this card" from "outside".
+      data-testid={expandable ? undefined : dataTestId}
       onClick={onClick}
       className={cn(
         "flex items-center gap-3",
-        isCard ? "rounded-lg border bg-card p-3" : "gap-2 border-b py-1.5 text-sm last:border-b-0",
+        isCard ? "p-3" : "border-b py-1.5 text-sm last:border-b-0",
+        // The border/rounding/background live here only when this header IS
+        // the whole visible card (not expandable) — an expandable group puts
+        // them on the outer wrapper below instead, since the header is then
+        // just its top half.
+        isCard && !expandable && "rounded-lg border bg-card",
         draggableId && "cursor-grab touch-none active:cursor-grabbing",
         onClick && "cursor-pointer",
         isDragging && "opacity-40",
-        className,
+        !expandable && className,
       )}
-      style={
-        transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 10 } : undefined
-      }
+      style={dragStyle}
     >
       <div className="flex min-w-0 flex-1 flex-col">
         {isCard ? (
           <>
-            <span className="truncate font-medium">{unit.label}</span>
+            <span className="flex items-center gap-1 truncate font-medium">
+              {expandable &&
+                (expanded ? (
+                  <ChevronDown className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+                ) : (
+                  <ChevronRight className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+                ))}
+              {unit.label}
+            </span>
             {unit.members.length > 1 && (
               <span className="text-muted-foreground truncate text-xs">
                 {unit.members.map((m) => m.name).join(", ")}
@@ -106,15 +147,87 @@ export function AssignableUnitCard({
             </span>
           </div>
           <div
-            className="w-16 shrink-0 text-right text-2xl font-semibold tabular-nums"
+            className={cn(
+              "w-16 shrink-0 text-right text-2xl font-semibold tabular-nums",
+              overCapacity && "text-destructive",
+            )}
             data-testid="pool-unit-weight"
           >
             {unit.totalWeightKg}
-            <span className="text-muted-foreground ml-1 text-sm font-normal">kg</span>
+            <span
+              className={cn(
+                "ml-1 text-sm font-normal",
+                overCapacity ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              kg
+            </span>
           </div>
         </>
       )}
       {actions}
+    </div>
+  );
+
+  if (!expandable) return header;
+
+  return (
+    <div className={cn("rounded-lg border bg-card", className)} data-testid={dataTestId}>
+      {header}
+      {expanded && expandedContent && (
+        // A plain sibling of the header, not nested inside it — a member
+        // row's own drag listeners must never sit inside the group's own
+        // drag-handle subtree, or one pointerdown could activate both drags.
+        <div
+          className="flex flex-col border-t"
+          data-testid="pool-unit-members"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {expandedContent}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One draggable+clickable row for a single passenger, pulled out of an
+// expanded group card — assigning just this row assigns only this guest, not
+// the rest of the group. Its own component (not a loop inside
+// AssignableUnitCard) because dnd-kit's useDraggable must be called once per
+// draggable node, not conditionally inside a parent's render loop.
+export function AssignableMemberRow({
+  guest,
+  draggableId,
+  onClick,
+  className,
+  dataTestId,
+}: {
+  guest: Guest;
+  draggableId: string;
+  onClick?: () => void;
+  className?: string;
+  dataTestId?: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: draggableId });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      data-testid={dataTestId ?? "pool-unit-member"}
+      onClick={onClick}
+      className={cn(
+        "flex touch-none items-center justify-between gap-2 border-t px-3 py-1.5 text-sm first:border-t-0 active:cursor-grabbing",
+        onClick ? "cursor-pointer" : "cursor-grab",
+        isDragging && "opacity-40",
+        className,
+      )}
+      style={
+        transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 10 } : undefined
+      }
+    >
+      <span className="truncate">{guest.name}</span>
+      <span className="text-muted-foreground tabular-nums">{guest.weightKg} kg</span>
     </div>
   );
 }

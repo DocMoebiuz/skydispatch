@@ -1,4 +1,5 @@
-import type { Guest } from "shared";
+import type { Aircraft, Flight, Guest } from "shared";
+import type { FlightLoad } from "./flightLoad";
 
 // A group (or a solo guest, acting as a "group of one") — the whole thing
 // assigned to a flight together, never per-seat. See docs/architecture.md §
@@ -36,4 +37,35 @@ export function groupIntoUnits(guests: Guest[]): AssignableUnit[] {
     units.push({ key: g.id, label: g.name, members: [g], totalWeightKg: g.weightKg ?? 0 });
   }
   return units;
+}
+
+// True if this unit could go on some flight as one whole piece — either an
+// existing (still fillable) flight's actual remaining capacity, or a
+// hypothetical brand-new flight built around any aircraft in the fleet at its
+// raw capacity (pilot weight ignored there, since none is assigned yet).
+// False means it structurally can never move as one unit no matter what the
+// dispatcher does right now — the pool's own red-weight warning, see
+// PlanningPage.tsx and docs/architecture.md § Shared flight components.
+export function unitFitsAnywhereWhole(
+  unit: AssignableUnit,
+  aircraftList: Aircraft[],
+  flights: Flight[],
+  flightLoads: Map<string, FlightLoad>,
+): boolean {
+  for (const f of flights) {
+    if (f.status === "airborne" || f.status === "completed") continue;
+    const load = flightLoads.get(f.id);
+    if (!load) continue;
+    const remainingSeats = load.totalSeats - load.usedSeats;
+    const remainingWeightKg = load.maxPayloadKg - load.usedWeightKg;
+    if (unit.members.length <= remainingSeats && unit.totalWeightKg <= remainingWeightKg) {
+      return true;
+    }
+  }
+  for (const a of aircraftList) {
+    if (unit.members.length <= a.seats && unit.totalWeightKg <= a.maxPayloadKg) {
+      return true;
+    }
+  }
+  return false;
 }
