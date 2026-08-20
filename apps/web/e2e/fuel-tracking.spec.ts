@@ -92,15 +92,24 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     await expect(flightCard.getByTestId("flight-card-fuel")).toContainText("927 / 1200 kg MTOM");
     await expect(flightCard.getByTestId("flight-card-fuel")).toContainText("72 kg");
 
-    // --- Ready, check-in, start, land ---
+    // --- Ready, boarding, start, land ---
     await flightCard.getByTestId("set-ready-flight").click();
-    await page.goto("/dispatch/checkin");
-    const checkinCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
-    await checkinCard
-      .getByTestId("checkin-card-passenger-row")
+    await page.goto("/dispatch/boarding");
+    const boardingCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
+    // This guest is the flight's only passenger, so checking them in
+    // completes the roster and flips status to "ready" server-side
+    // (recomputeBoardingStatus) — wait for that before navigating to
+    // Tracking, which (like Boarding) now filters by status and would miss
+    // the flight if it navigated there while still "assigned".
+    const checkInResponse = page.waitForResponse(
+      (r) => r.url().includes("/actions/check-in") && r.request().method() === "POST",
+    );
+    await boardingCard
+      .getByTestId("boarding-card-passenger-row")
       .filter({ hasText: guestName })
       .getByTestId("card-checkin-button")
       .click();
+    await checkInResponse;
 
     await page.goto("/dispatch/tracking");
     const trackingCard = page.getByTestId("flight-card").filter({ hasText: flightCode });

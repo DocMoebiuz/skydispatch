@@ -39,7 +39,10 @@ export function GuestsPage() {
   const [guests, setGuests] = useState<Guest[] | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loadError, setLoadError] = useState(false);
-  const [filter, setFilter] = useState<FilterKey>("all");
+  // "open" (not paid/weighed yet), not "all" — that's the actual day-to-day
+  // work queue at the front desk; "all" is a deliberate opt-in, not the
+  // default view.
+  const [filter, setFilter] = useState<FilterKey>("open");
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<Set<string>>(new Set());

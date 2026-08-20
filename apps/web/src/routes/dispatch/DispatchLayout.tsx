@@ -28,8 +28,11 @@ import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 // Full dispatcher shell matching docs/static-html-app/SkyDispatch-UI-Mockup.html's
-// nav areas — Dashboard/Setup/Gäste/Planung/Check-in/Tracking/Reporting — so the
+// nav areas — Dashboard/Setup/Gäste/Planung/Boarding/Tracking/Reporting — so the
 // app's shape is visible even before every area has real persistence behind it.
+// "Boarding" (was "Check-in") — that name is reserved for the per-guest action
+// and the guest-facing front-desk pay/weigh step; this page is about a whole
+// flight's roster actively boarding right now.
 // English route segments (code stays English, UI stays German — nfr.md §
 // Localization); German nav labels via i18next like everywhere else.
 // Setup last — it's a rarely-used, one-time-per-day configuration screen, not
@@ -38,7 +41,7 @@ const NAV_ITEMS = [
   { to: "/dispatch", icon: LayoutDashboard, key: "dashboard", end: true },
   { to: "/dispatch/guests", icon: Users, key: "guests", end: false },
   { to: "/dispatch/planning", icon: Map, key: "planning", end: false },
-  { to: "/dispatch/checkin", icon: ScanLine, key: "checkin", end: false },
+  { to: "/dispatch/boarding", icon: ScanLine, key: "boarding", end: false },
   { to: "/dispatch/tracking", icon: Radar, key: "tracking", end: false },
   { to: "/dispatch/reporting", icon: BarChart3, key: "reporting", end: false },
   { to: "/dispatch/setup", icon: Settings, key: "setup", end: false },

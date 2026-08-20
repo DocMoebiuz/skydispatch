@@ -95,17 +95,25 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     await flightCard.getByTestId("set-ready-flight").click();
     await expect(flightCard.getByTestId("flight-card-status")).toHaveText("Zugewiesen");
 
-    // --- Check-in ---
+    // --- Boarding ---
     // Every boardable flight renders as a card with its passengers listed and
     // actionable directly on the card — no separate select-then-act step. See
-    // docs/architecture.md § Shared flight components.
-    await page.goto("/dispatch/checkin");
-    const checkinCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
-    const checkinRow = checkinCard
-      .getByTestId("checkin-card-passenger-row")
+    // docs/architecture.md § Shared flight components. Boarding only shows
+    // "assigned" flights (still locked, not yet fully checked in) — this
+    // guest is the flight's only passenger, so checking them in completes
+    // the roster and the flight auto-flips to "ready" server-side
+    // (recomputeBoardingStatus), dropping its card off this page entirely.
+    await page.goto("/dispatch/boarding");
+    const boardingCard = page.getByTestId("flight-card").filter({ hasText: flightCode });
+    const boardingRow = boardingCard
+      .getByTestId("boarding-card-passenger-row")
       .filter({ hasText: guestName });
-    await checkinRow.getByTestId("card-checkin-button").click();
-    await expect(checkinRow.getByTestId("card-undo-checkin-button")).toBeVisible();
+    const checkInResponse = page.waitForResponse(
+      (r) => r.url().includes("/actions/check-in") && r.request().method() === "POST",
+    );
+    await boardingRow.getByTestId("card-checkin-button").click();
+    await checkInResponse;
+    await expect(page.getByTestId("flight-card").filter({ hasText: flightCode })).toHaveCount(0);
 
     // --- Start + land ---
     await page.goto("/dispatch/tracking");
@@ -116,7 +124,10 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     await expect(card.getByTestId("flight-card-status")).toHaveText("Gelandet");
 
     // --- Verify: guest flown, shows on board as completed ---
+    // "Offen" (open/pending) is the default filter and hides fully-processed
+    // (paid+weighed) guests, flown ones included — switch to "Alle" first.
     await page.goto("/dispatch/guests");
+    await page.getByTestId("guest-filter-all").click();
     await expect(
       page.getByTestId("guest-row").filter({ hasText: guestName }).getByTestId("guest-status"),
     ).toContainText("geflogen");

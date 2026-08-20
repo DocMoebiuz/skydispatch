@@ -222,7 +222,7 @@ export function DashboardPage() {
     } else if (stage === "assigned" || stage === "boarding") {
       actions = (
         <Button asChild variant="outline" size="sm">
-          <Link to="/dispatch/checkin">{t("dispatch.common.goToCheckin")}</Link>
+          <Link to="/dispatch/boarding">{t("dispatch.common.goToBoarding")}</Link>
         </Button>
       );
     } else if (stage === "landed") {
@@ -334,7 +334,7 @@ export function DashboardPage() {
             message={t("dispatch.dashboard.flights.liveEmpty")}
             action={
               <Button asChild size="sm" variant="outline">
-                <Link to="/dispatch/checkin">{t("dispatch.common.goToCheckin")}</Link>
+                <Link to="/dispatch/boarding">{t("dispatch.common.goToBoarding")}</Link>
               </Button>
             }
           />

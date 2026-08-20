@@ -349,7 +349,7 @@ export function SetupPage() {
   async function resetDatabase() {
     setResettingDatabase(true);
     try {
-      const response = await fetch("/api/admin/actions/reset-database", { method: "POST" });
+      const response = await fetch("/api/system/actions/reset-database", { method: "POST" });
       if (response.ok) window.location.reload();
     } finally {
       setResettingDatabase(false);

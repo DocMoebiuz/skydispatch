@@ -9,14 +9,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
 
-// Check-in & boarding — matches the prototype's flow: check in assigned guests (or
-// mark a no-show, which immediately frees the seat — see apps/api guests.ts).
+// Boarding — matches the prototype's flow: check in assigned guests (or mark a
+// no-show, which immediately frees the seat — see apps/api guests.ts). "Boarding"
+// is the page/nav concept (a flight's whole roster, actively being boarded right
+// now); "Check-in" stays the right word for the per-guest action itself (and for
+// the guest-facing front-desk pay/weigh step elsewhere) — see
+// docs/architecture.md § Shared flight components for that distinction.
+//
 // Every flight is shown as a card with its passengers listed and actionable right
 // there — no separate "select a flight, then act in a list below" step, and no
 // separate quick-check-in submit flow either: the search field just filters the
-// passenger lists live, by name or code, down to whoever you're looking for. See
-// docs/architecture.md § Shared flight components.
-export function CheckInPage() {
+// passenger lists live, by name or code, down to whoever you're looking for.
+export function BoardingPage() {
   const { t } = useTranslation();
   const [guests, setGuests] = useState<Guest[]>([]);
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
@@ -65,9 +69,11 @@ export function CheckInPage() {
   }, []);
 
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
-  const boardableFlights = flights.filter(
-    (f) => f.status !== "airborne" && f.status !== "completed",
-  );
+  // Only "assigned" — locked, boarding actively in progress. "created" isn't
+  // locked yet (Planning's job, not boarding's); once every guest is checked
+  // in the flight auto-flips to "ready" (recomputeBoardingStatus) and boarding
+  // is done, so it drops off here — Tracking picks it up from there.
+  const boardableFlights = flights.filter((f) => f.status === "assigned");
 
   function matchesSearch(g: Guest): boolean {
     const q = search.trim().toLowerCase();
@@ -109,11 +115,11 @@ export function CheckInPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("dispatch.nav.checkin")}</h1>
+      <h1 className="text-2xl font-semibold">{t("dispatch.nav.boarding")}</h1>
 
       {boardableFlights.length === 0 ? (
         <EmptyState
-          data-testid="checkin-flights-empty"
+          data-testid="boarding-flights-empty"
           message={t("dispatch.checkin.noFlights")}
           action={
             <Button asChild size="sm">
@@ -126,14 +132,14 @@ export function CheckInPage() {
           <Input
             className="max-w-64"
             placeholder={t("dispatch.checkin.searchPlaceholder")}
-            data-testid="checkin-search"
+            data-testid="boarding-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
 
           <div
             className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
-            data-testid="checkin-flight-picker"
+            data-testid="boarding-flight-picker"
           >
             {boardableFlights.map((f) => {
               const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
@@ -158,7 +164,7 @@ export function CheckInPage() {
                   {visibleGuests.length > 0 ? (
                     <div
                       className="flex max-h-40 flex-col gap-0.5 overflow-y-auto"
-                      data-testid="checkin-card-passengers"
+                      data-testid="boarding-card-passengers"
                     >
                       {visibleGuests.map((g) => {
                         const isPending = pending.has(g.id);
@@ -166,7 +172,7 @@ export function CheckInPage() {
                           <div
                             key={g.id}
                             className="flex items-center justify-between gap-1"
-                            data-testid="checkin-card-passenger-row"
+                            data-testid="boarding-card-passenger-row"
                           >
                             <span className="flex min-w-0 items-center gap-1.5">
                               {g.checkedIn ? (

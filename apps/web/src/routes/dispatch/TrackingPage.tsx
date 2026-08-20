@@ -69,7 +69,15 @@ export function TrackingPage() {
   }, []);
 
   const guestById = useMemo(() => new Map(guests.map((g) => [g.id, g])), [guests]);
-  const sortedFlights = [...flights].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+  // "ready" (fully boarded, about to depart), "airborne", and "completed" —
+  // not "created"/"assigned" (still Planning's/Boarding's concern, nothing
+  // to track yet). "completed" stays in (not just "ready"/"airborne") so a
+  // just-landed flight's card doesn't vanish out from under the dispatcher
+  // the instant they click "Landung erfassen" — it's still useful
+  // confirmation right after the action.
+  const sortedFlights = flights
+    .filter((f) => f.status === "ready" || f.status === "airborne" || f.status === "completed")
+    .sort((a, b) => ORDER[a.status] - ORDER[b.status]);
 
   function markPending(flightId: string, on: boolean) {
     setPending((prev) => {

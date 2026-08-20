@@ -20,7 +20,7 @@ const routes: { path: string; heading: string }[] = [
   { path: "/dispatch/setup", heading: "Setup" },
   { path: "/dispatch/guests", heading: "Fluggäste" },
   { path: "/dispatch/planning", heading: "Planung" },
-  { path: "/dispatch/checkin", heading: "Check-in" },
+  { path: "/dispatch/boarding", heading: "Boarding" },
   { path: "/dispatch/tracking", heading: "Tracking" },
   { path: "/dispatch/reporting", heading: "Reporting" },
   { path: "/board", heading: "Abflugtafel" },

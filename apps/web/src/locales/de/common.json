@@ -18,14 +18,14 @@
       "setup": "Setup",
       "guests": "Gäste",
       "planning": "Planung",
-      "checkin": "Check-in",
+      "boarding": "Boarding",
       "tracking": "Tracking",
       "reporting": "Reporting"
     },
     "common": {
       "goToPlanning": "Zur Flugplanung",
       "goToGuests": "Zu den Gästen",
-      "goToCheckin": "Zum Check-in"
+      "goToBoarding": "Zum Boarding"
     },
     "stage": {
       "new": "Neu",
