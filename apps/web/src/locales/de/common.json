@@ -167,7 +167,12 @@
       },
       "exportFlights": "Flüge exportieren (CSV)",
       "exportGuests": "Fluggäste exportieren (CSV)",
-      "log": "Flugprotokoll"
+      "log": "Flugprotokoll",
+      "table": {
+        "flight": "Flug",
+        "pax": "Pax",
+        "status": "Status"
+      }
     },
     "guests": {
       "heading": "Fluggäste",

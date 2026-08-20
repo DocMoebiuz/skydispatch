@@ -169,17 +169,24 @@ export function ReportingPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Flug</TableHead>
-                <TableHead>Pilot</TableHead>
-                <TableHead>Pax</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t("dispatch.reporting.table.flight")}</TableHead>
+                <TableHead>{t("dispatch.reporting.table.pax")}</TableHead>
+                <TableHead>{t("dispatch.reporting.table.status")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {flights.map((f) => (
                 <TableRow key={f.id}>
-                  <TableCell>{f.code}</TableCell>
-                  <TableCell>{pilots.find((p) => p.id === f.pilotId)?.name ?? "—"}</TableCell>
+                  {/* Primary/secondary stacking, not a separate Pilot column —
+                      see docs/architecture.md § Shared flight components. */}
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{f.code}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {pilots.find((p) => p.id === f.pilotId)?.name ?? "—"}
+                      </span>
+                    </div>
+                  </TableCell>
                   <TableCell>{f.guestIds.length}</TableCell>
                   <TableCell>{t(`dispatch.planning.status.${f.status}`)}</TableCell>
                 </TableRow>
