@@ -4,10 +4,13 @@ import { useTranslation } from "react-i18next";
 import {
   deriveFlightStage,
   estimateDepartures,
+  DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+  DEFAULT_BOARDING_MINUTES,
   type Guest,
   type Aircraft,
   type Pilot,
   type Flight,
+  type FlightDay,
 } from "shared";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,6 +60,7 @@ export function TrackingPage() {
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [editingTime, setEditingTime] = useState<{ flightId: string; field: TimeField } | null>(
     null,
@@ -71,11 +75,15 @@ export function TrackingPage() {
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, a, p, f]) => {
+      // 404 means no flight day configured yet (see apps/api flightday.ts's
+      // getFlightDay) — falls back to the DEFAULT_* schedule constants below.
+      fetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+    ]).then(([g, a, p, f, d]) => {
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
+      setFlightDay(d);
     });
   }
 
@@ -92,12 +100,14 @@ export function TrackingPage() {
       fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, a, p, f]) => {
+      fetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+    ]).then(([g, a, p, f, d]) => {
       if (cancelled) return;
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
+      setFlightDay(d);
     });
     return () => {
       cancelled = true;
@@ -111,8 +121,12 @@ export function TrackingPage() {
   // display yet (still Planning's/Boarding's concern).
   const departureEstimates = useMemo(() => {
     const aircraftById = new Map(aircraftList.map((a) => [a.id, a]));
-    return estimateDepartures(flights, aircraftById, new Date());
-  }, [flights, aircraftList]);
+    return estimateDepartures(flights, aircraftById, new Date(), {
+      averageFlightDurationMinutes:
+        flightDay?.averageFlightDurationMinutes ?? DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+      boardingMinutes: flightDay?.boardingMinutes ?? DEFAULT_BOARDING_MINUTES,
+    });
+  }, [flights, aircraftList, flightDay]);
   // "ready" (fully boarded, about to depart), "airborne", and "completed" —
   // not "created"/"assigned" (still Planning's/Boarding's concern, nothing
   // to track yet). Within that, the filter above decides whether "completed"

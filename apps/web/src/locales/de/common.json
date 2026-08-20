@@ -63,6 +63,8 @@
         "airfieldName": "Flugplatz – Name",
         "airfieldIcao": "ICAO-Kennung",
         "price": "Preis/Gast (EUR)",
+        "averageFlightDurationMinutes": "Ø Flugdauer (Min.)",
+        "boardingMinutes": "Boarding-Zeit (Min.)",
         "save": "Speichern",
         "start": "Tag starten",
         "end": "Tag beenden",

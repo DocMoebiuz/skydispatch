@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { estimateDepartures } from "./schedule";
 
 const NOW = new Date("2026-08-20T10:00:00.000Z");
+const SETTINGS = { averageFlightDurationMinutes: 15, boardingMinutes: 5 };
 
 function flight(
   overrides: Partial<{
@@ -24,7 +25,7 @@ function flight(
 
 describe("estimateDepartures", () => {
   it("a ready flight with an idle aircraft can depart now", () => {
-    const result = estimateDepartures([flight({ id: "f1", status: "ready" })], new Map(), NOW);
+    const result = estimateDepartures([flight({ id: "f1", status: "ready" })], new Map(), NOW, SETTINGS);
     expect(result.get("f1")).toBe(NOW.toISOString());
   });
 
@@ -37,6 +38,7 @@ describe("estimateDepartures", () => {
       ],
       new Map(),
       NOW,
+      SETTINGS,
     );
     expect(result.size).toBe(0);
   });
@@ -50,6 +52,7 @@ describe("estimateDepartures", () => {
       ],
       new Map(),
       NOW,
+      SETTINGS,
     );
     // 09:50 + 15 min flight + 5 min boarding = 10:10 — after "now" (10:00),
     // so the airborne leg's cycle wins over the "now" floor.
@@ -62,6 +65,7 @@ describe("estimateDepartures", () => {
       [flight({ id: "airborne", status: "airborne", offBlock }), flight({ id: "next", status: "ready" })],
       new Map(),
       NOW,
+      SETTINGS,
     );
     expect(result.get("next")).toBe(NOW.toISOString());
   });
@@ -75,6 +79,7 @@ describe("estimateDepartures", () => {
       ],
       new Map(),
       NOW,
+      SETTINGS,
     );
     expect(result.get("first")).toBe("2026-08-20T10:00:00.000Z");
     expect(result.get("second")).toBe("2026-08-20T10:20:00.000Z");
@@ -86,6 +91,7 @@ describe("estimateDepartures", () => {
       [flight({ id: "a", aircraftId: "ac1", status: "ready" }), flight({ id: "b", aircraftId: "ac2", status: "ready" })],
       new Map(),
       NOW,
+      SETTINGS,
     );
     // Both estimated to depart at the same moment — they don't wait on each
     // other the way the old single global queue would have forced.
@@ -105,8 +111,23 @@ describe("estimateDepartures", () => {
         },
       ],
     ]);
-    const result = estimateDepartures([flight({ id: "f1", status: "ready" })], aircraftById, NOW);
+    const result = estimateDepartures([flight({ id: "f1", status: "ready" })], aircraftById, NOW, SETTINGS);
     // 09:55 + 20 min = 10:15, after "now" (10:00).
     expect(result.get("f1")).toBe("2026-08-20T10:15:00.000Z");
+  });
+
+  it("honors per-event settings instead of a fixed 15+5", () => {
+    const offBlock = "2026-08-20T09:50:00.000Z";
+    const result = estimateDepartures(
+      [
+        flight({ id: "airborne", status: "airborne", offBlock }),
+        flight({ id: "next", status: "ready" }),
+      ],
+      new Map(),
+      NOW,
+      { averageFlightDurationMinutes: 25, boardingMinutes: 10 },
+    );
+    // 09:50 + 25 + 10 = 10:25.
+    expect(result.get("next")).toBe("2026-08-20T10:25:00.000Z");
   });
 });

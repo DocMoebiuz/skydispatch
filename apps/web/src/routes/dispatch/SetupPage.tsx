@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { FlightDay, Pilot, Aircraft, Flight, FuelType } from "shared";
+import {
+  DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+  DEFAULT_BOARDING_MINUTES,
+  type FlightDay,
+  type Pilot,
+  type Aircraft,
+  type Flight,
+  type FuelType,
+} from "shared";
 import {
   Select,
   SelectContent,
@@ -47,6 +55,10 @@ export function SetupPage() {
   const [airfieldName, setAirfieldName] = useState("");
   const [airfieldIcao, setAirfieldIcao] = useState("");
   const [pricePerGuestEur, setPricePerGuestEur] = useState("");
+  const [averageFlightDurationMinutes, setAverageFlightDurationMinutes] = useState(
+    String(DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES),
+  );
+  const [boardingMinutes, setBoardingMinutes] = useState(String(DEFAULT_BOARDING_MINUTES));
   const [savingDay, setSavingDay] = useState(false);
 
   const [pilots, setPilots] = useState<Pilot[]>([]);
@@ -99,6 +111,12 @@ export function SetupPage() {
         setAirfieldName(d.airfieldName);
         setAirfieldIcao(d.airfieldIcao);
         setPricePerGuestEur(String(d.pricePerGuestEur));
+        // Coalesce with the defaults — a FlightDay saved before these
+        // fields existed won't have them on file yet.
+        setAverageFlightDurationMinutes(
+          String(d.averageFlightDurationMinutes ?? DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES),
+        );
+        setBoardingMinutes(String(d.boardingMinutes ?? DEFAULT_BOARDING_MINUTES));
       })
       .catch(() => undefined);
     fetch("/api/pilots")
@@ -126,7 +144,18 @@ export function SetupPage() {
 
   async function saveFlightDay() {
     const price = Number(pricePerGuestEur);
-    if (!date.trim() || !airfieldName.trim() || !airfieldIcao.trim() || !Number.isFinite(price)) {
+    const avgFlightMinutes = Number(averageFlightDurationMinutes);
+    const boardingMin = Number(boardingMinutes);
+    if (
+      !date.trim() ||
+      !airfieldName.trim() ||
+      !airfieldIcao.trim() ||
+      !Number.isFinite(price) ||
+      !Number.isInteger(avgFlightMinutes) ||
+      avgFlightMinutes < 1 ||
+      !Number.isInteger(boardingMin) ||
+      boardingMin < 1
+    ) {
       return;
     }
     setSavingDay(true);
@@ -139,6 +168,8 @@ export function SetupPage() {
           airfieldName,
           airfieldIcao,
           pricePerGuestEur: price,
+          averageFlightDurationMinutes: avgFlightMinutes,
+          boardingMinutes: boardingMin,
         }),
       });
       if (response.ok) setFlightDay((await response.json()) as FlightDay);
@@ -353,7 +384,7 @@ export function SetupPage() {
         <CardHeader>
           <CardTitle>{t("dispatch.setup.flightDay.title")}</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-4 lg:grid-cols-6">
           <div className="grid gap-2">
             <Label htmlFor="fd-date">{t("dispatch.setup.flightDay.date")}</Label>
             {/* type="date" guarantees an ISO "YYYY-MM-DD" value (HTML spec) —
@@ -390,6 +421,30 @@ export function SetupPage() {
               type="number"
               value={pricePerGuestEur}
               onChange={(e) => setPricePerGuestEur(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="fd-avg-flight-minutes">
+              {t("dispatch.setup.flightDay.averageFlightDurationMinutes")}
+            </Label>
+            <Input
+              id="fd-avg-flight-minutes"
+              type="number"
+              min={1}
+              data-testid="fd-avg-flight-minutes"
+              value={averageFlightDurationMinutes}
+              onChange={(e) => setAverageFlightDurationMinutes(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="fd-boarding-minutes">{t("dispatch.setup.flightDay.boardingMinutes")}</Label>
+            <Input
+              id="fd-boarding-minutes"
+              type="number"
+              min={1}
+              data-testid="fd-boarding-minutes"
+              value={boardingMinutes}
+              onChange={(e) => setBoardingMinutes(e.target.value)}
             />
           </div>
         </CardContent>

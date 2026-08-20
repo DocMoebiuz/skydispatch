@@ -39,6 +39,8 @@ export async function upsertFlightDay(
     airfieldName: parsed.data.airfieldName,
     airfieldIcao: parsed.data.airfieldIcao,
     pricePerGuestEur: parsed.data.pricePerGuestEur,
+    averageFlightDurationMinutes: parsed.data.averageFlightDurationMinutes,
+    boardingMinutes: parsed.data.boardingMinutes,
     status: existing?.status ?? "planned",
   };
   await container.items.upsert(flightDay);

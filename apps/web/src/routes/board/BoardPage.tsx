@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import {
   deriveFlightStage,
   estimateDepartures,
+  DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+  DEFAULT_BOARDING_MINUTES,
   type Guest,
   type Aircraft,
   type Flight,
@@ -148,7 +150,11 @@ export function BoardPage() {
   // manual's "voraussichtliche bzw. tatsächliche Zeit" column (§4.1) for
   // scheduled/boarding flights, which otherwise have no real offBlock yet.
   const aircraftById = new Map(aircraftList.map((a) => [a.id, a]));
-  const departureEstimates = estimateDepartures(flights, aircraftById, now);
+  const departureEstimates = estimateDepartures(flights, aircraftById, now, {
+    averageFlightDurationMinutes:
+      flightDay?.averageFlightDurationMinutes ?? DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+    boardingMinutes: flightDay?.boardingMinutes ?? DEFAULT_BOARDING_MINUTES,
+  });
 
   const withStatus = flights
     .map((flight) => ({

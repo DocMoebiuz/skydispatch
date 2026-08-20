@@ -1,4 +1,9 @@
-import { DEFAULT_FLIGHT_DAY_ID, type FlightDay } from "shared";
+import {
+  DEFAULT_FLIGHT_DAY_ID,
+  DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+  DEFAULT_BOARDING_MINUTES,
+  type FlightDay,
+} from "shared";
 import { deleteOrphanedFlights, getTestContainer } from "./helpers/cosmos";
 
 // Every real deployment has a dispatcher configure the flight day before
@@ -26,6 +31,8 @@ async function seedFlightDay(): Promise<void> {
     airfieldName: "Flugplatz Backnang-Heiningen",
     airfieldIcao: "EDSH",
     pricePerGuestEur: 80,
+    averageFlightDurationMinutes: DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+    boardingMinutes: DEFAULT_BOARDING_MINUTES,
     status: "active",
   };
   await container.items.upsert(flightDay);

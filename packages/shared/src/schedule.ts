@@ -1,8 +1,14 @@
-import { AVERAGE_FLIGHT_DURATION_MINUTES, BOARDING_MINUTES } from "./constants";
 import type { Aircraft } from "./types/aircraft";
 import type { Flight } from "./types/flight";
 
-const CYCLE_MS = (AVERAGE_FLIGHT_DURATION_MINUTES + BOARDING_MINUTES) * 60_000;
+// Per-event, not fixed — FlightDay.averageFlightDurationMinutes/
+// boardingMinutes (Setup's flight-day form). Callers read those off the
+// current FlightDay, falling back to constants.ts's DEFAULT_* for a flight
+// day saved before these fields existed.
+export interface ScheduleSettings {
+  averageFlightDurationMinutes: number;
+  boardingMinutes: number;
+}
 
 type ScheduleFlightFields = Pick<Flight, "id" | "aircraftId" | "status" | "offBlock" | "createdAt">;
 type ScheduleAircraftFields = Pick<
@@ -15,8 +21,9 @@ type ScheduleAircraftFields = Pick<
 // see docs/architecture.md § Open decisions #5/#6). Each aircraft has its
 // own independent timeline; two different aircraft can both be estimated to
 // depart at the same moment, and that's fine — they're not waiting on each
-// other. Within one aircraft, flights chain 20 min apart (15 min average
-// flight + 5 min boarding, the user's own fixed rule — see constants.ts).
+// other. Within one aircraft, flights chain `averageFlightDurationMinutes +
+// boardingMinutes` apart (the user's own rule, defaults 15+5 — see
+// constants.ts and ScheduleSettings above).
 //
 // Only "assigned" (locked, boarding) and "ready" (boarded, about to depart)
 // flights get an estimate — those are the ones still ahead of the aircraft.
@@ -26,7 +33,9 @@ export function estimateDepartures(
   flights: ScheduleFlightFields[],
   aircraftById: Map<string, ScheduleAircraftFields>,
   now: Date,
+  settings: ScheduleSettings,
 ): Map<string, string> {
+  const cycleMs = (settings.averageFlightDurationMinutes + settings.boardingMinutes) * 60_000;
   const result = new Map<string, string>();
 
   const byAircraft = new Map<string, ScheduleFlightFields[]>();
@@ -49,7 +58,7 @@ export function estimateDepartures(
     // slot is "now", not a stale computed time.
     let cursor = now.getTime();
     if (airborne?.offBlock) {
-      cursor = Math.max(cursor, Date.parse(airborne.offBlock) + CYCLE_MS);
+      cursor = Math.max(cursor, Date.parse(airborne.offBlock) + cycleMs);
     }
     const aircraft = aircraftById.get(aircraftId);
     if (
@@ -65,7 +74,7 @@ export function estimateDepartures(
 
     for (const flight of queue) {
       result.set(flight.id, new Date(cursor).toISOString());
-      cursor += CYCLE_MS;
+      cursor += cycleMs;
     }
   }
 
