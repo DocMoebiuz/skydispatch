@@ -278,6 +278,7 @@
       "waiverTitle": "Einverständnis- und Haftungserklärung",
       "waiverText": "Ich melde mich freiwillig zur Teilnahme an einem Rundflug an und nehme auf eigenes Risiko teil. Mir ist bekannt, dass die Durchführung von Wetter, Auslastung und Sicherheitsentscheidungen der Flugleitung abhängt. Ich versichere, dass meine Angaben – insbesondere mein Gewicht – zutreffend sind, und bin damit einverstanden, dass mein Gewicht am Flugplatz überprüft wird. Ich stimme der Verarbeitung meiner personenbezogenen Daten ausschließlich zum Zweck der Flugorganisation gemäß DSGVO zu.",
       "consent": "Ich habe die Einverständnis- und Haftungserklärung gelesen und stimme zu.",
+      "guardianConsent": "Ich bin erziehungsberechtigt oder habe die Zustimmung einer erziehungsberechtigten Person zu dieser Anmeldung eingeholt.",
       "newsletter": "Ich möchte den Newsletter mit Neuigkeiten und Angeboten erhalten (optional).",
       "submit": "Anmelden"
     },
@@ -290,6 +291,7 @@
       "zipCode": "Bitte eine Postleitzahl angeben.",
       "city": "Bitte einen Ort angeben.",
       "consent": "Bitte stimmen Sie der Erklärung zu.",
+      "guardianConsent": "Für minderjährige Teilnehmer ist die Zustimmung einer erziehungsberechtigten Person erforderlich.",
       "submit": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
     },
     "success": {

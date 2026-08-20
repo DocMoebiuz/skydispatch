@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import {
   guestCreateRequestSchema,
+  isMinor,
   type GuestCreateRequest,
   type Guest,
   type FlightDay,
@@ -92,6 +93,7 @@ const defaultValues: GuestCreateRequest = {
   dateOfBirth: "",
   address: { street: "", zipCode: "", city: "" },
   consent: false,
+  guardianConsent: false,
   newsletter: false,
 };
 
@@ -149,6 +151,16 @@ export function RegisterPage() {
     resolver: zodResolver(guestCreateRequestSchema),
     defaultValues,
   });
+
+  // Reactive, not a one-off read — the consent step's guardian checkbox has
+  // to appear/disappear as soon as the passenger step's DOB makes the
+  // registrant a minor, without needing a remount. useWatch, not watch() —
+  // watch() returns a plain function React Compiler can't safely memoize.
+  // Falls back to a deliberately-ancient placeholder (not a future date,
+  // which would compute a negative — and therefore "under 18" — age) so an
+  // unset DOB never shows the checkbox prematurely.
+  const dateOfBirthValue = useWatch({ control, name: "dateOfBirth" });
+  const isRegistrantMinor = isMinor(dateOfBirthValue || "1900-01-01");
 
   // Combine the three dropdowns into the "YYYY-MM-DD" string the form/API
   // expect — syncing into react-hook-form's own (external) store, not React
@@ -702,6 +714,37 @@ export function RegisterPage() {
                   <p className="text-destructive text-sm">
                     {t("register.errors.consent")}
                   </p>
+                )}
+
+                {/* A minor can't give binding consent themselves — only
+                    shown/required when the passenger step's DOB makes them
+                    one, see isMinor and guestCreateRequestSchema's matching
+                    server-side check. */}
+                {isRegistrantMinor && (
+                  <div className="flex flex-col gap-1 rounded-md border p-3">
+                    <div className="flex items-start gap-2">
+                      <Controller
+                        control={control}
+                        name="guardianConsent"
+                        render={({ field }) => (
+                          <Checkbox
+                            id="guardianConsent"
+                            checked={field.value ?? false}
+                            onCheckedChange={(checked) => field.onChange(checked === true)}
+                            aria-invalid={!!errors.guardianConsent}
+                          />
+                        )}
+                      />
+                      <Label htmlFor="guardianConsent" className="font-normal">
+                        {t("register.form.guardianConsent")}
+                      </Label>
+                    </div>
+                    {errors.guardianConsent && (
+                      <p className="text-destructive text-sm">
+                        {t("register.errors.guardianConsent")}
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 <div className="flex items-start gap-2">

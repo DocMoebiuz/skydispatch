@@ -130,6 +130,7 @@ export async function createGuest(
     address: parsed.data.address,
     paid: false, // no payment at registration — see docs/nfr.md § Security & Privacy
     consent: parsed.data.consent,
+    guardianConsent: parsed.data.guardianConsent ?? null,
     newsletter: parsed.data.newsletter,
     groupId: parsed.data.group?.groupId ?? null,
     groupName: parsed.data.group?.groupName ?? null,

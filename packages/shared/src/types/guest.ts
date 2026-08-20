@@ -15,6 +15,10 @@ export interface Guest {
   address: { street: string; zipCode: string; city: string };
   paid: boolean; // false at creation; only POST /api/guests/{id}/actions/mark-paid sets true
   consent: boolean;
+  // Required (and enforced server-side, see guestCreateRequestSchema) only
+  // when the guest is a minor as of registration (see age.ts's isMinor) —
+  // null/false for an adult registrant who never saw this checkbox.
+  guardianConsent?: boolean | null;
   newsletter: boolean; // opt-in, asked alongside consent — not required, no default
   groupId?: string | null;
   groupName?: string | null;
