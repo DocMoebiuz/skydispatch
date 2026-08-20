@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { Guest, Aircraft, Flight } from "shared";
+import { deriveFlightStage, type Guest, type Aircraft, type Flight, type FlightDay } from "shared";
+import { PlaneTakeoff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -16,25 +16,45 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-const ORDER: Record<Flight["status"], number> = {
-  created: 0,
-  assigned: 1,
-  ready: 2,
-  airborne: 3,
-  completed: 4,
+// A public departure board doesn't need the full 7-value FlightStage or the
+// 5-value persisted Flight.status — a flight that's still being assembled
+// ("new"/"planning") isn't board-relevant at all (nothing to announce yet),
+// and "assigned" (locked, boarding not started) reads as "Scheduled" to a
+// waiting guest. "boarding" and "boarded" (fully checked in, about to
+// depart) both just read as "Boarding" here — a public board doesn't need
+// the finer distinction the dispatcher's own FlightCard badge does.
+type BoardStatus = "landed" | "airborne" | "boarding" | "scheduled";
+
+// Listed in the exact priority order requested: most-recently-notable event
+// first (a plane that just landed is the freshest news), soonest-expected
+// last. Within "landed"/"airborne", newest real timestamp first; within
+// "boarding"/"scheduled", creation order — see the sort below.
+const BOARD_PRIORITY: Record<BoardStatus, number> = {
+  landed: 0,
+  airborne: 1,
+  boarding: 2,
+  scheduled: 3,
 };
 
 // A departure board is a public kiosk display, not a themed app surface — real
 // airport boards are always dark/high-contrast regardless of time of day, so
 // this stays fixed-dark independent of the dispatcher's light/dark toggle
 // (see src/lib/theme.ts, which this page deliberately never touches).
-const BOARD_STATUS_CLASS: Record<Flight["status"], string> = {
-  created: "border-slate-600 bg-slate-800 text-slate-300",
-  assigned: "border-sky-600 bg-sky-950 text-sky-300",
-  ready: "border-blue-600 bg-blue-950 text-blue-300",
+const BOARD_STATUS_CLASS: Record<BoardStatus, string> = {
+  scheduled: "border-slate-600 bg-slate-800 text-slate-300",
+  boarding: "border-sky-600 bg-sky-950 text-sky-300",
   airborne: "border-emerald-600 bg-emerald-950 text-emerald-300 animate-pulse",
-  completed: "border-slate-700 bg-slate-900 text-slate-500",
+  landed: "border-slate-700 bg-slate-900 text-slate-500",
 };
+
+function boardStatusOf(flight: Flight, assignedGuests: Guest[]): BoardStatus | null {
+  const stage = deriveFlightStage(flight, assignedGuests);
+  if (stage === "landed") return "landed";
+  if (stage === "airborne") return "airborne";
+  if (stage === "boarding" || stage === "boarded") return "boarding";
+  if (stage === "assigned") return "scheduled";
+  return null; // "new"/"planning" — not shown, nothing to announce yet
+}
 
 function fmtTime(iso: string | null): string {
   return iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—";
@@ -56,6 +76,7 @@ export function BoardPage() {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
   const [lookupCode, setLookupCode] = useState(searchParams.get("code") ?? "");
   const [lookupResult, setLookupResult] = useState<Guest | "not-found" | null>(null);
   const pendingAutoLookup = useRef(searchParams.get("code"));
@@ -86,6 +107,14 @@ export function BoardPage() {
         pendingAutoLookup.current = null;
       }
     });
+    // 404 means no flight day configured yet — the header's airfield line
+    // just doesn't render, not an error state.
+    fetch("/api/flightday")
+      .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
+      .then((d) => {
+        if (!cancelledRef?.current) setFlightDay(d);
+      })
+      .catch(() => undefined);
   }
 
   useEffect(() => {
@@ -108,7 +137,40 @@ export function BoardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const sorted = [...flights].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+  const withStatus = flights
+    .map((flight) => ({
+      flight,
+      status: boardStatusOf(
+        flight,
+        guests.filter((g) => flight.guestIds.includes(g.id)),
+      ),
+    }))
+    .filter((x): x is { flight: Flight; status: BoardStatus } => x.status !== null);
+
+  // A landed flight stays on the board only as long as its aircraft's next
+  // leg hasn't started boarding (or gone airborne) yet — once it has, that
+  // next leg is the relevant story for this tail number, not the old one.
+  const visible = withStatus.filter(({ flight, status }) => {
+    if (status !== "landed") return true;
+    return !withStatus.some(
+      (other) =>
+        other.flight.aircraftId === flight.aircraftId &&
+        other.flight.id !== flight.id &&
+        (other.status === "boarding" || other.status === "airborne"),
+    );
+  });
+
+  const sorted = [...visible].sort((a, b) => {
+    const byPriority = BOARD_PRIORITY[a.status] - BOARD_PRIORITY[b.status];
+    if (byPriority !== 0) return byPriority;
+    // Within the same bucket: most recent real event first for landed/
+    // airborne (freshest news on top); creation order for boarding/
+    // scheduled (the "line" a later flight can skip by landing sooner —
+    // that's handled by the bucket sort above, not here).
+    if (a.status === "landed") return Date.parse(b.flight.onBlock!) - Date.parse(a.flight.onBlock!);
+    if (a.status === "airborne") return Date.parse(b.flight.offBlock!) - Date.parse(a.flight.offBlock!);
+    return Date.parse(a.flight.createdAt) - Date.parse(b.flight.createdAt);
+  });
 
   const groupMembers =
     lookupResult && lookupResult !== "not-found"
@@ -133,13 +195,28 @@ export function BoardPage() {
     <main className="min-h-screen bg-slate-950 p-8 text-slate-100">
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <div className="flex items-end justify-between border-b border-slate-800 pb-4">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-wide text-amber-300">
-            <Logo className="size-8 shrink-0" />
-            {t("board.title")}
-          </h1>
-          <span className="font-mono text-2xl tabular-nums text-amber-300" data-testid="board-clock">
-            {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-          </span>
+          <div className="flex flex-col gap-1">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-wide text-amber-300">
+              <PlaneTakeoff className="size-8 shrink-0" aria-hidden />
+              {t("board.title")}
+            </h1>
+            {flightDay && (
+              <span className="text-sm text-slate-400" data-testid="board-airfield">
+                {flightDay.airfieldName} · {flightDay.airfieldIcao}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <span
+              className="font-mono text-2xl tabular-nums text-amber-300"
+              data-testid="board-clock"
+            >
+              {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+            <span className="text-xs text-slate-500">
+              {now.toLocaleDateString([], { weekday: "long", day: "2-digit", month: "2-digit" })}
+            </span>
+          </div>
         </div>
 
         <Table>
@@ -160,9 +237,9 @@ export function BoardPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((f) => {
+            {sorted.map(({ flight: f, status }) => {
               const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
-              const time = f.status === "completed" ? fmtTime(f.onBlock) : fmtTime(f.offBlock);
+              const time = status === "landed" ? fmtTime(f.onBlock) : fmtTime(f.offBlock);
               return (
                 <TableRow
                   key={f.id}
@@ -173,8 +250,8 @@ export function BoardPage() {
                   <TableCell className="text-slate-300">{aircraft?.reg ?? "—"}</TableCell>
                   <TableCell className="tabular-nums text-slate-300">{time}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={cn("font-sans", BOARD_STATUS_CLASS[f.status])}>
-                      {t(`dispatch.planning.status.${f.status}`)}
+                    <Badge variant="outline" className={cn("font-sans", BOARD_STATUS_CLASS[status])}>
+                      {t(`board.status.${status}`)}
                     </Badge>
                   </TableCell>
                 </TableRow>

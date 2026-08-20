@@ -193,8 +193,12 @@
         "flown": "Gäste geflogen",
         "utilization": "Ø Auslastung",
         "noShows": "No-Shows",
-        "revenue": "Einnahmen"
+        "revenue": "Einnahmen",
+        "totalFlightTime": "Gesamtflugzeit"
       },
+      "achievements": "Flugzeug-Bestenliste",
+      "achievementFlights": "{{count}} Flug",
+      "achievementFlights_other": "{{count}} Flüge",
       "exportFlights": "Flüge exportieren (CSV)",
       "exportGuests": "Fluggäste exportieren (CSV)",
       "log": "Flugprotokoll",
@@ -321,6 +325,12 @@
       "aircraft": "Flugzeug",
       "time": "Zeit",
       "status": "Status"
+    },
+    "status": {
+      "scheduled": "Geplant",
+      "boarding": "Boarding",
+      "airborne": "In der Luft",
+      "landed": "Gelandet"
     },
     "lookup": {
       "title": "Wann bin ich an der Reihe?",

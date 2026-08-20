@@ -133,10 +133,12 @@ test("full guest journey: assign, ready, check-in, start, land", async ({ page }
     // Not the board's guest-code lookup here — the flight-row check above already
     // proves the same fact (flight shows completed on the board) without relying
     // on a second, separately-generated random code under parallel test execution.
+    // "Gelandet", not the raw status "abgeschlossen" — the board uses its own
+    // 4-value status vocabulary, see BoardPage's boardStatusOf.
     await page.goto("/board");
     await expect(
       page.getByTestId("board-flight-row").filter({ hasText: flightCode }),
-    ).toContainText("abgeschlossen");
+    ).toContainText("Gelandet");
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

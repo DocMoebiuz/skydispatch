@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import type { FlightDay } from "shared";
 import {
   LayoutDashboard,
   Settings,
@@ -45,6 +47,35 @@ const NAV_ITEMS = [
 export function DispatchLayout() {
   const { t } = useTranslation();
   const location = useLocation();
+  const [now, setNow] = useState(new Date());
+  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
+
+  useEffect(() => {
+    const clock = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(clock);
+  }, []);
+
+  // Polled, not fetch-once — this layout persists across every /dispatch/*
+  // navigation (only <Outlet> swaps), so a start/end-day action on Setup
+  // wouldn't otherwise be reflected here without a full page reload. Same
+  // lightweight polling convention as /board.
+  useEffect(() => {
+    let cancelled = false;
+    function poll() {
+      fetch("/api/flightday")
+        .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
+        .then((d) => {
+          if (!cancelled) setFlightDay(d);
+        })
+        .catch(() => undefined);
+    }
+    poll();
+    const interval = setInterval(poll, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <SidebarProvider>
@@ -80,10 +111,29 @@ export function DispatchLayout() {
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        <header className="bg-brand-gradient flex h-14 items-center gap-2 border-b px-4">
+        <header className="bg-brand-gradient flex h-14 items-center gap-3 border-b px-4">
           <SidebarTrigger />
           <span className="font-medium">{t("dispatch.title")}</span>
-          <div className="ml-auto">
+          {flightDay && (
+            <span
+              className="text-muted-foreground hidden items-center gap-1 truncate text-sm md:flex"
+              data-testid="header-flightday"
+            >
+              {flightDay.airfieldName} ({flightDay.airfieldIcao}) · {flightDay.date} ·{" "}
+              {t(`dispatch.setup.flightDay.status.${flightDay.status}`)}
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            <span
+              className="hidden items-center gap-1.5 font-mono text-sm tabular-nums sm:flex"
+              data-testid="header-clock"
+            >
+              {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              <span className="text-muted-foreground">
+                · {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}{" "}
+                UTC
+              </span>
+            </span>
             <ThemeToggle />
           </div>
         </header>
