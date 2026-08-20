@@ -49,10 +49,53 @@ export async function createAircraft(
   return { status: 201, jsonBody: aircraft };
 }
 
+// Full-field edit from Setup's aircraft details dialog — a plain PUT, not
+// another /actions/ endpoint, since there's no branching server logic here
+// (see pilots.ts's updatePilot for the same reasoning). Kept as a *separate*
+// endpoint from refuelAircraft below, even though PUT could theoretically
+// carry fuelOnBoardL too — refueling is a distinct, frequent real-world
+// action (the fuel truck visits between flights) that shouldn't require
+// reopening the full edit form and resubmitting every other field.
+export async function updateAircraft(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const aircraftId = request.params.id;
+  if (!aircraftId) return { status: 400, jsonBody: { error: "missing-id" } };
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { status: 400, jsonBody: { error: "invalid-json" } };
+  }
+  const parsed = aircraftCreateRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
+  }
+  const container = await getOperationsContainer();
+  const { resource: aircraft } = await container
+    .item(aircraftId, DEFAULT_FLIGHT_DAY_ID)
+    .read<Aircraft>();
+  if (!aircraft) return { status: 404, jsonBody: { error: "not-found" } };
+  const updated: Aircraft = {
+    ...aircraft,
+    reg: parsed.data.reg,
+    model: parsed.data.model,
+    seats: parsed.data.seats,
+    maxPayloadKg: parsed.data.maxPayloadKg,
+    costPerHourEur: parsed.data.costPerHourEur ?? null,
+    emptyWeightKg: parsed.data.emptyWeightKg ?? null,
+    maxTakeoffMassKg: parsed.data.maxTakeoffMassKg ?? null,
+    fuelType: parsed.data.fuelType ?? null,
+    fuelBurnLPerHour: parsed.data.fuelBurnLPerHour ?? null,
+    // fuelOnBoardL deliberately untouched — see refuelAircraft below.
+  };
+  await container.item(aircraftId, DEFAULT_FLIGHT_DAY_ID).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 // Dispatcher records a refuel (sets the absolute liters on board, read off the
-// fuel truck's meter) — same shape as pilots' actions/weigh. Kept as its own
-// action rather than a general aircraft PATCH endpoint (which doesn't exist
-// yet) to match the rest of the API's set-one-thing action-endpoint pattern.
+// fuel truck's meter) — same shape as pilots' actions/weigh.
 export async function refuelAircraft(
   request: HttpRequest,
   _context: InvocationContext,
@@ -119,6 +162,13 @@ app.http("listAircraft", {
   route: "aircraft",
   authLevel: "anonymous",
   handler: listAircraft,
+});
+
+app.http("updateAircraft", {
+  methods: ["PUT"],
+  route: "aircraft/{id}",
+  authLevel: "anonymous",
+  handler: updateAircraft,
 });
 
 app.http("deleteAircraft", {

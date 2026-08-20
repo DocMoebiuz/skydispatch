@@ -26,13 +26,18 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { Plus, Trash2, UserRound, Plane } from "lucide-react";
 
-// Increment 3 prerequisite — entity setup (flight day/pilots/aircraft). Pilots and
-// aircraft are created via a "+" button opening a modal dialog, not an inline form —
-// takes far less space in a list of entities (matches the prototype's own
-// openModal() pattern for "Pilot hinzufügen"/"Flugzeug hinzufügen"). Plain
-// create+list, no edit/delete yet (KISS: not needed for priorities 1-3).
+// Increment 3 prerequisite — entity setup (flight day/pilots/aircraft). A
+// scenic-flight day realistically has single-digit pilots/aircraft (5-10
+// planes, maybe double that in pilots), so a card grid — not a dense list —
+// is the right shape: enough room per entity for a future avatar image, and
+// enough visual weight that "click a card" reads as "open its details," not
+// "click a row." Cards open a read-only details dialog; that dialog is the
+// only place delete lives (never a quick-access action right on the card —
+// too easy to misclick), and its own "Bearbeiten" button opens the same
+// create form, prefilled, for editing. One form serves both create and
+// edit — see editingPilotId/editingAircraftId below.
 export function SetupPage() {
   const { t } = useTranslation();
 
@@ -45,18 +50,22 @@ export function SetupPage() {
 
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [pilotDialogOpen, setPilotDialogOpen] = useState(false);
+  // null = creating a new pilot; a real id = editing that pilot — same dialog,
+  // same fields, just a different submit target (POST vs. PUT) and label.
+  const [editingPilotId, setEditingPilotId] = useState<string | null>(null);
+  const [detailsPilotId, setDetailsPilotId] = useState<string | null>(null);
   const [pilotName, setPilotName] = useState("");
   const [pilotLicense, setPilotLicense] = useState("");
   const [pilotWeightKg, setPilotWeightKg] = useState("");
   const [savingPilot, setSavingPilot] = useState(false);
-  const [editingWeightPilotId, setEditingWeightPilotId] = useState<string | null>(null);
-  const [weightEditValue, setWeightEditValue] = useState("");
-  const [savingWeight, setSavingWeight] = useState(false);
+  const [deletingPilot, setDeletingPilot] = useState(false);
 
   const [flights, setFlights] = useState<Flight[]>([]);
 
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
   const [aircraftDialogOpen, setAircraftDialogOpen] = useState(false);
+  const [editingAircraftId, setEditingAircraftId] = useState<string | null>(null);
+  const [detailsAircraftId, setDetailsAircraftId] = useState<string | null>(null);
   const [reg, setReg] = useState("");
   const [model, setModel] = useState("");
   const [seats, setSeats] = useState("");
@@ -67,6 +76,7 @@ export function SetupPage() {
   const [fuelOnBoardL, setFuelOnBoardL] = useState("");
   const [fuelBurnLPerHour, setFuelBurnLPerHour] = useState("");
   const [savingAircraft, setSavingAircraft] = useState(false);
+  const [deletingAircraft, setDeletingAircraft] = useState(false);
   const [editingFuelAircraftId, setEditingFuelAircraftId] = useState<string | null>(null);
   const [fuelEditValue, setFuelEditValue] = useState("");
   const [savingFuel, setSavingFuel] = useState(false);
@@ -74,6 +84,9 @@ export function SetupPage() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirmValue, setResetConfirmValue] = useState("");
   const [resettingDatabase, setResettingDatabase] = useState(false);
+
+  const detailsPilot = detailsPilotId ? pilots.find((p) => p.id === detailsPilotId) : null;
+  const detailsAircraft = detailsAircraftId ? aircraft.find((a) => a.id === detailsAircraftId) : null;
 
   // `cancelled` guard on each fetch — required, not decorative: React
   // StrictMode's dev-mode double mount/unmount/remount runs this effect
@@ -159,59 +172,45 @@ export function SetupPage() {
     }
   }
 
-  function startEditWeight(pilot: Pilot) {
-    setEditingWeightPilotId(pilot.id);
-    setWeightEditValue(pilot.weightKg != null ? String(pilot.weightKg) : "");
+  function openCreatePilotDialog() {
+    setEditingPilotId(null);
+    setPilotName("");
+    setPilotLicense("");
+    setPilotWeightKg("");
+    setPilotDialogOpen(true);
   }
 
-  async function saveWeight(pilotId: string) {
-    const weightNum = Number(weightEditValue);
-    if (!Number.isFinite(weightNum) || weightNum < 30 || weightNum > 200) return;
-    setSavingWeight(true);
-    try {
-      const response = await fetch(`/api/pilots/${pilotId}/actions/set-weight`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weightKg: weightNum }),
-      });
-      if (response.ok) {
-        const updated = (await response.json()) as Pilot;
-        setPilots((prev) => prev.map((p) => (p.id === pilotId ? updated : p)));
-        setEditingWeightPilotId(null);
-      }
-    } finally {
-      setSavingWeight(false);
-    }
+  function openEditPilotDialog(p: Pilot) {
+    setDetailsPilotId(null);
+    setEditingPilotId(p.id);
+    setPilotName(p.name);
+    setPilotLicense(p.license);
+    setPilotWeightKg(p.weightKg != null ? String(p.weightKg) : "");
+    setPilotDialogOpen(true);
   }
 
-  async function deletePilot(pilotId: string) {
-    const response = await fetch(`/api/pilots/${pilotId}`, { method: "DELETE" });
-    if (response.ok) setPilots((prev) => prev.filter((p) => p.id !== pilotId));
-    else alert(t("dispatch.setup.pilots.deleteError"));
-  }
-
-  async function deleteAircraft(aircraftId: string) {
-    const response = await fetch(`/api/aircraft/${aircraftId}`, { method: "DELETE" });
-    if (response.ok) setAircraft((prev) => prev.filter((a) => a.id !== aircraftId));
-    else alert(t("dispatch.setup.aircraft.deleteError"));
-  }
-
-  async function addPilot() {
+  async function savePilot() {
     const weightNum = Number(pilotWeightKg);
     if (!pilotName.trim() || !pilotLicense.trim() || !weightNum) return;
     setSavingPilot(true);
     try {
-      const response = await fetch("/api/pilots", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: pilotName, license: pilotLicense, weightKg: weightNum }),
-      });
+      const body = JSON.stringify({ name: pilotName, license: pilotLicense, weightKg: weightNum });
+      const response = editingPilotId
+        ? await fetch(`/api/pilots/${editingPilotId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body,
+          })
+        : await fetch("/api/pilots", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          });
       if (response.ok) {
-        const created = (await response.json()) as Pilot;
-        setPilots((prev) => [...prev, created]);
-        setPilotName("");
-        setPilotLicense("");
-        setPilotWeightKg("");
+        const saved = (await response.json()) as Pilot;
+        setPilots((prev) =>
+          editingPilotId ? prev.map((p) => (p.id === saved.id ? saved : p)) : [...prev, saved],
+        );
         setPilotDialogOpen(false);
       }
     } finally {
@@ -219,47 +218,108 @@ export function SetupPage() {
     }
   }
 
-  async function addAircraft() {
+  async function deletePilotConfirmed(pilotId: string) {
+    if (!confirm(t("dispatch.setup.pilots.deleteConfirm"))) return;
+    setDeletingPilot(true);
+    try {
+      const response = await fetch(`/api/pilots/${pilotId}`, { method: "DELETE" });
+      if (response.ok) {
+        setPilots((prev) => prev.filter((p) => p.id !== pilotId));
+        setDetailsPilotId(null);
+      } else {
+        alert(t("dispatch.setup.pilots.deleteError"));
+      }
+    } finally {
+      setDeletingPilot(false);
+    }
+  }
+
+  function openCreateAircraftDialog() {
+    setEditingAircraftId(null);
+    setReg("");
+    setModel("");
+    setSeats("");
+    setMaxPayloadKg("");
+    setEmptyWeightKg("");
+    setMaxTakeoffMassKg("");
+    setFuelType("");
+    setFuelOnBoardL("");
+    setFuelBurnLPerHour("");
+    setAircraftDialogOpen(true);
+  }
+
+  function openEditAircraftDialog(a: Aircraft) {
+    setDetailsAircraftId(null);
+    setEditingAircraftId(a.id);
+    setReg(a.reg);
+    setModel(a.model);
+    setSeats(String(a.seats));
+    setMaxPayloadKg(String(a.maxPayloadKg));
+    setEmptyWeightKg(a.emptyWeightKg != null ? String(a.emptyWeightKg) : "");
+    setMaxTakeoffMassKg(a.maxTakeoffMassKg != null ? String(a.maxTakeoffMassKg) : "");
+    setFuelType(a.fuelType ?? "");
+    setFuelBurnLPerHour(a.fuelBurnLPerHour != null ? String(a.fuelBurnLPerHour) : "");
+    setAircraftDialogOpen(true);
+  }
+
+  async function saveAircraft() {
     const seatsNum = Number(seats);
     const payloadNum = Number(maxPayloadKg);
     if (!reg.trim() || !model.trim() || !seatsNum || !payloadNum) return;
     setSavingAircraft(true);
     try {
-      const response = await fetch("/api/aircraft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reg,
-          model,
-          seats: seatsNum,
-          maxPayloadKg: payloadNum,
-          // Fuel-tracking fields are all optional (see shared's
-          // aircraftCreateRequestSchema) — only sent when actually filled in,
-          // so an aircraft without known fuel figures yet just omits them
-          // rather than getting sent as 0/NaN.
-          ...(emptyWeightKg && { emptyWeightKg: Number(emptyWeightKg) }),
-          ...(maxTakeoffMassKg && { maxTakeoffMassKg: Number(maxTakeoffMassKg) }),
-          ...(fuelType && { fuelType }),
-          ...(fuelOnBoardL && { fuelOnBoardL: Number(fuelOnBoardL) }),
-          ...(fuelBurnLPerHour && { fuelBurnLPerHour: Number(fuelBurnLPerHour) }),
-        }),
+      const body = JSON.stringify({
+        reg,
+        model,
+        seats: seatsNum,
+        maxPayloadKg: payloadNum,
+        // Fuel-tracking fields are all optional (see shared's
+        // aircraftCreateRequestSchema) — only sent when actually filled in,
+        // so an aircraft without known fuel figures yet just omits them
+        // rather than getting sent as 0/NaN. fuelOnBoardL is create-only —
+        // editing never touches it, see openEditAircraftDialog/updateAircraft.
+        ...(emptyWeightKg && { emptyWeightKg: Number(emptyWeightKg) }),
+        ...(maxTakeoffMassKg && { maxTakeoffMassKg: Number(maxTakeoffMassKg) }),
+        ...(fuelType && { fuelType }),
+        ...(!editingAircraftId && fuelOnBoardL && { fuelOnBoardL: Number(fuelOnBoardL) }),
+        ...(fuelBurnLPerHour && { fuelBurnLPerHour: Number(fuelBurnLPerHour) }),
       });
+      const response = editingAircraftId
+        ? await fetch(`/api/aircraft/${editingAircraftId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body,
+          })
+        : await fetch("/api/aircraft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          });
       if (response.ok) {
-        const created = (await response.json()) as Aircraft;
-        setAircraft((prev) => [...prev, created]);
-        setReg("");
-        setModel("");
-        setSeats("");
-        setMaxPayloadKg("");
-        setEmptyWeightKg("");
-        setMaxTakeoffMassKg("");
-        setFuelType("");
-        setFuelOnBoardL("");
-        setFuelBurnLPerHour("");
+        const saved = (await response.json()) as Aircraft;
+        setAircraft((prev) =>
+          editingAircraftId ? prev.map((a) => (a.id === saved.id ? saved : a)) : [...prev, saved],
+        );
         setAircraftDialogOpen(false);
       }
     } finally {
       setSavingAircraft(false);
+    }
+  }
+
+  async function deleteAircraftConfirmed(aircraftId: string) {
+    if (!confirm(t("dispatch.setup.aircraft.deleteConfirm"))) return;
+    setDeletingAircraft(true);
+    try {
+      const response = await fetch(`/api/aircraft/${aircraftId}`, { method: "DELETE" });
+      if (response.ok) {
+        setAircraft((prev) => prev.filter((a) => a.id !== aircraftId));
+        setDetailsAircraftId(null);
+      } else {
+        alert(t("dispatch.setup.aircraft.deleteError"));
+      }
+    } finally {
+      setDeletingAircraft(false);
     }
   }
 
@@ -387,7 +447,7 @@ export function SetupPage() {
               size="icon-sm"
               variant="outline"
               data-testid="open-add-pilot"
-              onClick={() => setPilotDialogOpen(true)}
+              onClick={openCreatePilotDialog}
               aria-label={t("dispatch.setup.pilots.add")}
             >
               <Plus />
@@ -395,98 +455,129 @@ export function SetupPage() {
           </CardAction>
         </CardHeader>
         <CardContent>
-          <ul className="flex flex-col gap-1" data-testid="pilot-list">
-            {pilots.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between text-sm"
-                data-testid="pilot-row"
-              >
-                <span className="flex items-center gap-1">
-                  {p.name} — {p.license} —{" "}
-                  {editingWeightPilotId === p.id ? (
-                    <span className="flex items-center gap-1">
-                      <Input
-                        type="number"
-                        className="h-7 w-16"
-                        data-testid="pilot-weight-input"
-                        value={weightEditValue}
-                        onChange={(e) => setWeightEditValue(e.target.value)}
-                        autoFocus
-                      />
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        data-testid="pilot-weight-save"
-                        disabled={savingWeight}
-                        aria-label={t("dispatch.setup.pilots.saveWeight")}
-                        onClick={() => void saveWeight(p.id)}
+          {pilots.length === 0 ? (
+            <p className="text-muted-foreground text-sm">{t("dispatch.setup.pilots.empty")}</p>
+          ) : (
+            <div
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+              data-testid="pilot-list"
+            >
+              {pilots.map((p) => (
+                <Card
+                  key={p.id}
+                  className="hover:bg-accent/50 cursor-pointer gap-3 py-4 transition-colors"
+                  data-testid="pilot-row"
+                  onClick={() => setDetailsPilotId(p.id)}
+                >
+                  <CardContent className="flex items-center gap-3 px-4">
+                    {/* Placeholder avatar slot — a future per-pilot image
+                        upload drops in here without touching this layout. */}
+                    <div className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-full">
+                      <UserRound className="text-muted-foreground size-5" aria-hidden />
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate font-medium">{p.name}</span>
+                      <span
+                        className={
+                          p.weightKg != null
+                            ? "text-muted-foreground truncate text-xs"
+                            : "truncate text-xs text-amber-600 dark:text-amber-500"
+                        }
+                        data-testid="pilot-weight-cell"
                       >
-                        ✓
-                      </Button>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className={
-                        p.weightKg != null
-                          ? "underline decoration-dotted underline-offset-2"
-                          : "text-amber-600 underline decoration-dotted underline-offset-2 dark:text-amber-500"
-                      }
-                      data-testid="pilot-weight-cell"
-                      onClick={() => startEditWeight(p)}
+                        {p.license} ·{" "}
+                        {p.weightKg != null
+                          ? `${p.weightKg} kg`
+                          : t("dispatch.setup.pilots.weightUnknown")}
+                      </span>
+                      {hoursFlownToday(p.id) >= 3 && (
+                        <span
+                          className="text-xs text-amber-600 dark:text-amber-500"
+                          data-testid="pilot-break-hint"
+                          title={t("dispatch.setup.pilots.breakHint")}
+                        >
+                          ⚠ {t("dispatch.setup.pilots.breakHint")}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      data-testid="toggle-pilot-available"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void togglePilotAvailable(p.id);
+                      }}
                     >
-                      {p.weightKg != null
-                        ? `${p.weightKg} kg`
-                        : t("dispatch.setup.pilots.weightUnknown")}
-                    </button>
-                  )}
-                </span>
-                <span className="flex items-center gap-2">
-                  {hoursFlownToday(p.id) >= 3 && (
-                    <span
-                      className="text-amber-600 text-xs dark:text-amber-500"
-                      data-testid="pilot-break-hint"
-                      title={t("dispatch.setup.pilots.breakHint")}
-                    >
-                      ⚠ {t("dispatch.setup.pilots.breakHint")}
-                    </span>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    data-testid="toggle-pilot-available"
-                    onClick={() => void togglePilotAvailable(p.id)}
-                  >
-                    {p.available
-                      ? t("dispatch.setup.pilots.available")
-                      : t("dispatch.setup.pilots.unavailable")}
-                  </Button>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    data-testid="delete-pilot"
-                    aria-label={t("dispatch.setup.pilots.delete")}
-                    onClick={() => void deletePilot(p.id)}
-                  >
-                    ✕
-                  </Button>
-                </span>
-              </li>
-            ))}
-            {pilots.length === 0 && (
-              <li className="text-muted-foreground text-sm">
-                {t("dispatch.setup.pilots.empty")}
-              </li>
-            )}
-          </ul>
+                      {p.available
+                        ? t("dispatch.setup.pilots.available")
+                        : t("dispatch.setup.pilots.unavailable")}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Details — the only place delete lives, never a quick-access button
+          right on the card. */}
+      <Dialog open={!!detailsPilotId} onOpenChange={(open) => !open && setDetailsPilotId(null)}>
+        <DialogContent data-testid="pilot-details">
+          {detailsPilot && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{detailsPilot.name}</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t("dispatch.setup.pilots.license")}</span>
+                  <span>{detailsPilot.license}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t("dispatch.setup.pilots.weightKg")}</span>
+                  <span>
+                    {detailsPilot.weightKg != null
+                      ? `${detailsPilot.weightKg} kg`
+                      : t("dispatch.setup.pilots.weightUnknown")}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t("dispatch.setup.pilots.status")}</span>
+                  <span>
+                    {detailsPilot.available
+                      ? t("dispatch.setup.pilots.available")
+                      : t("dispatch.setup.pilots.unavailable")}
+                  </span>
+                </div>
+              </div>
+              <DialogFooter className="sm:justify-between">
+                <Button
+                  variant="destructive"
+                  data-testid="delete-pilot"
+                  disabled={deletingPilot}
+                  aria-label={t("dispatch.setup.pilots.delete")}
+                  onClick={() => void deletePilotConfirmed(detailsPilot.id)}
+                >
+                  <Trash2 /> {t("dispatch.setup.pilots.delete")}
+                </Button>
+                <Button data-testid="edit-pilot" onClick={() => openEditPilotDialog(detailsPilot)}>
+                  {t("dispatch.setup.pilots.edit")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={pilotDialogOpen} onOpenChange={setPilotDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("dispatch.setup.pilots.add")}</DialogTitle>
+            <DialogTitle>
+              {editingPilotId ? t("dispatch.setup.pilots.edit") : t("dispatch.setup.pilots.add")}
+            </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="grid gap-2">
@@ -512,8 +603,8 @@ export function SetupPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button data-testid="add-pilot" disabled={savingPilot} onClick={() => void addPilot()}>
-              {t("dispatch.setup.pilots.add")}
+            <Button data-testid="add-pilot" disabled={savingPilot} onClick={() => void savePilot()}>
+              {editingPilotId ? t("dispatch.setup.pilots.save") : t("dispatch.setup.pilots.add")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -527,7 +618,7 @@ export function SetupPage() {
               size="icon-sm"
               variant="outline"
               data-testid="open-add-aircraft"
-              onClick={() => setAircraftDialogOpen(true)}
+              onClick={openCreateAircraftDialog}
               aria-label={t("dispatch.setup.aircraft.add")}
             >
               <Plus />
@@ -535,76 +626,176 @@ export function SetupPage() {
           </CardAction>
         </CardHeader>
         <CardContent>
-          <ul className="flex flex-col gap-1" data-testid="aircraft-list">
-            {aircraft.map((a) => (
-              <li
-                key={a.id}
-                className="flex items-center justify-between text-sm"
-                data-testid="aircraft-row"
-              >
-                <span className="flex items-center gap-1">
-                  {a.reg} — {a.model} ({a.seats} {t("dispatch.setup.aircraft.seats")},{" "}
-                  {a.maxPayloadKg} kg)
-                  {/* Fuel is only shown/editable once a fuel type is on file —
-                      "dim, don't hide": aircraft without fuel tracking yet
-                      just don't get this bit, not a broken-looking 0 L. */}
-                  {a.fuelType &&
-                    (editingFuelAircraftId === a.id ? (
-                      <span className="ml-1 flex items-center gap-1">
-                        <Input
-                          type="number"
-                          className="h-7 w-16"
-                          data-testid="aircraft-fuel-input"
-                          value={fuelEditValue}
-                          onChange={(e) => setFuelEditValue(e.target.value)}
-                          autoFocus
-                        />
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          data-testid="aircraft-fuel-save"
-                          disabled={savingFuel}
-                          aria-label={t("dispatch.setup.aircraft.saveFuel")}
-                          onClick={() => void saveFuel(a.id)}
-                        >
-                          ✓
-                        </Button>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-muted-foreground ml-1 underline decoration-dotted underline-offset-2"
-                        data-testid="aircraft-fuel-cell"
-                        onClick={() => startEditFuel(a)}
-                      >
-                        · {a.fuelOnBoardL ?? 0} L {t(`dispatch.setup.aircraft.fuelType.${a.fuelType}`)}
-                      </button>
-                    ))}
-                </span>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  data-testid="delete-aircraft"
-                  aria-label={t("dispatch.setup.aircraft.delete")}
-                  onClick={() => void deleteAircraft(a.id)}
+          {aircraft.length === 0 ? (
+            <p className="text-muted-foreground text-sm">{t("dispatch.setup.aircraft.empty")}</p>
+          ) : (
+            <div
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+              data-testid="aircraft-list"
+            >
+              {aircraft.map((a) => (
+                <Card
+                  key={a.id}
+                  className="hover:bg-accent/50 cursor-pointer gap-3 py-4 transition-colors"
+                  data-testid="aircraft-row"
+                  onClick={() => setDetailsAircraftId(a.id)}
                 >
-                  ✕
-                </Button>
-              </li>
-            ))}
-            {aircraft.length === 0 && (
-              <li className="text-muted-foreground text-sm">
-                {t("dispatch.setup.aircraft.empty")}
-              </li>
-            )}
-          </ul>
+                  <CardContent className="flex items-center gap-3 px-4">
+                    {/* Placeholder avatar slot — a future per-aircraft image
+                        upload drops in here without touching this layout. */}
+                    <div className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-full">
+                      <Plane className="text-muted-foreground size-5" aria-hidden />
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate font-medium">{a.reg}</span>
+                      <span className="text-muted-foreground truncate text-xs">
+                        {a.model} · {a.seats} {t("dispatch.setup.aircraft.seats")} · {a.maxPayloadKg} kg
+                      </span>
+                      {/* Fuel is only shown/editable once a fuel type is on
+                          file — "dim, don't hide": aircraft without fuel
+                          tracking yet just don't get this bit. Refueling
+                          stays a quick action right on the card (unlike
+                          delete) — it's a frequent, non-destructive,
+                          real-world action the fuel truck triggers between
+                          flights. */}
+                      {a.fuelType &&
+                        (editingFuelAircraftId === a.id ? (
+                          <span
+                            className="mt-0.5 flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Input
+                              type="number"
+                              className="h-7 w-16"
+                              data-testid="aircraft-fuel-input"
+                              value={fuelEditValue}
+                              onChange={(e) => setFuelEditValue(e.target.value)}
+                              autoFocus
+                            />
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              data-testid="aircraft-fuel-save"
+                              disabled={savingFuel}
+                              aria-label={t("dispatch.setup.aircraft.saveFuel")}
+                              onClick={() => void saveFuel(a.id)}
+                            >
+                              ✓
+                            </Button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-muted-foreground w-fit text-xs underline decoration-dotted underline-offset-2"
+                            data-testid="aircraft-fuel-cell"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditFuel(a);
+                            }}
+                          >
+                            {a.fuelOnBoardL ?? 0} L {t(`dispatch.setup.aircraft.fuelType.${a.fuelType}`)}
+                          </button>
+                        ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!detailsAircraftId} onOpenChange={(open) => !open && setDetailsAircraftId(null)}>
+        <DialogContent data-testid="aircraft-details">
+          {detailsAircraft && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{detailsAircraft.reg}</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t("dispatch.setup.aircraft.model")}</span>
+                  <span>{detailsAircraft.model}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t("dispatch.setup.aircraft.seats")}</span>
+                  <span>{detailsAircraft.seats}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">
+                    {t("dispatch.setup.aircraft.maxPayloadKg")}
+                  </span>
+                  <span>{detailsAircraft.maxPayloadKg} kg</span>
+                </div>
+                {detailsAircraft.emptyWeightKg != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">
+                      {t("dispatch.setup.aircraft.emptyWeightKg")}
+                    </span>
+                    <span>{detailsAircraft.emptyWeightKg} kg</span>
+                  </div>
+                )}
+                {detailsAircraft.maxTakeoffMassKg != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">
+                      {t("dispatch.setup.aircraft.maxTakeoffMassKg")}
+                    </span>
+                    <span>{detailsAircraft.maxTakeoffMassKg} kg</span>
+                  </div>
+                )}
+                {detailsAircraft.fuelType && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">
+                        {t("dispatch.setup.aircraft.fuelType.label")}
+                      </span>
+                      <span>{t(`dispatch.setup.aircraft.fuelType.${detailsAircraft.fuelType}`)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">
+                        {t("dispatch.setup.aircraft.fuelOnBoardL")}
+                      </span>
+                      <span>{detailsAircraft.fuelOnBoardL ?? 0} L</span>
+                    </div>
+                    {detailsAircraft.fuelBurnLPerHour != null && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">
+                          {t("dispatch.setup.aircraft.fuelBurnLPerHour")}
+                        </span>
+                        <span>{detailsAircraft.fuelBurnLPerHour} L/h</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <DialogFooter className="sm:justify-between">
+                <Button
+                  variant="destructive"
+                  data-testid="delete-aircraft"
+                  disabled={deletingAircraft}
+                  aria-label={t("dispatch.setup.aircraft.delete")}
+                  onClick={() => void deleteAircraftConfirmed(detailsAircraft.id)}
+                >
+                  <Trash2 /> {t("dispatch.setup.aircraft.delete")}
+                </Button>
+                <Button
+                  data-testid="edit-aircraft"
+                  onClick={() => openEditAircraftDialog(detailsAircraft)}
+                >
+                  {t("dispatch.setup.aircraft.edit")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={aircraftDialogOpen} onOpenChange={setAircraftDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("dispatch.setup.aircraft.add")}</DialogTitle>
+            <DialogTitle>
+              {editingAircraftId ? t("dispatch.setup.aircraft.edit") : t("dispatch.setup.aircraft.add")}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
@@ -671,15 +862,20 @@ export function SetupPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ac-fuel-onboard">{t("dispatch.setup.aircraft.fuelOnBoardL")}</Label>
-              <Input
-                id="ac-fuel-onboard"
-                type="number"
-                value={fuelOnBoardL}
-                onChange={(e) => setFuelOnBoardL(e.target.value)}
-              />
-            </div>
+            {/* Initial fuel is create-only — editing an existing aircraft
+                never touches fuelOnBoardL, see updateAircraft; use the
+                card's own refuel quick-action for that instead. */}
+            {!editingAircraftId && (
+              <div className="grid gap-2">
+                <Label htmlFor="ac-fuel-onboard">{t("dispatch.setup.aircraft.fuelOnBoardL")}</Label>
+                <Input
+                  id="ac-fuel-onboard"
+                  type="number"
+                  value={fuelOnBoardL}
+                  onChange={(e) => setFuelOnBoardL(e.target.value)}
+                />
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="ac-fuel-burn">{t("dispatch.setup.aircraft.fuelBurnLPerHour")}</Label>
               <Input
@@ -694,9 +890,9 @@ export function SetupPage() {
             <Button
               data-testid="add-aircraft"
               disabled={savingAircraft}
-              onClick={() => void addAircraft()}
+              onClick={() => void saveAircraft()}
             >
-              {t("dispatch.setup.aircraft.add")}
+              {editingAircraftId ? t("dispatch.setup.aircraft.save") : t("dispatch.setup.aircraft.add")}
             </Button>
           </DialogFooter>
         </DialogContent>

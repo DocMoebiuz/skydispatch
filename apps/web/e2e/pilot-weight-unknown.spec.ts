@@ -110,11 +110,13 @@ test("a pilot with no weight on file blocks assign/lock until fixed", async ({ p
     await page.getByTestId("pool-unit").filter({ hasText: guestName }).click();
     await expect(flightCard).toHaveClass(/opacity-40/);
 
-    // --- Fix in place: Setup's click-to-edit weight cell ---
+    // --- Fix in place: open the pilot's details, then edit (same form as
+    // creation, prefilled) ---
     await page.goto("/dispatch/setup");
-    await pilotRow.getByTestId("pilot-weight-cell").click();
-    await pilotRow.getByTestId("pilot-weight-input").fill("85");
-    await pilotRow.getByTestId("pilot-weight-save").click();
+    await pilotRow.click();
+    await page.getByTestId("edit-pilot").click();
+    await page.getByLabel("Gewicht (kg)").fill("85");
+    await page.getByTestId("add-pilot").click();
     await expect(pilotRow.getByTestId("pilot-weight-cell")).toContainText("85 kg");
 
     // --- Now assignment works and the gauge includes the pilot's weight ---

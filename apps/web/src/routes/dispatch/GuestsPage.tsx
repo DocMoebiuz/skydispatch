@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { UserPlus, Check, Banknote, UserX, X } from "lucide-react";
+import { UserPlus, Check, Banknote, UserX, Trash2 } from "lucide-react";
 import { deriveGuestStatus, type Guest, type Flight, type GuestStatus } from "shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -300,7 +300,7 @@ export function GuestsPage() {
                           onClick={() => void deleteGuest(guest.id)}
                           aria-label={t("dispatch.guests.delete")}
                         >
-                          <X className="size-3.5" />
+                          <Trash2 className="size-3.5" />
                         </Button>
                       )}
                       {actionError.has(guest.id) && (

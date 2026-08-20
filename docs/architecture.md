@@ -348,11 +348,13 @@ reporting), per the manual and `docs/static-html-app/`:
 | `POST /api/guests/{id}/actions/no-show` | Marks no-show and immediately frees the seat on its flight, if any |
 | `POST /api/guests/{id}/actions/unassign` | Removes a guest from its flight (correction path) |
 | `POST /api/pilots`, `GET /api/pilots` | Create/list pilots |
+| `PUT /api/pilots/{id}` | Full-field edit (name/license/weight) from Setup's pilot details dialog — a plain PUT, not another `/actions/` endpoint, since there's no branching server logic, just "replace these editable fields" |
 | `POST /api/pilots/{id}/actions/toggle-available`, `DELETE /api/pilots/{id}` | Availability toggle; delete blocked (409) if on a non-completed flight |
 | `POST /api/pilots/{id}/actions/set-weight` | Backfill/correct a pilot's weight after creation — real records created before `weightKg` existed had no other way to get one. `assign`/`set-ready` both refuse (409 `pilot-weight-unknown`) while a pilot with no weight on file is assigned to the flight, rather than silently treating it as 0kg |
 | `POST /api/aircraft`, `GET /api/aircraft` | Create/list aircraft |
+| `PUT /api/aircraft/{id}` | Full-field edit from Setup's aircraft details dialog, same reasoning as pilots' PUT above — deliberately never touches `fuelOnBoardL` (see `actions/refuel` below) |
 | `DELETE /api/aircraft/{id}` | Blocked (409) if on a non-completed flight |
-| `POST /api/aircraft/{id}/actions/refuel` | Dispatcher sets the absolute liters on board (read off the fuel truck's meter, not a delta) |
+| `POST /api/aircraft/{id}/actions/refuel` | Dispatcher sets the absolute liters on board (read off the fuel truck's meter, not a delta) — kept separate from the PUT above since refueling is a distinct, frequent real-world action that shouldn't require reopening the full edit form |
 | `POST /api/flightday`, `GET /api/flightday` | Upsert/read the one flight day's settings (date/airfield) — status untouched |
 | `POST /api/flightday/actions/start`, `.../end` | Flight day status transitions |
 | `POST /api/flights`, `GET /api/flights` | Create/list flights |

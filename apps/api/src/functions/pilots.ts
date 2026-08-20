@@ -101,6 +101,41 @@ export async function setPilotWeight(
   return { status: 200, jsonBody: updated };
 }
 
+// Full-field edit (name/license/weight) from Setup's pilot details dialog —
+// a plain PUT, not another /actions/ endpoint: unlike toggle-available or
+// set-weight, there's no branching server logic here, just "replace these
+// editable fields," which is exactly what a generic update endpoint is for
+// (see docs/architecture.md § API surface's convention note).
+export async function updatePilot(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const pilotId = request.params.id;
+  if (!pilotId) return { status: 400, jsonBody: { error: "missing-id" } };
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { status: 400, jsonBody: { error: "invalid-json" } };
+  }
+  const parsed = pilotCreateRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
+  }
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: pilot } = await container.item(pilotId, flightDayId).read<Pilot>();
+  if (!pilot) return { status: 404, jsonBody: { error: "not-found" } };
+  const updated: Pilot = {
+    ...pilot,
+    name: parsed.data.name,
+    license: parsed.data.license,
+    weightKg: parsed.data.weightKg,
+  };
+  await container.item(pilotId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 export async function deletePilot(
   request: HttpRequest,
   _context: InvocationContext,
@@ -141,6 +176,13 @@ app.http("setPilotWeight", {
   route: "pilots/{id}/actions/set-weight",
   authLevel: "anonymous",
   handler: setPilotWeight,
+});
+
+app.http("updatePilot", {
+  methods: ["PUT"],
+  route: "pilots/{id}",
+  authLevel: "anonymous",
+  handler: updatePilot,
 });
 
 app.http("deletePilot", {
