@@ -9,6 +9,7 @@ import {
   DEFAULT_FLIGHT_DAY_ID,
   flightCreateRequestSchema,
   assignRequestSchema,
+  adjustFlightTimesRequestSchema,
   type Flight,
   type Aircraft,
   type Guest,
@@ -457,6 +458,44 @@ export async function landFlight(
   return { status: 200, jsonBody: updated };
 }
 
+// Corrects offBlock/onBlock after the fact — actions/start and actions/land
+// stamp these the moment the dispatcher clicks, which isn't always exactly
+// when the wheels actually left/touched the ground. Deliberately does NOT
+// recompute the fuel deduction landFlight already made off the original
+// offBlock/onBlock pair (see landFlight above) — this is a display/record
+// correction tool, not a re-run of the landing transition; recomputing fuel
+// retroactively is real complexity this doesn't need yet (limits blast
+// radius, matches the same call made for fuel vs. maxPayloadKg elsewhere).
+export async function adjustFlightTimes(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const flightId = request.params.id;
+  if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { status: 400, jsonBody: { error: "invalid-json" } };
+  }
+  const parsed = adjustFlightTimesRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
+  }
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: flight } = await container.item(flightId, flightDayId).read<Flight>();
+  if (!flight) return { status: 404, jsonBody: { error: "not-found" } };
+  const updated: Flight = {
+    ...flight,
+    offBlock: parsed.data.offBlock ?? flight.offBlock,
+    onBlock: parsed.data.onBlock ?? flight.onBlock,
+    updatedAt: new Date().toISOString(),
+  };
+  await container.item(flightId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 app.http("createFlight", {
   methods: ["POST"],
   route: "flights",
@@ -504,4 +543,11 @@ app.http("landFlight", {
   route: "flights/{id}/actions/land",
   authLevel: "anonymous",
   handler: landFlight,
+});
+
+app.http("adjustFlightTimes", {
+  methods: ["POST"],
+  route: "flights/{id}/actions/adjust-times",
+  authLevel: "anonymous",
+  handler: adjustFlightTimes,
 });

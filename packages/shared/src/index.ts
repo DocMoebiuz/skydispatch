@@ -26,6 +26,8 @@ export type { FlightCreateRequest } from "./schemas/flightCreateRequest";
 export { flightCreateRequestSchema } from "./schemas/flightCreateRequest";
 export type { AssignRequest } from "./schemas/assignRequest";
 export { assignRequestSchema } from "./schemas/assignRequest";
+export type { AdjustFlightTimesRequest } from "./schemas/adjustFlightTimesRequest";
+export { adjustFlightTimesRequestSchema } from "./schemas/adjustFlightTimesRequest";
 export type { RefuelRequest } from "./schemas/refuelRequest";
 export { refuelRequestSchema } from "./schemas/refuelRequest";
 

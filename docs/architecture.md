@@ -361,6 +361,7 @@ reporting), per the manual and `docs/static-html-app/`:
 | `POST /api/flights/{id}/actions/assign` | Assign a guest or a whole group, enforcing hard seat/weight limits, greedy partial-fit for groups; returns `{assigned, rejected: [{guestId, reason}]}` |
 | `POST /api/flights/{id}/actions/set-ready`, `.../unready` | Ready requires guests > 0 and weight within payload (server-checked) |
 | `POST /api/flights/{id}/actions/start`, `.../land` | Start requires ready + all assigned guests checked in; landing marks the flight completed and every guest flown |
+| `POST /api/flights/{id}/actions/adjust-times` | Corrects offBlock/onBlock after the fact (Tracking's click-to-edit time fields) — either field optional, no state-machine checks; deliberately does NOT recompute the fuel `landFlight` already deducted off the original pair |
 | `POST /api/system/actions/reset-database` | Full wipe of every document (any type, any `flightDayId`) — backs Setup's "Gefahrenzone" reset button; no server-side confirmation of its own, the UI's type-to-confirm dialog is the only guard (see § Open decisions #1 on the lack of auth generally). Route deliberately isn't under `/api/admin/...` — Azure Functions Core Tools' local host reserves any route starting with `admin` for its own built-in management API (`/admin/functions`, `/admin/host/...`) even under the `/api` prefix, so that shape 404s unconditionally; confirmed live via `/admin/functions`, not guessed |
 
 No `PUT`/edit on any entity (only create, list, delete, and the specific action

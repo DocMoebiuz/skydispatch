@@ -2,10 +2,26 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { deriveFlightStage, type Guest, type Aircraft, type Pilot, type Flight } from "shared";
+import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
+
+type TimeField = "offBlock" | "onBlock";
+
+// Combines an edited "HH:MM" with the flight's existing date (falling back to
+// today if this timestamp was never set) — the dispatcher only ever adjusts
+// the time-of-day, not the date, so the input stays a plain <input
+// type="time"> instead of a full datetime picker.
+function isoFromTimeEdit(existingIso: string | null, timeValue: string): string | null {
+  const [hh, mm] = timeValue.split(":").map(Number);
+  if (hh == null || mm == null || Number.isNaN(hh) || Number.isNaN(mm)) return null;
+  const base = existingIso ? new Date(existingIso) : new Date();
+  base.setHours(hh, mm, 0, 0);
+  return base.toISOString();
+}
 
 const ORDER: Record<Flight["status"], number> = {
   created: 0,
@@ -28,6 +44,11 @@ export function TrackingPage() {
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [pending, setPending] = useState<Set<string>>(new Set());
+  const [editingTime, setEditingTime] = useState<{ flightId: string; field: TimeField } | null>(
+    null,
+  );
+  const [timeEditValue, setTimeEditValue] = useState("");
+  const [savingTime, setSavingTime] = useState(false);
 
   function reload(): Promise<void> {
     return Promise.all([
@@ -107,6 +128,87 @@ export function TrackingPage() {
     }
   }
 
+  // <input type="time">'s value is always 24h "HH:MM" regardless of locale
+  // (guaranteed by the HTML spec) — toLocaleTimeString isn't safe here, it'd
+  // format 12h with an AM/PM suffix in an en-US-ish locale.
+  function to24hInputValue(d: Date): string {
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function startEditTime(flightId: string, field: TimeField, currentIso: string | null) {
+    setEditingTime({ flightId, field });
+    setTimeEditValue(to24hInputValue(currentIso ? new Date(currentIso) : new Date()));
+  }
+
+  async function saveTime(flightId: string, field: TimeField, currentIso: string | null) {
+    const iso = isoFromTimeEdit(currentIso, timeEditValue);
+    if (!iso) return;
+    setSavingTime(true);
+    try {
+      const response = await fetch(`/api/flights/${flightId}/actions/adjust-times`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: iso }),
+      });
+      if (response.ok) {
+        await reload();
+        setEditingTime(null);
+      }
+    } finally {
+      setSavingTime(false);
+    }
+  }
+
+  // Click-to-edit, same pattern as Setup's pilot-weight/aircraft-fuel cells —
+  // corrects a timestamp actions/start or actions/land already stamped
+  // automatically, in place, without a separate edit dialog.
+  function renderTimeField(flightId: string, field: TimeField, label: string, iso: string) {
+    const isEditing = editingTime?.flightId === flightId && editingTime.field === field;
+    if (isEditing) {
+      return (
+        <div
+          className="flex items-center gap-1"
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`tracking-${field}-edit`}
+        >
+          <span className="text-xs">{label}:</span>
+          <Input
+            type="time"
+            className="h-7 w-24 text-xs"
+            data-testid={`tracking-${field}-input`}
+            value={timeEditValue}
+            onChange={(e) => setTimeEditValue(e.target.value)}
+            autoFocus
+          />
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            disabled={savingTime}
+            aria-label={t("dispatch.tracking.saveTime")}
+            data-testid={`tracking-${field}-save`}
+            onClick={() => void saveTime(flightId, field, iso)}
+          >
+            ✓
+          </Button>
+        </div>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="text-muted-foreground flex items-center gap-1 text-xs underline decoration-dotted underline-offset-2"
+        data-testid={`tracking-${field}-cell`}
+        onClick={(e) => {
+          e.stopPropagation();
+          startEditTime(flightId, field, iso);
+        }}
+      >
+        <Pencil className="size-3" aria-hidden />
+        {label}: {new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+      </button>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.tracking")}</h1>
@@ -182,16 +284,8 @@ export function TrackingPage() {
                     {notCheckedIn} {t("dispatch.tracking.notCheckedIn")}
                   </p>
                 )}
-                {f.offBlock && (
-                  <p className="text-xs">
-                    {t("dispatch.tracking.takeoff")}: {new Date(f.offBlock).toLocaleTimeString()}
-                  </p>
-                )}
-                {f.onBlock && (
-                  <p className="text-xs">
-                    {t("dispatch.tracking.landing")}: {new Date(f.onBlock).toLocaleTimeString()}
-                  </p>
-                )}
+                {f.offBlock && renderTimeField(f.id, "offBlock", t("dispatch.tracking.takeoff"), f.offBlock)}
+                {f.onBlock && renderTimeField(f.id, "onBlock", t("dispatch.tracking.landing"), f.onBlock)}
               </FlightCard>
             );
           })}
