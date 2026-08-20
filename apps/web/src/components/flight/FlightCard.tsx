@@ -82,6 +82,12 @@ export function FlightCard({
   const { t } = useTranslation();
   const compact = size === "compact";
   const freeKg = load.maxPayloadKg - load.usedWeightKg;
+  // Same "how much is actually free for this flight" framing as freeKg above,
+  // just from the static (last-reported) fuel figure instead of the
+  // burn-adjusted dynamic one — NOT the raw staticMaxPayloadKg (that's the
+  // aircraft's total static capacity, not netted against this flight's
+  // current passengers, and would overstate what's actually still free).
+  const staticFreeKg = load.staticMaxPayloadKg - load.usedWeightKg;
   return (
     <Card
       className={cn(
@@ -174,6 +180,29 @@ export function FlightCard({
                   not "no room" — show a dash instead of a misleading 0kg. */}
               {load.fuelUnknown ? "—" : `${load.over ? load.usedWeightKg - load.maxPayloadKg : freeKg} kg`}
             </span>
+            {/* Static (last-reported fuel, pessimistic) right under the
+                dynamic number above (burn-adjusted, realistic but with some
+                margin of error) — a dispatcher shouldn't have to do mental
+                math to sanity-check one against the other. Only shown once
+                dynamic tracking has actually diverged from static (some fuel
+                burn recorded since the last report); identical figures would
+                just be visual noise. Not itself a hard limit — assign/lock
+                still gate on the dynamic number above — so no "over limit"
+                wording, just a quieter red when it's already negative. */}
+            {!load.fuelUnknown && load.staticMaxPayloadKg !== load.maxPayloadKg && (
+              <span
+                className={cn(
+                  "mt-0.5 flex items-center gap-1 text-xs tabular-nums",
+                  staticFreeKg < 0 ? "text-destructive" : "text-muted-foreground",
+                )}
+                data-testid="flight-card-static-payload"
+                title={t("dispatch.planning.builder.staticPayloadTooltip")}
+              >
+                <Fuel className="size-3 shrink-0" aria-hidden />
+                <span className="sr-only">{t("dispatch.planning.builder.staticPayloadTooltip")}: </span>
+                {staticFreeKg} kg
+              </span>
+            )}
           </div>
         </div>
         {!compact && (
@@ -215,18 +244,6 @@ export function FlightCard({
             <span className="text-muted-foreground">
               {t("dispatch.planning.builder.fuelWeight", { fuel: load.fuel.fuelWeightKg })}
             </span>
-          </p>
-        )}
-
-        {/* Static payload, alongside the dynamic figure the primary gauge
-            above already shows — the dispatcher can sanity-check the
-            burn-since-last-report projection against the last known-good
-            reported number. Not itself a hard limit (assign/lock gate on
-            the dynamic one), so muted, not colored even when it reads
-            tighter than the dynamic figure. */}
-        {!load.fuelUnknown && !compact && load.staticMaxPayloadKg !== load.maxPayloadKg && (
-          <p className="text-muted-foreground" data-testid="flight-card-static-payload">
-            {t("dispatch.planning.builder.staticPayload", { kg: load.staticMaxPayloadKg })}
           </p>
         )}
 

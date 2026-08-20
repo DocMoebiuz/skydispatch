@@ -169,7 +169,7 @@
         "refuelBreakActive": "⛽ Wird betankt – Start nicht möglich",
         "mtom": "{{gross}} / {{max}} kg MTOM",
         "fuelWeight": "({{fuel}} kg Sprit)",
-        "staticPayload": "Statisch (letzte Meldung): {{kg}} kg frei"
+        "staticPayloadTooltip": "Statisch, letzte Meldung (pessimistisch)"
       },
       "status": {
         "created": "geplant",

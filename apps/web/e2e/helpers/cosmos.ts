@@ -72,6 +72,24 @@ export async function deleteById(id: string, flightDayId: string): Promise<void>
   await container.item(id, flightDayId).delete().catch(() => undefined);
 }
 
+// `fuelBurnedSinceReportL` is server-managed (only landFlight/end-refuel-break
+// touch it, see apps/api aircraft.ts/flights.ts) — there's no public endpoint
+// to set it directly. A real burn big enough to move the displayed kg figure
+// (Math.round'd, see weightAndBalance.ts) needs real elapsed airborne minutes,
+// impractical to wait out in a test — so tests that need a visible static-vs-
+// dynamic divergence patch it in directly instead, the same way global-setup
+// reads/writes FlightDay documents outside the public API.
+export async function setAircraftFuelBurned(
+  aircraftId: string,
+  flightDayId: string,
+  litersBurned: number,
+): Promise<void> {
+  const container = await getTestContainer();
+  const { resource } = await container.item(aircraftId, flightDayId).read();
+  if (!resource) return;
+  await container.items.upsert({ ...resource, fuelBurnedSinceReportL: litersBurned });
+}
+
 // Self-healing cleanup for a real gap: `Flight` documents have no name/email/reg
 // field, so a spec that gets hard-killed mid-run (a Playwright test timeout, or —
 // repeatedly observed this session — the devcontainer itself dying) can leave a
