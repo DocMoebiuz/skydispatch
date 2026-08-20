@@ -162,12 +162,14 @@ export function DashboardPage() {
     { key: "utilization", value: `${utilization}%`, sub: t("dispatch.dashboard.kpi.utilizationSub") },
   ];
 
-  // Live = actively happening or just wrapped up (boarding underway, fully
-  // boarded, airborne, or landed) — this is the "eyes on it right now" bucket,
-  // stage-based rather than raw status so a flight only half-checked-in still
-  // counts as live, not stuck in planning. Everything before boarding starts
-  // (new/planning/assigned-but-untouched) is still prep work, not yet live.
-  const LIVE_STAGES: FlightStage[] = ["boarding", "boarded", "airborne", "landed"];
+  // Live = actively happening right now (boarding underway, fully boarded,
+  // airborne) — the "eyes on it right now" bucket, stage-based rather than
+  // raw status so a flight only half-checked-in still counts as live, not
+  // stuck in planning. A landed flight is done, not something that still
+  // needs eyes on it — Tracking and Board are where completed flights get
+  // reviewed, so it just drops off the dashboard entirely rather than
+  // lingering prominently in the Live lane.
+  const LIVE_STAGES: FlightStage[] = ["boarding", "boarded", "airborne"];
   const stagedFlights = [...flights]
     .sort((a, b) => ORDER[a.status] - ORDER[b.status])
     .map((f) => {
@@ -178,14 +180,14 @@ export function DashboardPage() {
     });
   const liveFlights = stagedFlights.filter((s) => LIVE_STAGES.includes(s.stage)).map((s) => s.flight);
   const planningFlights = stagedFlights
-    .filter((s) => !LIVE_STAGES.includes(s.stage))
+    .filter((s) => s.stage !== "landed" && !LIVE_STAGES.includes(s.stage))
     .map((s) => s.flight);
 
   // One primary action per stage — always the actual next thing to do, never
   // a disabled dead-end button. "assigned"/"boarding" used to render a
   // disabled "Start nicht möglich" button here; now they point straight at
   // Check-in, since that's what's actually blocking the start.
-  function renderFlightCard(f: Flight) {
+  function renderFlightCard(f: Flight, size: "default" | "compact" = "default") {
     const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
     const pilot = pilots.find((p) => p.id === f.pilotId);
     const flightGuests = f.guestIds
@@ -246,6 +248,7 @@ export function DashboardPage() {
         pilot={pilot}
         load={load}
         actions={actions}
+        size={size}
       />
     );
   }
@@ -271,9 +274,9 @@ export function DashboardPage() {
         </div>
         <div className="flex flex-col gap-3">
           <Skeleton className="h-6 w-40" />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 3 }, (_, i) => (
-              <Skeleton key={i} className="h-44 w-full" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {Array.from({ length: 5 }, (_, i) => (
+              <Skeleton key={i} className="h-28 w-full" />
             ))}
           </div>
         </div>
@@ -345,8 +348,12 @@ export function DashboardPage() {
           {t("dispatch.dashboard.flights.planningTitle")} ({planningFlights.length})
         </h2>
         {planningFlights.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {planningFlights.map((f) => renderFlightCard(f))}
+          // Denser + compact than the Live lane — these are mostly just
+          // glanceable ("what's still in the pipeline"), not something that
+          // needs a full-size card per flight, and there can be a lot of them
+          // on a busy day.
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {planningFlights.map((f) => renderFlightCard(f, "compact"))}
           </div>
         ) : (
           <EmptyState
