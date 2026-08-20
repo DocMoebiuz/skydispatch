@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, X, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, Loader2, CircleAlert } from "lucide-react";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AssignableUnitCard } from "@/components/flight/AssignableUnitCard";
@@ -103,11 +103,14 @@ export function PlanningPage() {
   );
   const [activeUnit, setActiveUnit] = useState<AssignableUnit | null>(null);
   const [activeWidth, setActiveWidth] = useState<number | null>(null);
-  // Click a pool unit to select it — flight cards that could fit it highlight,
-  // ones that can't dim; clicking a highlighted flight then assigns it there.
-  // Purely a UI convenience; drag ignores this and can target any flight
-  // directly regardless of what's selected.
+  // Selection works both directions — click a pool unit (fitting flights
+  // highlight, non-fitting dim) OR click a planned flight (fitting pool units
+  // highlight, non-fitting dim) — then click the highlighted counterpart to
+  // assign. Mutually exclusive: selecting one side always clears the other,
+  // see selectUnit/selectFlight below. Purely a UI convenience; drag ignores
+  // this and can target any flight directly regardless of what's selected.
   const [selectedUnitKey, setSelectedUnitKey] = useState<string | null>(null);
+  const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
   // "Finished" (airborne + completed) flights have zero planning actions
   // available — collapsed by default, on demand only, so screen space goes to
   // what's actually actionable right now. See docs/architecture.md § Shared
@@ -215,11 +218,29 @@ export function PlanningPage() {
   );
 
   const selectedUnit = selectedUnitKey ? poolUnits.find((u) => u.key === selectedUnitKey) : null;
-  // Dimmed, not hidden, when a flight can't fit the selected unit — hiding
-  // outright would jump the flight grid around on every selection change,
+  const selectedFlight = selectedFlightId ? plannedFlights.find((f) => f.id === selectedFlightId) : null;
+  // Dimmed, not hidden, when something can't fit the current selection —
+  // hiding outright would jump the grid around on every selection change,
   // worse than just seeing (and ruling out) what won't work right now.
   function flightFitsSelectedUnit(aircraft: Aircraft | undefined, load: FlightLoad): boolean {
     return !selectedUnit || unitFits(selectedUnit, aircraft, load);
+  }
+
+  function unitFitsSelectedFlight(unit: AssignableUnit): boolean {
+    if (!selectedFlight) return true;
+    const aircraft = aircraftList.find((a) => a.id === selectedFlight.aircraftId);
+    const load = flightLoads.get(selectedFlight.id);
+    return !!load && unitFits(unit, aircraft, load);
+  }
+
+  function selectUnit(key: string) {
+    setSelectedFlightId(null);
+    setSelectedUnitKey((prev) => (prev === key ? null : key));
+  }
+
+  function selectFlight(id: string) {
+    setSelectedUnitKey(null);
+    setSelectedFlightId((prev) => (prev === id ? null : id));
   }
 
   function markPending(key: string, on: boolean) {
@@ -472,17 +493,25 @@ export function PlanningPage() {
             actions={actions}
             size={size}
             onClick={
-              selectedUnit && fitsSelectedUnit
-                ? () => {
-                    void assignUnit(selectedUnit, f.id);
-                    setSelectedUnitKey(null);
-                  }
-                : undefined
+              selectedUnit
+                ? fitsSelectedUnit
+                  ? () => {
+                      void assignUnit(selectedUnit, f.id);
+                      setSelectedUnitKey(null);
+                    }
+                  : undefined
+                : !isLocked
+                  ? () => selectFlight(f.id)
+                  : undefined
             }
             className={cn(
               "h-full",
               isOver && "ring-primary ring-2 ring-offset-2",
-              selectedUnit && (fitsSelectedUnit ? "border-primary ring-primary/50 ring-1" : "opacity-40"),
+              selectedUnit &&
+                (fitsSelectedUnit
+                  ? "border-primary ring-primary/50 ring-1"
+                  : "opacity-40 saturate-50"),
+              !selectedUnit && selectedFlightId === f.id && "border-primary ring-primary/50 ring-1",
             )}
           >
             {size === "compact" ? (
@@ -549,7 +578,7 @@ export function PlanningPage() {
           <h1 className="text-2xl font-semibold">{t("dispatch.nav.planning")}</h1>
           <Skeleton className="h-9 w-32" />
         </div>
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
           <div className="flex flex-col gap-3">
             <Skeleton className="h-7 w-40" />
             <div className="flex flex-col gap-2">
@@ -638,7 +667,7 @@ export function PlanningPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
           {/* Pool — same heading size/weight as the primary lane below; a
               flat list (a hairline divider between rows), not a card nested
               inside another card. */}
@@ -646,26 +675,36 @@ export function PlanningPage() {
             <h2 className="text-lg font-medium">
               {t("dispatch.planning.pool.title")} ({poolUnits.length})
             </h2>
-            {selectedUnit && (
-              <p className="text-muted-foreground text-xs" data-testid="pool-select-hint">
-                {t("dispatch.planning.pool.assignHint")}
-              </p>
-            )}
-            <div className="flex flex-col">
+            <div className="flex flex-col gap-4">
               {poolUnits.map((unit) => {
                 const assigning = pending.has(`pool:${unit.key}`);
                 const selected = selectedUnitKey === unit.key;
+                const fitsSelectedFlight = unitFitsSelectedFlight(unit);
                 return (
                   <AssignableUnitCard
                     key={unit.key}
                     unit={unit}
+                    variant="card"
                     draggableId={`pool:${unit.key}`}
                     dataTestId="pool-unit"
                     className={cn(
                       selected && "border-primary ring-primary/50 ring-1",
+                      selectedFlight &&
+                        (fitsSelectedFlight
+                          ? "border-primary ring-primary/50 ring-1"
+                          : "opacity-40 saturate-50"),
                       assigning && "opacity-40",
                     )}
-                    onClick={() => setSelectedUnitKey((prev) => (prev === unit.key ? null : unit.key))}
+                    onClick={() => {
+                      if (selectedFlight) {
+                        if (fitsSelectedFlight) {
+                          void assignUnit(unit, selectedFlight.id);
+                          setSelectedFlightId(null);
+                        }
+                        return;
+                      }
+                      selectUnit(unit.key);
+                    }}
                     actions={assigning ? <Loader2 className="size-3.5 animate-spin" /> : undefined}
                   />
                 );
@@ -689,9 +728,25 @@ export function PlanningPage() {
                 per row, full detail (see docs/architecture.md § Shared flight
                 components). */}
             <div className="flex flex-col gap-3">
-              <h2 className="text-lg font-medium" data-testid="lane-planning-heading">
-                {t("dispatch.planning.lanes.planning")} ({plannedFlights.length})
-              </h2>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h2 className="text-lg font-medium" data-testid="lane-planning-heading">
+                  {t("dispatch.planning.lanes.planning")} ({plannedFlights.length})
+                </h2>
+                {/* Inline next to the heading, not a separate line above the
+                    pool — a line that appears/disappears above a list jumps
+                    the whole list every time the selection changes. */}
+                {(selectedUnit || selectedFlight) && (
+                  <span
+                    className="text-muted-foreground flex items-center gap-1 text-xs"
+                    data-testid="pool-select-hint"
+                  >
+                    <CircleAlert className="size-3.5 shrink-0" aria-hidden />
+                    {selectedUnit
+                      ? t("dispatch.planning.pool.assignHint")
+                      : t("dispatch.planning.pool.assignHintGroups")}
+                  </span>
+                )}
+              </div>
               {plannedFlights.length === 0 ? (
                 <EmptyState
                   data-testid="planning-flights-empty"
@@ -774,10 +829,7 @@ export function PlanningPage() {
       <DragOverlay>
         {activeUnit && (
           <div style={activeWidth ? { width: activeWidth } : undefined}>
-            <AssignableUnitCard
-              unit={activeUnit}
-              className="bg-card rounded-md border px-3 shadow-lg"
-            />
+            <AssignableUnitCard unit={activeUnit} variant="card" className="shadow-lg" />
           </div>
         )}
       </DragOverlay>

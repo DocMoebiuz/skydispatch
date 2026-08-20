@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plane, UserRound, Armchair, Fuel } from "lucide-react";
 import type { Aircraft, Flight, FlightStage, Pilot } from "shared";
@@ -79,6 +80,7 @@ export function FlightCard({
 }: FlightCardProps) {
   const { t } = useTranslation();
   const compact = size === "compact";
+  const freeKg = load.maxPayloadKg - load.usedWeightKg;
   return (
     <Card
       className={cn(
@@ -135,11 +137,17 @@ export function FlightCard({
           </div>
           <span
             data-testid="flight-card-weight"
-            className={cn(load.over && "text-destructive font-semibold")}
+            className={cn(
+              "ml-auto text-lg font-semibold tabular-nums",
+              // Red once genuinely over, but also while still technically free —
+              // under 5kg left is close enough to the limit to flag before the
+              // next guest actually tips it over, not just after.
+              (load.over || (freeKg >= 0 && freeKg < 5)) && "text-destructive",
+            )}
           >
             {load.over
               ? `⚠ ${load.usedWeightKg - load.maxPayloadKg} ${t("dispatch.planning.builder.weightOver")}`
-              : `${load.maxPayloadKg - load.usedWeightKg} ${t("dispatch.planning.builder.weightFree")}`}
+              : `${freeKg} ${t("dispatch.planning.builder.weightFree")}`}
           </span>
         </div>
         {!compact && (
@@ -189,7 +197,18 @@ export function FlightCard({
             className="text-amber-600 dark:text-amber-500"
             data-testid="pilot-weight-unknown-warning"
           >
-            {compact ? "⚠" : t("dispatch.planning.builder.pilotWeightUnknown")}
+            {/* The fix for this lives on Setup (backfilling the pilot's
+                weight), not here — link straight there instead of leaving
+                the dispatcher to go find it themselves. stopPropagation so
+                clicking the link doesn't also trigger the card's own onClick
+                (assign-on-click, on Planning's pool-selected cards). */}
+            <Link
+              to="/dispatch/setup"
+              className="underline underline-offset-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {compact ? "⚠" : t("dispatch.planning.builder.pilotWeightUnknown")}
+            </Link>
           </p>
         )}
 

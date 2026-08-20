@@ -8,6 +8,12 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  // Default (30s) is tight for the multi-step specs (register -> pay -> weigh
+  // -> create flight -> assign -> ...) on CI's slower, fewer-core runner —
+  // several have now failed there on plain timeouts, not real bugs (confirmed
+  // by the same specs passing locally every time). Generous timeout rather
+  // than a flaky default, matching webServer.timeout's own rationale below.
+  timeout: 60_000,
   // open: "never" — the default HTML reporter starts a local server and blocks
   // indefinitely waiting for Ctrl+C once tests finish, which hangs any non-interactive
   // run (including this one, the first time). Still writes the report to disk.

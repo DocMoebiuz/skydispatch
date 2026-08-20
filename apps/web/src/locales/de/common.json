@@ -138,6 +138,7 @@
         "title": "Verfügbare Gäste",
         "pax": "{{count}} Pers.",
         "assignHint": "Passende Flüge sind hervorgehoben — anklicken zum Zuweisen.",
+        "assignHintGroups": "Passende Gruppen/Gäste sind hervorgehoben — anklicken zum Zuweisen.",
         "empty": "Kein flugbereiter Gast verfügbar."
       },
       "builder": {

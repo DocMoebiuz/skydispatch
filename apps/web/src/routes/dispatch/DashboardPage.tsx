@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,10 @@ export function DashboardPage() {
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [pending, setPending] = useState<Set<string>>(new Set());
+  // Only the very first load shows a skeleton — every action after that is
+  // optimistic or a small button-local spinner, never a full-page loading
+  // state again. Same pattern as Planning's initialLoading.
+  const [initialLoading, setInitialLoading] = useState(true);
 
   function reload(): Promise<void> {
     return Promise.all([
@@ -85,6 +90,7 @@ export function DashboardPage() {
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
+      setInitialLoading(false);
     });
     return () => {
       cancelled = true;
@@ -241,6 +247,37 @@ export function DashboardPage() {
         load={load}
         actions={actions}
       />
+    );
+  }
+
+  if (initialLoading) {
+    return (
+      <div className="flex flex-col gap-6" data-testid="dashboard-loading">
+        <div className="bg-brand-gradient -m-8 mb-0 rounded-b-xl p-8 pb-0">
+          <h1 className="text-2xl font-semibold">{t("dispatch.nav.dashboard")}</h1>
+        </div>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-7 w-32" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-44 w-full" />
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-6 w-40" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-44 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 
