@@ -12,6 +12,7 @@ import {
   weighRequestSchema,
   type Guest,
   type Flight,
+  type FlightDay,
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
 import { randomCode } from "../lib/randomCode";
@@ -107,12 +108,23 @@ export async function createGuest(
   }
 
   const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+
+  // Dispatcher-controlled circuit breaker (Setup's "Anmeldung pausieren") —
+  // enforced here, not just withheld by RegisterPage's own UI (nfr.md §
+  // Reliability & safety). No FlightDay configured at all isn't paused,
+  // that's a separate, pre-existing gap.
+  const { resource: flightDay } = await container
+    .item(flightDayId, flightDayId)
+    .read<FlightDay>();
+  if (flightDay?.registrationPaused) {
+    return { status: 409, jsonBody: { error: "registration-paused" } };
+  }
 
   if (parsed.data.group && !(await isValidGroup(flightDayId, parsed.data.group))) {
     return { status: 400, jsonBody: { error: "invalid-group" } };
   }
 
-  const container = await getOperationsContainer();
   const code = await nextGuestCode(flightDayId);
   const now = new Date().toISOString();
 

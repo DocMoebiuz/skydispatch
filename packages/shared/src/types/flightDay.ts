@@ -26,4 +26,11 @@ export interface FlightDay {
   // it in the first place, since an unplanned mid-day break then cascades
   // delays through every other flight already queued behind it (schedule.ts).
   reserveFuelMinutes: number;
+  // Dispatcher-controlled circuit breaker for public self-registration
+  // (Setup's own "Anmeldung pausieren"/"fortsetzen" toggle) — independent of
+  // `status` above (a day can be "active" with registration paused, e.g.
+  // once it's hit capacity for today). Enforced server-side by createGuest,
+  // not just hidden in the UI (nfr.md § Reliability & safety); RegisterPage
+  // shows a plain hint instead of the form while this is true.
+  registrationPaused: boolean;
 }

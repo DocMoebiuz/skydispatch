@@ -70,6 +70,9 @@
         "start": "Tag starten",
         "end": "Tag beenden",
         "endConfirm": "Flugtag jetzt beenden?",
+        "pauseRegistration": "Anmeldung pausieren",
+        "resumeRegistration": "Anmeldung fortsetzen",
+        "registrationPausedIndicator": "Anmeldung pausiert",
         "status": {
           "planned": "geplant",
           "active": "aktiv",
@@ -293,6 +296,10 @@
       "passenger": "Angaben zur Person",
       "address": "Adresse",
       "consent": "Einverständnis"
+    },
+    "paused": {
+      "title": "Anmeldung derzeit pausiert",
+      "lead": "Die Gästeanmeldung ist derzeit pausiert. Wir haben möglicherweise die maximale Anzahl an Gästen für heute erreicht."
     },
     "form": {
       "name": "Vor- und Nachname",

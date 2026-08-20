@@ -43,6 +43,9 @@ export async function upsertFlightDay(
     boardingMinutes: parsed.data.boardingMinutes,
     reserveFuelMinutes: parsed.data.reserveFuelMinutes,
     status: existing?.status ?? "planned",
+    // Preserved the same way status is — this endpoint only edits settings,
+    // toggleRegistrationPause below owns this flag.
+    registrationPaused: existing?.registrationPaused ?? false,
   };
   await container.items.upsert(flightDay);
   return { status: 200, jsonBody: flightDay };
@@ -92,6 +95,23 @@ export async function endDay(
   return { status: 200, jsonBody: updated };
 }
 
+export async function toggleRegistrationPause(
+  _request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const container = await getOperationsContainer();
+  const { resource: existing } = await container
+    .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)
+    .read<FlightDay>();
+  if (!existing) return { status: 404, jsonBody: { error: "not-found" } };
+  const updated: FlightDay = {
+    ...existing,
+    registrationPaused: !existing.registrationPaused,
+  };
+  await container.items.upsert(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 app.http("upsertFlightDay", {
   methods: ["POST"],
   route: "flightday",
@@ -118,4 +138,11 @@ app.http("endDay", {
   route: "flightday/actions/end",
   authLevel: "anonymous",
   handler: endDay,
+});
+
+app.http("toggleRegistrationPause", {
+  methods: ["POST"],
+  route: "flightday/actions/toggle-registration-pause",
+  authLevel: "anonymous",
+  handler: toggleRegistrationPause,
 });

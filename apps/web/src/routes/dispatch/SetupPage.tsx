@@ -192,6 +192,17 @@ export function SetupPage() {
     if (response.ok) setFlightDay((await response.json()) as FlightDay);
   }
 
+  // Independent of day status above — a day can be "active" with
+  // registration paused (e.g. it's already hit capacity for today).
+  // Enforced server-side too (nfr.md § Reliability & safety), see
+  // createGuest's own check.
+  async function toggleRegistrationPause() {
+    const response = await fetch("/api/flightday/actions/toggle-registration-pause", {
+      method: "POST",
+    });
+    if (response.ok) setFlightDay((await response.json()) as FlightDay);
+  }
+
   async function togglePilotAvailable(pilotId: string) {
     const response = await fetch(`/api/pilots/${pilotId}/actions/toggle-available`, {
       method: "POST",
@@ -483,9 +494,29 @@ export function SetupPage() {
                   ? t("dispatch.setup.flightDay.end")
                   : t("dispatch.setup.flightDay.start")}
               </Button>
+              <Button
+                variant={flightDay.registrationPaused ? "default" : "outline"}
+                data-testid="toggle-registration-pause"
+                onClick={() => void toggleRegistrationPause()}
+              >
+                {flightDay.registrationPaused
+                  ? t("dispatch.setup.flightDay.resumeRegistration")
+                  : t("dispatch.setup.flightDay.pauseRegistration")}
+              </Button>
               <span className="text-muted-foreground text-sm" data-testid="flightday-saved">
                 {flightDay.airfieldName} ({flightDay.airfieldIcao}) · {flightDay.date} ·{" "}
                 {t(`dispatch.setup.flightDay.status.${flightDay.status}`)}
+                {flightDay.registrationPaused && (
+                  <>
+                    {" · "}
+                    <span
+                      className="font-medium text-amber-600 dark:text-amber-500"
+                      data-testid="registration-paused-indicator"
+                    >
+                      {t("dispatch.setup.flightDay.registrationPausedIndicator")}
+                    </span>
+                  </>
+                )}
               </span>
             </>
           )}

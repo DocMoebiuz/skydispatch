@@ -219,6 +219,14 @@ export function RegisterPage() {
       }),
     });
     if (!response.ok) {
+      if (response.status === 409) {
+        // Possibly paused mid-fill (race) — refetch so the paused-hint
+        // screen takes over on the next render instead of a generic error.
+        fetch("/api/flightday")
+          .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
+          .then(setFlightDay)
+          .catch(() => undefined);
+      }
       setSubmitError(true);
       return;
     }
@@ -326,6 +334,25 @@ export function RegisterPage() {
       {flightDayChip}
     </div>
   );
+
+  // Dispatcher-controlled circuit breaker (Setup's "Anmeldung pausieren") —
+  // enforced server-side too (createGuest refuses 409, nfr.md § Reliability
+  // & safety). Only gates a fresh "form" start — someone already mid-group-
+  // registration (group-prompt/success/done) isn't interrupted partway
+  // through.
+  if (phase === "form" && flightDay?.registrationPaused) {
+    return (
+      <main className="bg-brand-gradient mx-auto flex min-h-screen max-w-md flex-col gap-6 p-8">
+        {pageHeader}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("register.paused.title")}</CardTitle>
+            <CardDescription>{t("register.paused.lead")}</CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
+    );
+  }
 
   if (phase === "group-prompt") {
     return (

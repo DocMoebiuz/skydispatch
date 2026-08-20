@@ -36,6 +36,7 @@ async function seedFlightDay(): Promise<void> {
     boardingMinutes: DEFAULT_BOARDING_MINUTES,
     reserveFuelMinutes: DEFAULT_RESERVE_FUEL_MINUTES,
     status: "active",
+    registrationPaused: false,
   };
   await container.items.upsert(flightDay);
 }
