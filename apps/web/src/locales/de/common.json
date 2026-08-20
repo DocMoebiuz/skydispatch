@@ -333,6 +333,7 @@
       "airborne": "In der Luft",
       "landed": "Gelandet"
     },
+    "recentlyLanded": "Kürzlich gelandet",
     "lookup": {
       "title": "Wann bin ich an der Reihe?",
       "submit": "Anzeigen",

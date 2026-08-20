@@ -160,17 +160,34 @@ export function BoardPage() {
     );
   });
 
-  const sorted = [...visible].sort((a, b) => {
-    const byPriority = BOARD_PRIORITY[a.status] - BOARD_PRIORITY[b.status];
-    if (byPriority !== 0) return byPriority;
-    // Within the same bucket: most recent real event first for landed/
-    // airborne (freshest news on top); creation order for boarding/
-    // scheduled (the "line" a later flight can skip by landing sooner —
-    // that's handled by the bucket sort above, not here).
-    if (a.status === "landed") return Date.parse(b.flight.onBlock!) - Date.parse(a.flight.onBlock!);
-    if (a.status === "airborne") return Date.parse(b.flight.offBlock!) - Date.parse(a.flight.offBlock!);
-    return Date.parse(a.flight.createdAt) - Date.parse(b.flight.createdAt);
-  });
+  // Departures table: everything still ahead (scheduled/boarding/airborne).
+  // "Landed" gets its own separate section below, not interleaved here —
+  // and capped to the single most recent landing per aircraft, not every
+  // completed leg that aircraft has flown today.
+  const departures = visible
+    .filter((x) => x.status !== "landed")
+    .sort((a, b) => {
+      const byPriority = BOARD_PRIORITY[a.status] - BOARD_PRIORITY[b.status];
+      if (byPriority !== 0) return byPriority;
+      // Within the same bucket: most recent real event first for airborne
+      // (freshest news on top); creation order for boarding/scheduled (the
+      // "line" a later flight can skip by going airborne sooner — that's
+      // handled by the bucket sort above, not here).
+      if (a.status === "airborne") return Date.parse(b.flight.offBlock!) - Date.parse(a.flight.offBlock!);
+      return Date.parse(a.flight.createdAt) - Date.parse(b.flight.createdAt);
+    });
+
+  const mostRecentLandedByAircraft = new Map<string, { flight: Flight; status: BoardStatus }>();
+  for (const entry of visible) {
+    if (entry.status !== "landed") continue;
+    const existing = mostRecentLandedByAircraft.get(entry.flight.aircraftId);
+    if (!existing || Date.parse(entry.flight.onBlock!) > Date.parse(existing.flight.onBlock!)) {
+      mostRecentLandedByAircraft.set(entry.flight.aircraftId, entry);
+    }
+  }
+  const recentlyLanded = [...mostRecentLandedByAircraft.values()].sort(
+    (a, b) => Date.parse(b.flight.onBlock!) - Date.parse(a.flight.onBlock!),
+  );
 
   const groupMembers =
     lookupResult && lookupResult !== "not-found"
@@ -240,9 +257,8 @@ export function BoardPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map(({ flight: f, status }) => {
+            {departures.map(({ flight: f, status }) => {
               const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
-              const time = status === "landed" ? fmtTime(f.onBlock) : fmtTime(f.offBlock);
               return (
                 <TableRow
                   key={f.id}
@@ -251,7 +267,7 @@ export function BoardPage() {
                 >
                   <TableCell className="font-bold tracking-wide text-amber-300">{f.code}</TableCell>
                   <TableCell className="text-slate-300">{aircraft?.reg ?? "—"}</TableCell>
-                  <TableCell className="tabular-nums text-slate-300">{time}</TableCell>
+                  <TableCell className="tabular-nums text-slate-300">{fmtTime(f.offBlock)}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={cn("font-sans", BOARD_STATUS_CLASS[status])}>
                       {t(`board.status.${status}`)}
@@ -260,7 +276,7 @@ export function BoardPage() {
                 </TableRow>
               );
             })}
-            {sorted.length === 0 && (
+            {departures.length === 0 && (
               <TableRow className="border-slate-800">
                 <TableCell colSpan={4} className="text-slate-500">
                   {t("board.empty")}
@@ -269,6 +285,44 @@ export function BoardPage() {
             )}
           </TableBody>
         </Table>
+
+        {/* Separate section, not interleaved with departures above — and
+            capped to one row per aircraft (the most recent landing), not
+            every completed leg that aircraft has flown today. */}
+        {recentlyLanded.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium tracking-wide text-slate-400 uppercase">
+              {t("board.recentlyLanded")}
+            </h2>
+            <Table>
+              <TableBody>
+                {recentlyLanded.map(({ flight: f, status }) => {
+                  const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+                  return (
+                    <TableRow
+                      key={f.id}
+                      data-testid="board-flight-row"
+                      className="border-slate-800 font-mono text-lg hover:bg-slate-900/60"
+                    >
+                      <TableCell className="font-bold tracking-wide text-amber-300">
+                        {f.code}
+                      </TableCell>
+                      <TableCell className="text-slate-300">{aircraft?.reg ?? "—"}</TableCell>
+                      <TableCell className="tabular-nums text-slate-300">
+                        {fmtTime(f.onBlock)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn("font-sans", BOARD_STATUS_CLASS[status])}>
+                          {t(`board.status.${status}`)}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2 border-t border-slate-800 pt-6">
           <h2 className="text-lg font-medium text-slate-200">{t("board.lookup.title")}</h2>
