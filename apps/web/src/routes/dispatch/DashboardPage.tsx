@@ -369,7 +369,7 @@ export function DashboardPage() {
           // glanceable ("what's still in the pipeline"), not something that
           // needs a full-size card per flight, and there can be a lot of them
           // on a busy day.
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {planningFlights.map((f) => renderFlightCard(f, "compact"))}
           </div>
         ) : (

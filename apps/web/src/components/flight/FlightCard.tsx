@@ -99,7 +99,13 @@ export function FlightCard({
       className={cn(
         compact && "gap-2 py-3",
         onClick && "cursor-pointer transition-shadow hover:shadow-md",
-        "flex flex-col transition-colors",
+        // min-w-0: every caller places this Card as a CSS grid item (the
+        // Dashboard/Planning lanes below). Grid (and flex) items default to
+        // min-width:auto — their content's own min-content width, not 0 —
+        // so without this a long unbreakable code/name inside forces the
+        // whole card wider than its track instead of the internal
+        // `truncate` spans ever getting a chance to ellipsize.
+        "flex min-w-0 flex-col transition-colors",
         className,
       )}
       data-testid="flight-card"
@@ -115,9 +121,14 @@ export function FlightCard({
         >
           <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
             <Plane className={cn("shrink-0", compact ? "size-3.5" : "size-4")} aria-hidden />
-            <span className="truncate">{flight.code}</span>
+            {/* min-w-0 on each: as flex items they'd otherwise refuse to
+                shrink below their own text's width (see the FlightCard root
+                comment above), so `truncate` never gets a chance to kick
+                in — a long code/reg would just push its sibling out
+                instead of ellipsizing itself. */}
+            <span className="min-w-0 truncate">{flight.code}</span>
             <Separator orientation="vertical" className="h-4 shrink-0" />
-            <span className="text-muted-foreground truncate font-normal">
+            <span className="text-muted-foreground min-w-0 truncate font-normal">
               {aircraft?.reg ?? "—"}
             </span>
           </span>
@@ -227,10 +238,14 @@ export function FlightCard({
 
         {/* Secondary: pilot + aircraft type — one visual step down from the
             primary code/gauge block. */}
-        <p className="text-muted-foreground flex items-center gap-1.5">
+        <p className="text-muted-foreground flex min-w-0 items-center gap-1.5">
           <UserRound className={cn("shrink-0", compact ? "size-3.5" : "size-4")} aria-hidden />
-          {pilot?.name ?? "—"}
-          {!compact && aircraft?.model && <span>· {aircraft.model}</span>}
+          {/* Pilot name gets the shrinkable/truncating slot (min-w-0 +
+              truncate) — the aircraft model is short and fixed-vocabulary
+              (e.g. "C172"), so it stays shrink-0 and fully visible; a long
+              pilot name truncates around it instead of pushing it off. */}
+          <span className="min-w-0 truncate">{pilot?.name ?? "—"}</span>
+          {!compact && aircraft?.model && <span className="shrink-0">· {aircraft.model}</span>}
         </p>
 
         {load.refuelBreakActive && (

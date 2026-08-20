@@ -108,6 +108,17 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind v4's preflight sets cursor: default on <button> (a deliberate
+     upstream change from v3's behavior) — every button/link/clickable
+     element in this app should still show a pointer, matching the rest of
+     the web and long-standing user expectation. Excludes disabled buttons
+     (shadcn's Button already sets disabled:pointer-events-none, so the
+     cursor never shows there anyway, but stay explicit). */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a[href] {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {

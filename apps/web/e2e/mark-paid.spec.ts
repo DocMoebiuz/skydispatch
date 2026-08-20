@@ -30,7 +30,9 @@ test("front-desk marks a guest paid on /dispatch", async ({ page }) => {
     await expect(row.getByTestId("guest-status")).toHaveText("registriert");
 
     await row.getByTestId("mark-paid-button").click();
-    await expect(row.getByTestId("guest-status")).toHaveText("bezahlt");
+    // Not yet weighed, so this is "Check-in" (in progress), not "ready" —
+    // either paid or weighed starting it reads the same, see status.ts.
+    await expect(row.getByTestId("guest-status")).toHaveText("Check-in");
     await expect(row.getByTestId("mark-paid-button")).not.toBeVisible();
   } finally {
     await deleteGuestByEmail(email);

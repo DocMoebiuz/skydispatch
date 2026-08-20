@@ -2,13 +2,21 @@ import type { Guest } from "./types/guest";
 import type { Flight } from "./types/flight";
 
 // English identifiers in code; rendered labels are localized in apps/web (see
-// docs/nfr.md § Localization). Maps to the manual's progression
-// (registriert -> bezahlt -> gewogen -> zugewiesen -> eingecheckt -> geflogen, plus
-// a no-show terminal state) — see docs/architecture.md § Data flow.
+// docs/nfr.md § Localization). Maps to the manual's progression, with the
+// front-desk steps collapsed to match how GuestsPage actually lets a
+// dispatcher work now that paid/weighed can be done in either order (see its
+// Payment/Weight columns): "registered" (neither done yet) -> "check-in"
+// (the moment either paid OR weighed becomes true — doesn't matter which)
+// -> "ready" once BOTH are true (that's what actually gates PlanningPage's
+// assignable pool). No separate "paid" status — the Payment column already
+// shows that on its own, repeating it here was the original complaint.
+// "checked-in" is a distinct, LATER stage — boarding check-in
+// (guest.checkedIn), not to be confused with the front-desk "check-in" step
+// above despite the similar English word; see docs/architecture.md § Data flow.
 export type GuestStatus =
   | "registered"
-  | "paid"
-  | "weighed"
+  | "check-in"
+  | "ready"
   | "assigned"
   | "checked-in"
   | "flown"
@@ -28,8 +36,8 @@ export function deriveGuestStatus(guest: GuestStatusFields): GuestStatus {
   if (guest.flown) return "flown";
   if (guest.checkedIn) return "checked-in";
   if (guest.assignedFlightId) return "assigned";
-  if (guest.paid && guest.weightKg != null) return "weighed";
-  if (guest.paid) return "paid";
+  if (guest.paid && guest.weightKg != null) return "ready";
+  if (guest.paid || guest.weightKg != null) return "check-in";
   return "registered";
 }
 

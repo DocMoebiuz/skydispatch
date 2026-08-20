@@ -2,16 +2,20 @@ import { describe, it, expect } from "vitest";
 import { deriveGuestStatus, deriveFlightStage } from "./status";
 
 describe("deriveGuestStatus", () => {
-  it("defaults to registered", () => {
+  it("defaults to registered — neither paid nor weighed yet", () => {
     expect(deriveGuestStatus({ paid: false, weightKg: null, checkedIn: false, noShow: false, flown: false, assignedFlightId: null })).toBe("registered");
   });
 
-  it("paid but not yet weighed", () => {
-    expect(deriveGuestStatus({ paid: true, weightKg: null, checkedIn: false, noShow: false, flown: false, assignedFlightId: null })).toBe("paid");
+  it("paid but not yet weighed is check-in", () => {
+    expect(deriveGuestStatus({ paid: true, weightKg: null, checkedIn: false, noShow: false, flown: false, assignedFlightId: null })).toBe("check-in");
   });
 
-  it("paid and weighed but not assigned", () => {
-    expect(deriveGuestStatus({ paid: true, weightKg: 75, checkedIn: false, noShow: false, flown: false, assignedFlightId: null })).toBe("weighed");
+  it("weighed but not yet paid is also check-in — either one starting it reads the same", () => {
+    expect(deriveGuestStatus({ paid: false, weightKg: 75, checkedIn: false, noShow: false, flown: false, assignedFlightId: null })).toBe("check-in");
+  });
+
+  it("paid and weighed but not assigned is ready", () => {
+    expect(deriveGuestStatus({ paid: true, weightKg: 75, checkedIn: false, noShow: false, flown: false, assignedFlightId: null })).toBe("ready");
   });
 
   it("assigned to a flight", () => {

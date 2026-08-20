@@ -127,9 +127,13 @@ export function DispatchLayout() {
         <header className="bg-background bg-brand-gradient sticky top-0 z-40 flex h-14 items-center gap-3 border-b px-4">
           <SidebarTrigger />
           <span className="font-medium">{t("dispatch.title")}</span>
+          {/* block, not flex — this is one line of plain text, no icon; a
+              flex container's text-overflow doesn't reliably show an
+              ellipsis (see AssignableUnitCard.tsx's own fix for the
+              confirmed case of this), and flex was never needed here. */}
           {flightDay && (
             <span
-              className="text-muted-foreground hidden items-center gap-1 truncate text-sm md:flex"
+              className="text-muted-foreground hidden truncate text-sm md:block"
               data-testid="header-flightday"
             >
               {flightDay.airfieldName} ({flightDay.airfieldIcao}) · {flightDay.date} ·{" "}

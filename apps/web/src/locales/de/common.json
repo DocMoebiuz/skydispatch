@@ -192,7 +192,7 @@
       "undo": "Rückgängig",
       "checkin": "Check-in",
       "boardedLane": "Vollständig geboardet",
-      "resetBoarding": "Boarding zurücksetzen"
+      "resetBoarding": "Zurücksetzen"
     },
     "tracking": {
       "notCheckedIn": "nicht eingecheckt",
@@ -256,18 +256,21 @@
       "table": {
         "code": "ID",
         "name": "Name",
+        "payment": "Zahlung",
         "weight": "Gewicht (kg)",
         "status": "Status",
         "action": "Aktion"
       },
       "markPaid": "Als bezahlt markieren",
+      "markPaidAction": "Bezahlt markieren",
       "markPaidError": "Fehler beim Markieren als bezahlt.",
+      "paidBadge": "Bezahlt",
       "confirmWeight": "Gewicht bestätigen",
       "weighError": "Fehler beim Erfassen des Gewichts.",
       "status": {
         "registered": "registriert",
-        "paid": "bezahlt",
-        "weighed": "gewogen",
+        "check-in": "Check-in",
+        "ready": "bereit",
         "assigned": "Flug zugewiesen",
         "checked-in": "eingecheckt",
         "flown": "geflogen",
@@ -277,7 +280,7 @@
       "filter": {
         "all": "Alle",
         "open": "Offen",
-        "ready": "Gewogen",
+        "ready": "Bereit",
         "flown": "Geflogen",
         "noshow": "Nicht erschienen"
       },

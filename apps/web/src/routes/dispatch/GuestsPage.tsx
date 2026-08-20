@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { UserPlus, Check, Banknote, UserX, Trash2 } from "lucide-react";
+import { UserPlus, Check, Banknote, EyeOff, Trash2 } from "lucide-react";
 import { deriveGuestStatus, type Guest, type Flight, type GuestStatus } from "shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +23,8 @@ import {
 
 const STATUS_VARIANT: Record<GuestStatus, "default" | "secondary" | "destructive" | "outline"> = {
   registered: "outline",
-  paid: "secondary",
-  weighed: "secondary",
+  "check-in": "outline",
+  ready: "secondary",
   assigned: "default",
   "checked-in": "default",
   flown: "outline",
@@ -33,6 +33,17 @@ const STATUS_VARIANT: Record<GuestStatus, "default" | "secondary" | "destructive
 
 type FilterKey = "all" | "open" | "ready" | "flown" | "noshow";
 const FILTER_KEYS: FilterKey[] = ["all", "open", "ready", "flown", "noshow"];
+
+// Where "go to this guest's flight" should actually land — whichever page
+// currently owns that flight's next action, same hand-off convention already
+// used for Planning's own ghost links (locked+not-ready -> Boarding,
+// ready/airborne/landed -> Tracking; PlanningPage.tsx's setReady action
+// area). "created" (not locked yet) is still Planning's own concern.
+function flightRouteFor(status: Flight["status"]): string {
+  if (status === "created") return "/dispatch/planning";
+  if (status === "assigned") return "/dispatch/boarding";
+  return "/dispatch/tracking";
+}
 
 export function GuestsPage() {
   const { t } = useTranslation();
@@ -164,7 +175,7 @@ export function GuestsPage() {
   const filtered = (guests ?? []).filter((g) => {
     const status = deriveGuestStatus(g);
     if (filter === "open" && !(!g.paid || g.weightKg == null)) return false;
-    if (filter === "ready" && status !== "weighed") return false;
+    if (filter === "ready" && status !== "ready") return false;
     if (filter === "flown" && !g.flown) return false;
     if (filter === "noshow" && !g.noShow) return false;
     if (search.trim()) {
@@ -191,8 +202,12 @@ export function GuestsPage() {
   // to stay covered, since it's the exact same state/handlers either way.
   function renderWeightEditor(guest: Guest, testIds: boolean) {
     const isPending = pending.has(guest.id);
-    if (!(guest.paid && guest.weightKg == null)) {
-      return guest.weightKg ?? `(${guest.declaredWeightKg})`;
+    // Available regardless of paid state — weighing doesn't require payment
+    // server-side either (weighGuest has no such check), and the dispatcher
+    // shouldn't have to do the two in a fixed order. Once actually weighed,
+    // this collapses to the plain number.
+    if (guest.weightKg != null) {
+      return guest.weightKg;
     }
     return (
       <div className="flex items-center gap-1">
@@ -215,11 +230,61 @@ export function GuestsPage() {
           data-testid={testIds ? "weigh-button" : undefined}
           disabled={isPending}
           aria-label={t("dispatch.guests.confirmWeight")}
+          title={t("dispatch.guests.confirmWeight")}
           onClick={() => void confirmWeight(guest.id, guest.declaredWeightKg)}
         >
-          <Check className="size-3.5" />
+          <Check className="size-4" />
         </Button>
       </div>
+    );
+  }
+
+  // Its own column, not folded into renderActions below — a button that's
+  // there one moment and gone the next (paid) used to live in the same cell
+  // as no-show/delete, so the whole row visibly jumped width the instant it
+  // was clicked. Now paid replaces the button with a same-sized badge in the
+  // same spot instead of just removing an element from a shared flex row.
+  function renderPayment(guest: Guest, testIds: boolean) {
+    if (guest.paid) {
+      return (
+        <Badge
+          variant="secondary"
+          className="w-fit"
+          data-testid={testIds ? "guest-paid-badge" : undefined}
+        >
+          {t("dispatch.guests.paidBadge")}
+        </Badge>
+      );
+    }
+    const isPending = pending.has(guest.id);
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid={testIds ? "mark-paid-button" : undefined}
+        disabled={isPending}
+        title={t("dispatch.guests.markPaid")}
+        onClick={() => void callAction(guest.id, "actions/mark-paid")}
+      >
+        <Banknote className="size-4" />
+        {t("dispatch.guests.markPaidAction")}
+      </Button>
+    );
+  }
+
+  // The flight code under a guest's status is a link to wherever that
+  // flight actually lives right now (Planning/Boarding/Tracking — see
+  // flightRouteFor above), not just a label — so a dispatcher can jump
+  // straight from "who's this guest flying with" to that flight's own view.
+  function renderFlightLink(flight: Flight, testIds: boolean) {
+    return (
+      <Link
+        to={flightRouteFor(flight.status)}
+        className="text-muted-foreground text-xs underline underline-offset-2 hover:text-foreground"
+        data-testid={testIds ? "guest-flight-code" : undefined}
+      >
+        {flight.code}
+      </Link>
     );
   }
 
@@ -227,41 +292,31 @@ export function GuestsPage() {
     const isPending = pending.has(guest.id);
     const canDelete = !guest.flown;
     return (
-      <div className="flex flex-wrap items-center gap-1">
-        {!guest.paid && (
-          <Button
-            size="icon-sm"
-            variant="outline"
-            data-testid={testIds ? "mark-paid-button" : undefined}
-            disabled={isPending}
-            aria-label={t("dispatch.guests.markPaid")}
-            onClick={() => void callAction(guest.id, "actions/mark-paid")}
-          >
-            <Banknote className="size-3.5" />
-          </Button>
-        )}
+      <div className="flex min-w-16 flex-wrap items-center gap-1">
         {!guest.noShow && !guest.flown && (
           <Button
-            size="icon-sm"
+            size="icon"
             variant="outline"
             data-testid={testIds ? "no-show-button" : undefined}
             disabled={isPending}
             aria-label={t("dispatch.guests.noShow")}
+            title={t("dispatch.guests.noShow")}
             onClick={() => void callAction(guest.id, "actions/no-show")}
           >
-            <UserX className="size-3.5" />
+            <EyeOff className="size-4" />
           </Button>
         )}
         {canDelete && (
           <Button
-            size="icon-sm"
+            size="icon"
             variant="ghost"
             data-testid={testIds ? "delete-guest-button" : undefined}
             disabled={isPending}
             onClick={() => void deleteGuest(guest.id)}
             aria-label={t("dispatch.guests.delete")}
+            title={t("dispatch.guests.delete")}
           >
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-4" />
           </Button>
         )}
         {actionError.has(guest.id) && (
@@ -321,14 +376,23 @@ export function GuestsPage() {
               action buttons are shared (renderWeightEditor/renderActions
               below) with the mobile card layout underneath, so the two never
               drift out of sync with each other. */}
-          <Table className="hidden sm:table">
+          {/* table-fixed + explicit widths on the columns whose content
+              toggles (button <-> badge, empty <-> input, badge count) — with
+              the browser's default auto layout, any of those toggles resizes
+              the column to fit its new content and reflows every column
+              after it. Fixed layout locks widths from this header row alone,
+              so a payment/weight/status change can never move anything else
+              in the row. ID/Name stay flexible (no explicit width — they
+              split whatever's left) since their content genuinely varies. */}
+          <Table className="hidden table-fixed sm:table">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("dispatch.guests.table.code")}</TableHead>
+                <TableHead className="w-16">{t("dispatch.guests.table.code")}</TableHead>
                 <TableHead>{t("dispatch.guests.table.name")}</TableHead>
-                <TableHead>{t("dispatch.guests.table.weight")}</TableHead>
-                <TableHead>{t("dispatch.guests.table.status")}</TableHead>
-                <TableHead>{t("dispatch.guests.table.action")}</TableHead>
+                <TableHead className="w-40">{t("dispatch.guests.table.payment")}</TableHead>
+                <TableHead className="w-32">{t("dispatch.guests.table.weight")}</TableHead>
+                <TableHead className="w-40">{t("dispatch.guests.table.status")}</TableHead>
+                <TableHead className="w-24">{t("dispatch.guests.table.action")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -343,7 +407,11 @@ export function GuestsPage() {
                     data-group-id={guest.groupId ?? ""}
                   >
                     <TableCell className="font-medium">{guest.code}</TableCell>
-                    <TableCell>
+                    {/* whitespace-normal overrides TableCell's default nowrap
+                        — with table-fixed above, Name no longer grows to fit
+                        a long name, so it needs to wrap instead of
+                        overflowing/forcing horizontal scroll. */}
+                    <TableCell className="whitespace-normal">
                       <div className="flex flex-col">
                         <span>{guest.name}</span>
                         {guest.groupName && (
@@ -351,20 +419,14 @@ export function GuestsPage() {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell data-testid="guest-payment">{renderPayment(guest, true)}</TableCell>
                     <TableCell data-testid="guest-weight">{renderWeightEditor(guest, true)}</TableCell>
                     <TableCell data-testid="guest-status">
                       <div className="flex flex-col gap-0.5">
                         <Badge variant={STATUS_VARIANT[status]} className="w-fit">
                           {t(`dispatch.guests.status.${status}`)}
                         </Badge>
-                        {flight && (
-                          <span
-                            className="text-muted-foreground text-xs"
-                            data-testid="guest-flight-code"
-                          >
-                            {flight.code}
-                          </span>
-                        )}
+                        {flight && renderFlightLink(flight, true)}
                       </div>
                     </TableCell>
                     <TableCell>{renderActions(guest, true)}</TableCell>
@@ -396,10 +458,11 @@ export function GuestsPage() {
                     <div className="shrink-0 text-sm">{renderWeightEditor(guest, false)}</div>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {renderPayment(guest, false)}
                     <Badge variant={STATUS_VARIANT[status]} className="w-fit">
                       {t(`dispatch.guests.status.${status}`)}
                     </Badge>
-                    {flight && <span className="text-muted-foreground text-xs">{flight.code}</span>}
+                    {flight && renderFlightLink(flight, false)}
                   </div>
                   <div className="mt-2 border-t pt-2">{renderActions(guest, false)}</div>
                 </div>

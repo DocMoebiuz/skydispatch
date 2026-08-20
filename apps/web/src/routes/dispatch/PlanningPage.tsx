@@ -741,7 +741,14 @@ export function PlanningPage() {
           </div>
           <div className="flex flex-col gap-3">
             <Skeleton className="h-7 w-32" />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            {/* md is where the sidebar switches from an overlay drawer to a
+                permanent panel (sidebar.tsx's own "hidden md:flex") — it
+                eats real width starting exactly there, so md forces back
+                down to 1 card/row, and every breakpoint after it carries one
+                fewer column than it otherwise would to compensate. Matches
+                the real grid below (renderFlightCard(f, "default")) so the
+                skeleton lines up with where actual cards will land. */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
               {Array.from({ length: 3 }, (_, i) => (
                 <Skeleton key={i} className="h-44 w-full" />
               ))}
@@ -973,6 +980,11 @@ export function PlanningPage() {
                   </span>
                 )}
               </div>
+              {/* md forces back to 1 card/row — that's where the sidebar
+                  (sidebar.tsx's "hidden md:flex") stops being an overlay
+                  drawer and starts permanently eating width; every
+                  breakpoint after it drops one column versus what it'd
+                  otherwise be, to compensate. */}
               {plannedFlights.length === 0 ? (
                 <EmptyState
                   data-testid="planning-flights-empty"
@@ -984,7 +996,7 @@ export function PlanningPage() {
                   }
                 />
               ) : (
-                <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
                   {plannedFlights.map((f) => renderFlightCard(f, "default"))}
                 </div>
               )}
@@ -999,7 +1011,10 @@ export function PlanningPage() {
                 <h2 className="text-muted-foreground text-sm font-medium">
                   {t("dispatch.planning.lanes.ready")} ({readyFlights.length})
                 </h2>
-                <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                {/* Same md-forces-1-column reasoning as the primary lane
+                    above — the sidebar starts permanently eating width right
+                    at md, so every breakpoint after it drops one column. */}
+                <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4">
                   {readyFlights.map((f) => renderFlightCard(f, "compact"))}
                 </div>
               </div>

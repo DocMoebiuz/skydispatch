@@ -96,14 +96,22 @@ export function AssignableUnitCard({
       <div className="flex min-w-0 flex-1 flex-col">
         {isCard ? (
           <>
-            <span className="flex items-center gap-1 truncate font-medium">
+            {/* truncate on the same element as `flex` never shows an
+                ellipsis — text-overflow can't compute a cut point once the
+                icon is mixed into the flex box (confirmed live: the group
+                name just hard-clipped mid-word, no "…", while the plain
+                (non-flex) member-names line right below it truncated fine).
+                The icon stays a flex item; the label gets its own nested
+                min-w-0 + truncate span so it can actually shrink and ellipsis
+                within the row. */}
+            <span className="flex items-center gap-1 font-medium">
               {expandable &&
                 (expanded ? (
                   <ChevronDown className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
                 ) : (
                   <ChevronRight className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
                 ))}
-              {unit.label}
+              <span className="min-w-0 truncate">{unit.label}</span>
             </span>
             {unit.members.length > 1 && (
               <span className="text-muted-foreground truncate text-xs">
@@ -226,8 +234,11 @@ export function AssignableMemberRow({
         transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 10 } : undefined
       }
     >
-      <span className="truncate">{guest.name}</span>
-      <span className="text-muted-foreground tabular-nums">{guest.weightKg} kg</span>
+      {/* min-w-0 + flex-1: same "flex item won't shrink below its own text"
+          issue as the group header above — without it a long guest name
+          just pushes the weight figure out instead of truncating. */}
+      <span className="min-w-0 flex-1 truncate">{guest.name}</span>
+      <span className="text-muted-foreground shrink-0 tabular-nums">{guest.weightKg} kg</span>
     </div>
   );
 }
