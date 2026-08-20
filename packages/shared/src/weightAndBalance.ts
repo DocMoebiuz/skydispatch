@@ -1,35 +1,68 @@
 import { FUEL_DENSITY_KG_PER_L } from "./constants";
-import type { Aircraft } from "./types/aircraft";
+import type { Aircraft, FuelType } from "./types/aircraft";
 
 type FuelFields = Pick<Aircraft, "fuelOnBoardL" | "fuelType">;
+type DynamicFuelFields = Pick<Aircraft, "fuelOnBoardL" | "fuelBurnedSinceReportL" | "fuelType">;
 type PayloadFields = Pick<Aircraft, "emptyWeightKg" | "maxTakeoffMassKg" | "fuelOnBoardL" | "fuelType">;
+type DynamicPayloadFields = PayloadFields & Pick<Aircraft, "fuelBurnedSinceReportL">;
 
-// null when fuel on board isn't known yet (nobody's dipped the tank since
-// this aircraft was created) — never silently treated as 0, same reasoning
-// as an unknown pilot weight (see nfr.md § Reliability & safety). fuelType
-// is typed as required but, like emptyWeightKg/maxTakeoffMassKg below, a
-// pre-existing aircraft document can still lack it — checked at runtime too.
-export function fuelWeightKg(aircraft: FuelFields): number | null {
-  if (aircraft.fuelOnBoardL == null || aircraft.fuelType == null) return null;
-  return Math.round(aircraft.fuelOnBoardL * FUEL_DENSITY_KG_PER_L[aircraft.fuelType]);
+function litersToKg(liters: number | null, fuelType: FuelType | null | undefined): number | null {
+  if (liters == null || fuelType == null) return null;
+  return Math.round(liters * FUEL_DENSITY_KG_PER_L[fuelType]);
 }
 
-// The hard limit for pilot + passenger weight combined — maxTakeoffMassKg
-// minus the airframe's own empty weight minus current fuel weight. Replaces
-// the old separately dispatcher-set maxPayloadKg field: that number could
-// silently drift from reality as fuel changed throughout the day (heavier
-// tanks genuinely mean less room for people), which is exactly the gap this
-// closes. null propagates fuelWeightKg's null (fuel not known yet) — callers
-// must refuse assign/lock in that state, not assume any particular payload.
-//
-// emptyWeightKg/maxTakeoffMassKg are typed as required (every aircraft
-// created going forward has them), but an aircraft saved before this field
-// became mandatory can still hold a real document without them — `== null`
-// checked at runtime despite the type, same "unknown blocks, never assumed"
-// treatment as an unset fuel level, not a crash or a silent NaN.
-export function availablePayloadKg(aircraft: PayloadFields): number | null {
+// Static — fuel exactly as of the last explicit report (a refuel event, or
+// the aircraft's initial figure), never adjusted on its own. null when fuel
+// on board isn't known yet (nobody's dipped the tank since this aircraft was
+// created) — never silently treated as 0, same reasoning as an unknown pilot
+// weight (see nfr.md § Reliability & safety). fuelType is typed as required
+// but, like emptyWeightKg/maxTakeoffMassKg below, a pre-existing aircraft
+// document can still lack it — checked at runtime too.
+export function fuelWeightKg(aircraft: FuelFields): number | null {
+  return litersToKg(aircraft.fuelOnBoardL, aircraft.fuelType);
+}
+
+// Dynamic — static fuel minus the burn estimated to have happened since that
+// figure was last reported (fuelBurnedSinceReportL, accumulated by
+// landFlight; reset to 0 whenever a new report comes in, via either the
+// quick refuel action or ending a refuel break). This is the "probably more
+// accurate right now" number, always <= the static one. Clamped at 0 rather
+// than going negative on a burn-rate estimate that runs a little hot.
+export function dynamicFuelOnBoardL(aircraft: DynamicFuelFields): number | null {
+  if (aircraft.fuelOnBoardL == null) return null;
+  return Math.max(0, aircraft.fuelOnBoardL - (aircraft.fuelBurnedSinceReportL ?? 0));
+}
+
+export function dynamicFuelWeightKg(aircraft: DynamicFuelFields): number | null {
+  return litersToKg(dynamicFuelOnBoardL(aircraft), aircraft.fuelType);
+}
+
+function payloadFromFuelKg(aircraft: PayloadFields, fuelKg: number | null): number | null {
+  // emptyWeightKg/maxTakeoffMassKg are typed as required (every aircraft
+  // created going forward has them), but an aircraft saved before this field
+  // became mandatory can still hold a real document without them — `== null`
+  // checked at runtime despite the type, same "unknown blocks, never
+  // assumed" treatment as an unset fuel level, not a crash or a silent NaN.
   if (aircraft.emptyWeightKg == null || aircraft.maxTakeoffMassKg == null) return null;
-  const fuel = fuelWeightKg(aircraft);
-  if (fuel == null) return null;
-  return aircraft.maxTakeoffMassKg - aircraft.emptyWeightKg - fuel;
+  if (fuelKg == null) return null;
+  return aircraft.maxTakeoffMassKg - aircraft.emptyWeightKg - fuelKg;
+}
+
+// THE hard limit for pilot + passenger weight combined — maxTakeoffMassKg
+// minus the airframe's own empty weight minus *dynamic* fuel weight. This is
+// what assign/lock actually gate on (nfr.md § Reliability & safety): the
+// dynamic figure is the more accurate real-time estimate, so it's the one
+// that determines whether a passenger genuinely fits, not the more
+// conservative static figure below. See docs/architecture.md § Open
+// decisions #5 for why there are two figures at all.
+export function availablePayloadKg(aircraft: DynamicPayloadFields): number | null {
+  return payloadFromFuelKg(aircraft, dynamicFuelWeightKg(aircraft));
+}
+
+// Conservative — computed from the static (last-reported-only) fuel figure,
+// never the projected one. Shown alongside the dynamic figure above purely
+// so the dispatcher can sanity-check the burn projection against the last
+// known-good measurement; not itself enforced anywhere.
+export function staticAvailablePayloadKg(aircraft: PayloadFields): number | null {
+  return payloadFromFuelKg(aircraft, fuelWeightKg(aircraft));
 }

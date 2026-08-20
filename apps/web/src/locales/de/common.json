@@ -111,6 +111,9 @@
         "fuelOnBoardL": "Sprit an Bord (L)",
         "fuelBurnLPerHour": "Verbrauch (L/Std.)",
         "saveFuel": "Sprit speichern",
+        "startRefuelBreak": "Sprit-Pause starten",
+        "endRefuelBreak": "Sprit-Pause beenden",
+        "refuelBreakActive": "Wird betankt",
         "fuelType": {
           "label": "Kraftstoff",
           "avgas": "Avgas",
@@ -163,8 +166,10 @@
         "unready": "Wieder öffnen",
         "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Fertigstellen nicht möglich.",
         "fuelUnknown": "⚠ Sprit-Stand unbekannt – Zuweisen/Fertigstellen nicht möglich.",
+        "refuelBreakActive": "⛽ Wird betankt – Start nicht möglich",
         "mtom": "{{gross}} / {{max}} kg MTOM",
-        "fuelWeight": "({{fuel}} kg Sprit)"
+        "fuelWeight": "({{fuel}} kg Sprit)",
+        "staticPayload": "Statisch (letzte Meldung): {{kg}} kg frei"
       },
       "status": {
         "created": "geplant",
@@ -190,6 +195,7 @@
       "land": "Landung erfassen",
       "start": "Start erfassen",
       "startBlocked": "Start nicht möglich",
+      "startBlockedRefueling": "Flugzeug wird betankt",
       "saveTime": "Uhrzeit speichern",
       "completed": "Abgeschlossen",
       "empty": "Noch keine Flüge angelegt.",

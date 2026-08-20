@@ -256,7 +256,9 @@ export function TrackingPage() {
             const load = computeFlightLoad(f, aircraft, pilot, flightGuests);
             const stage = deriveFlightStage(f, flightGuests);
             const notCheckedIn = flightGuests.filter((g) => !g.checkedIn).length;
-            const canStart = stage === "boarded";
+            // Mid-refuel-break blocks a start the same way the API refuses it
+            // server-side (nfr.md § Reliability & safety) — see startFlight.
+            const canStart = stage === "boarded" && !load.refuelBreakActive;
             const isPending = pending.has(f.id);
 
             let actions;
@@ -280,7 +282,11 @@ export function TrackingPage() {
                   disabled={!canStart || isPending}
                   onClick={() => void start(f.id)}
                 >
-                  {canStart ? t("dispatch.tracking.start") : t("dispatch.tracking.startBlocked")}
+                  {stage === "boarded" && load.refuelBreakActive
+                    ? t("dispatch.tracking.startBlockedRefueling")
+                    : canStart
+                      ? t("dispatch.tracking.start")
+                      : t("dispatch.tracking.startBlocked")}
                 </Button>
               );
             } else {

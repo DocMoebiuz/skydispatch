@@ -47,11 +47,17 @@ These are hard product requirements carried over from the manual, not aspiration
 - The assigned pilot's own weight counts toward the aircraft's max payload, the same
   as any guest's — payload checks are never guest-weight-only. Every pilot has a
   required `weightKg` (Setup); flight assignment and the ready-status gate both sum
-  pilot + assigned-guest weight against the aircraft's available payload
-  (`maxTakeoffMassKg - emptyWeightKg - fuelWeightKg`, see
+  pilot + assigned-guest weight against the aircraft's *dynamic* available payload
+  (`maxTakeoffMassKg - emptyWeightKg - dynamicFuelWeightKg`, see
   `packages/shared/src/weightAndBalance.ts`) server-side — fuel weight counts
   against it too, the same as pilot/guest weight; it isn't a separate,
-  informational-only figure.
+  informational-only figure. A separate *static* figure (fuel exactly as last
+  reported, not adjusted for burn since) is shown alongside for the dispatcher to
+  sanity-check against, but is never itself enforced.
+- An aircraft mid-refuel-break (`Aircraft.refuelBreakActive`) refuses
+  `actions/start` on any of its flights — a plane can't be dispatched while it's
+  being fuelled. The break can only be closed by reporting the new fuel level
+  (`actions/end-refuel-break` requires it in the body), never left open.
 - A flight whose assigned pilot has **no weight on file** (real pilot records
   created before `weightKg` existed) refuses assign/lock outright — an unknown
   weight is never silently treated as 0kg, which would undercount payload and let

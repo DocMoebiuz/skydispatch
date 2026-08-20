@@ -32,6 +32,9 @@ const aircraft: Aircraft = {
   maxTakeoffMassKg: 800,
   fuelType: "avgas",
   fuelOnBoardL: 0,
+  fuelBurnedSinceReportL: 0,
+  refuelBreakActive: false,
+  refuelBreakStartedAt: null,
 };
 
 const pilot: Pilot = {
@@ -124,5 +127,36 @@ describe("computeFlightLoad", () => {
     expect(load.maxPayloadKg).toBe(228);
     expect(load.usedWeightKg).toBe(80 + 150); // 230
     expect(load.over).toBe(true); // would have read "under" against a flat 300kg
+  });
+
+  it("dynamic payload is more generous than static once fuel has burned", () => {
+    // 100L reported, 20L burned since (landFlight accumulates this
+    // separately — see types/aircraft.ts). Static still assumes the full
+    // 100L (72kg) is on board; dynamic assumes only 80L (57.6kg -> rounds to
+    // 58kg) is left, so dynamic payload is a few kg higher. Assign/lock gate
+    // on the dynamic (more generous, more accurate) figure — maxPayloadKg —
+    // per the user's own framing: "assigning a passenger should be possible
+    // as long as they are within the dynamic limit."
+    const partiallyBurned: Aircraft = { ...aircraft, fuelOnBoardL: 100, fuelBurnedSinceReportL: 20 };
+    const load = computeFlightLoad(flight, partiallyBurned, pilot, []);
+    expect(load.staticMaxPayloadKg).toBe(228); // 800 - 500 - 72
+    expect(load.maxPayloadKg).toBe(242); // 800 - 500 - 58
+    expect(load.maxPayloadKg).toBeGreaterThan(load.staticMaxPayloadKg);
+  });
+
+  it("dynamic fuel never goes negative even if burn exceeds the last reported level", () => {
+    // A burn-rate estimate that's run hot across several legs without a
+    // fresh report shouldn't produce a negative fuel weight.
+    const overBurned: Aircraft = { ...aircraft, fuelOnBoardL: 50, fuelBurnedSinceReportL: 999 };
+    const load = computeFlightLoad(flight, overBurned, pilot, []);
+    expect(load.maxPayloadKg).toBe(300); // 800 - 500 - 0
+  });
+
+  it("refuelBreakActive flows through from the aircraft", () => {
+    const refueling: Aircraft = { ...aircraft, refuelBreakActive: true };
+    const load = computeFlightLoad(flight, refueling, pilot, []);
+    expect(load.refuelBreakActive).toBe(true);
+    const notRefueling = computeFlightLoad(flight, aircraft, pilot, []);
+    expect(notRefueling.refuelBreakActive).toBe(false);
   });
 });

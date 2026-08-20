@@ -120,14 +120,22 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     await expect(page.getByTestId("flight-card").filter({ hasText: flightCode })).toHaveCount(0);
 
     // Landing burns fuel (elapsed airborne time × 30 L/h) — real duration here
-    // is a handful of seconds, so the drop is small, but it must have
-    // happened: fuel on board is now at or below what it started at, not
-    // untouched. See landFlight's fuel-deduction block.
+    // is a handful of seconds, so the amount is small, but it must have
+    // happened. fuelOnBoardL itself is the static, last-reported figure and
+    // stays untouched by landing — landFlight accumulates the burn into
+    // fuelBurnedSinceReportL instead (see docs/architecture.md § Open
+    // decisions #5); weightAndBalance.ts's dynamicFuelOnBoardL is what
+    // actually subtracts it back out for the real-time estimate.
     const aircraftAfter = await fetch("http://localhost:4280/api/aircraft")
-      .then((r) => r.json() as Promise<{ id: string; fuelOnBoardL: number | null }[]>)
+      .then(
+        (r) =>
+          r.json() as Promise<
+            { id: string; fuelOnBoardL: number | null; fuelBurnedSinceReportL: number }[]
+          >,
+      )
       .then((list) => list.find((a) => a.id === aircraftId));
-    expect(aircraftAfter?.fuelOnBoardL).not.toBeNull();
-    expect(aircraftAfter!.fuelOnBoardL!).toBeLessThanOrEqual(100);
+    expect(aircraftAfter?.fuelOnBoardL).toBe(100);
+    expect(aircraftAfter!.fuelBurnedSinceReportL).toBeGreaterThan(0);
 
     // --- Refuel action: dispatcher sets the absolute liters after refueling ---
     await page.goto("/dispatch/setup");
@@ -136,6 +144,13 @@ test("fuel: aircraft with fuel figures shows gross weight and burns fuel on land
     await row.getByTestId("aircraft-fuel-input").fill("150");
     await row.getByTestId("aircraft-fuel-save").click();
     await expect(row.getByTestId("aircraft-fuel-cell")).toContainText("150 L Avgas");
+
+    // Any real report — quick refuel or ending a break — resets the burn
+    // accumulator, since a fresh number is now on file.
+    const aircraftRefueled = await fetch("http://localhost:4280/api/aircraft")
+      .then((r) => r.json() as Promise<{ id: string; fuelBurnedSinceReportL: number }[]>)
+      .then((list) => list.find((a) => a.id === aircraftId));
+    expect(aircraftRefueled?.fuelBurnedSinceReportL).toBe(0);
   } finally {
     await deleteGuestByEmail(email);
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);

@@ -18,16 +18,32 @@ export interface Aircraft {
   emptyWeightKg: number;
   maxTakeoffMassKg: number;
   fuelType: FuelType;
-  // Current fuel on board, in liters — genuinely unknown at aircraft
-  // creation (nobody's dipped the tank yet), set via POST
-  // /api/aircraft/{id}/actions/refuel, and automatically decremented by
-  // landFlight (elapsed airborne time × fuelBurnLPerHour) so it reflects
-  // what's actually left without the dispatcher re-entering it after every
-  // leg. null blocks assign/lock the same way an unknown pilot weight does —
-  // see weightAndBalance.ts's availablePayloadKg.
+  // Static — fuel on board exactly as of the last explicit report, in
+  // liters. Genuinely unknown at aircraft creation (nobody's dipped the tank
+  // yet); set by either the quick POST /api/aircraft/{id}/actions/refuel
+  // (absolute liters) or ending a refuel break (actions/end-refuel-break) —
+  // both also reset fuelBurnedSinceReportL to 0, since either one means a
+  // real, current number is now on file. null blocks assign/lock the same
+  // way an unknown pilot weight does — see weightAndBalance.ts's
+  // availablePayloadKg.
   fuelOnBoardL: number | null;
-  // Used both for landFlight's automatic burn deduction and the low-fuel
+  // Dynamic delta — accumulated burn (elapsed airborne time ×
+  // fuelBurnLPerHour) since fuelOnBoardL was last reported, added to by
+  // landFlight after every leg. weightAndBalance.ts's dynamicFuelOnBoardL
+  // subtracts this from fuelOnBoardL to get the more-accurate-right-now
+  // estimate that assign/lock actually gate on — see docs/architecture.md §
+  // Open decisions #5 for why static and dynamic are tracked separately
+  // instead of landFlight just overwriting fuelOnBoardL directly (the
+  // original, simpler design).
+  fuelBurnedSinceReportL: number;
+  // Used both for landFlight's automatic burn accumulation and the low-fuel
   // reserve warning — optional since not every dispatcher will know it
   // immediately, but strongly recommended (Setup flags it).
   fuelBurnLPerHour?: number | null;
+  // A refuel break in progress — actions/start blocks on this aircraft while
+  // true (nfr.md § Reliability & safety: you can't dispatch a flight on a
+  // plane mid-refuel), and it can only be cleared by actions/end-refuel-break
+  // reporting the new fuelOnBoardL, never left open-ended.
+  refuelBreakActive: boolean;
+  refuelBreakStartedAt: string | null;
 }

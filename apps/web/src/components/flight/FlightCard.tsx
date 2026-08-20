@@ -218,6 +218,24 @@ export function FlightCard({
           </p>
         )}
 
+        {/* Static payload, alongside the dynamic figure the primary gauge
+            above already shows — the dispatcher can sanity-check the
+            burn-since-last-report projection against the last known-good
+            reported number. Not itself a hard limit (assign/lock gate on
+            the dynamic one), so muted, not colored even when it reads
+            tighter than the dynamic figure. */}
+        {!load.fuelUnknown && !compact && load.staticMaxPayloadKg !== load.maxPayloadKg && (
+          <p className="text-muted-foreground" data-testid="flight-card-static-payload">
+            {t("dispatch.planning.builder.staticPayload", { kg: load.staticMaxPayloadKg })}
+          </p>
+        )}
+
+        {load.refuelBreakActive && (
+          <p className="text-amber-600 dark:text-amber-500" data-testid="refuel-break-warning">
+            {compact ? "⛽" : t("dispatch.planning.builder.refuelBreakActive")}
+          </p>
+        )}
+
         {load.pilotWeightUnknown && (
           <p
             className="text-amber-600 dark:text-amber-500"

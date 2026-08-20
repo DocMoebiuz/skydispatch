@@ -211,14 +211,18 @@ export function DashboardPage() {
         </Button>
       );
     } else if (stage === "boarded") {
+      // Mid-refuel-break blocks a start the same way the API refuses it
+      // server-side (nfr.md § Reliability & safety) — see startFlight.
       actions = (
         <Button
           size="sm"
           data-testid="dashboard-start-button"
-          disabled={isPending}
+          disabled={isPending || load.refuelBreakActive}
           onClick={() => void start(f.id)}
         >
-          {t("dispatch.tracking.start")}
+          {load.refuelBreakActive
+            ? t("dispatch.tracking.startBlockedRefueling")
+            : t("dispatch.tracking.start")}
         </Button>
       );
     } else if (stage === "assigned" || stage === "boarding") {

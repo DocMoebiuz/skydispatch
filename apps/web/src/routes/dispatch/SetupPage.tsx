@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, UserRound, Plane, Coffee } from "lucide-react";
+import { Plus, Trash2, UserRound, Plane, Coffee, Fuel } from "lucide-react";
 
 // Increment 3 prerequisite — entity setup (flight day/pilots/aircraft). A
 // scenic-flight day realistically has single-digit pilots/aircraft (5-10
@@ -323,20 +323,46 @@ export function SetupPage() {
     setFuelEditValue(a.fuelOnBoardL != null ? String(a.fuelOnBoardL) : "");
   }
 
-  async function saveFuel(aircraftId: string) {
+  // Same input+save affordance either way — which endpoint it hits depends
+  // on whether a refuel break is open. Ending a break *requires* the number
+  // (it's how the break closes at all); the plain quick action is just a
+  // minor top-up/correction that doesn't warrant starting a break first.
+  async function saveFuel(aircraft: Aircraft) {
     const litersNum = Number(fuelEditValue);
     if (!fuelEditValue || Number.isNaN(litersNum) || litersNum < 0) return;
     setSavingFuel(true);
     try {
-      const response = await fetch(`/api/aircraft/${aircraftId}/actions/refuel`, {
+      const path = aircraft.refuelBreakActive ? "end-refuel-break" : "refuel";
+      const response = await fetch(`/api/aircraft/${aircraft.id}/actions/${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fuelOnBoardL: litersNum }),
       });
       if (response.ok) {
         const updated = (await response.json()) as Aircraft;
-        setAircraft((prev) => prev.map((a) => (a.id === aircraftId ? updated : a)));
+        setAircraft((prev) => prev.map((a) => (a.id === aircraft.id ? updated : a)));
         setEditingFuelAircraftId(null);
+        setFuelEditValue("");
+      }
+    } finally {
+      setSavingFuel(false);
+    }
+  }
+
+  async function startRefuelBreak(aircraftId: string) {
+    setSavingFuel(true);
+    try {
+      const response = await fetch(`/api/aircraft/${aircraftId}/actions/start-refuel-break`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        const updated = (await response.json()) as Aircraft;
+        setAircraft((prev) => prev.map((a) => (a.id === aircraftId ? updated : a)));
+        // Straight into the reporting UI — the whole point of a break is
+        // that it can't close without a number, so there's nothing else
+        // useful to show for this aircraft right now.
+        setEditingFuelAircraftId(aircraftId);
+        setFuelEditValue("");
       }
     } finally {
       setSavingFuel(false);
@@ -634,11 +660,13 @@ export function SetupPage() {
                       </span>
                       {/* Fuel is only shown/editable once a fuel type is on
                           file — "dim, don't hide": aircraft without fuel
-                          tracking yet just don't get this bit. Refueling
-                          stays a quick action right on the card (unlike
+                          tracking yet just don't get this bit. The quick
+                          refuel action stays right on the card (unlike
                           delete) — it's a frequent, non-destructive,
-                          real-world action the fuel truck triggers between
-                          flights. */}
+                          real-world correction. A refuel break is the more
+                          deliberate path: started explicitly, and can only
+                          be closed by reporting a number through this same
+                          input — never left open with stale fuel data. */}
                       {a.fuelType &&
                         (editingFuelAircraftId === a.id ? (
                           <span
@@ -651,31 +679,71 @@ export function SetupPage() {
                               data-testid="aircraft-fuel-input"
                               value={fuelEditValue}
                               onChange={(e) => setFuelEditValue(e.target.value)}
+                              placeholder={
+                                a.refuelBreakActive
+                                  ? t("dispatch.setup.aircraft.fuelOnBoardL")
+                                  : undefined
+                              }
                               autoFocus
                             />
                             <Button
                               size="icon-sm"
                               variant="ghost"
-                              data-testid="aircraft-fuel-save"
+                              data-testid={
+                                a.refuelBreakActive ? "aircraft-end-refuel-break" : "aircraft-fuel-save"
+                              }
                               disabled={savingFuel}
-                              aria-label={t("dispatch.setup.aircraft.saveFuel")}
-                              onClick={() => void saveFuel(a.id)}
+                              aria-label={
+                                a.refuelBreakActive
+                                  ? t("dispatch.setup.aircraft.endRefuelBreak")
+                                  : t("dispatch.setup.aircraft.saveFuel")
+                              }
+                              onClick={() => void saveFuel(a)}
                             >
                               ✓
                             </Button>
                           </span>
-                        ) : (
+                        ) : a.refuelBreakActive ? (
                           <button
                             type="button"
-                            className="text-muted-foreground w-fit text-xs underline decoration-dotted underline-offset-2"
-                            data-testid="aircraft-fuel-cell"
+                            className="mt-0.5 flex w-fit items-center gap-1 text-xs text-amber-600 dark:text-amber-500"
+                            data-testid="aircraft-refuel-break-active"
                             onClick={(e) => {
                               e.stopPropagation();
-                              startEditFuel(a);
+                              setEditingFuelAircraftId(a.id);
+                              setFuelEditValue("");
                             }}
                           >
-                            {a.fuelOnBoardL ?? 0} L {t(`dispatch.setup.aircraft.fuelType.${a.fuelType}`)}
+                            <Fuel className="size-3.5 shrink-0" aria-hidden />
+                            {t("dispatch.setup.aircraft.refuelBreakActive")}
                           </button>
+                        ) : (
+                          <span className="mt-0.5 flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              className="text-muted-foreground w-fit text-xs underline decoration-dotted underline-offset-2"
+                              data-testid="aircraft-fuel-cell"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditFuel(a);
+                              }}
+                            >
+                              {a.fuelOnBoardL ?? 0} L{" "}
+                              {t(`dispatch.setup.aircraft.fuelType.${a.fuelType}`)}
+                            </button>
+                            <button
+                              type="button"
+                              className="text-muted-foreground w-fit text-xs underline decoration-dotted underline-offset-2"
+                              data-testid="aircraft-start-refuel-break"
+                              disabled={savingFuel}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void startRefuelBreak(a.id);
+                              }}
+                            >
+                              {t("dispatch.setup.aircraft.startRefuelBreak")}
+                            </button>
+                          </span>
                         ))}
                     </div>
                   </CardContent>
