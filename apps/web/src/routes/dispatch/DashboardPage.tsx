@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
+import { cn } from "@/lib/utils";
 
 const ORDER: Record<Flight["status"], number> = {
   created: 0,
@@ -115,48 +116,136 @@ export function DashboardPage() {
           100,
       )
     : 0;
-  const kpis: { key: string; value: string | number; sub: string }[] = [
+  const kpis: { key: string; value: string | number; sub: string; to?: string }[] = [
     {
       key: "activeFlights",
       value: activeFlights.length,
       sub: t("dispatch.dashboard.kpi.activeFlightsSub", { count: completedFlights.length }),
+      to: "/dispatch/tracking",
     },
     {
       key: "guests",
       value: guests.length,
       sub: t("dispatch.dashboard.kpi.guestsSub", { count: readyPoolCount }),
+      to: "/dispatch/guests",
     },
-    { key: "waiting", value: readyPoolCount, sub: t("dispatch.dashboard.kpi.waitingSub") },
+    {
+      key: "waiting",
+      value: readyPoolCount,
+      sub: t("dispatch.dashboard.kpi.waitingSub"),
+      to: "/dispatch/planning",
+    },
     { key: "utilization", value: `${utilization}%`, sub: t("dispatch.dashboard.kpi.utilizationSub") },
   ];
 
   const sortedActive = [...activeFlights].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+  // Live (airborne or fully boarded, about to depart) needs eyes-on-it
+  // attention right now; still-in-planning flights don't, so they get a
+  // secondary, less prominent section instead of blending into one grid.
+  const liveFlights = sortedActive.filter((f) => f.status === "airborne" || f.status === "ready");
+  const planningFlights = sortedActive.filter(
+    (f) => f.status !== "airborne" && f.status !== "ready",
+  );
+
+  // One primary action per stage — always the actual next thing to do, never
+  // a disabled dead-end button. "assigned"/"boarding" used to render a
+  // disabled "Start nicht möglich" button here; now they point straight at
+  // Check-in, since that's what's actually blocking the start.
+  function renderFlightCard(f: Flight) {
+    const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+    const pilot = pilots.find((p) => p.id === f.pilotId);
+    const flightGuests = f.guestIds
+      .map((id) => guests.find((g) => g.id === id))
+      .filter((g): g is Guest => !!g);
+    const load = computeFlightLoad(f, aircraft, pilot, flightGuests);
+    const stage = deriveFlightStage(f, flightGuests);
+    const isPending = pending.has(f.id);
+
+    let actions;
+    if (stage === "airborne") {
+      actions = (
+        <Button
+          variant="destructive"
+          size="sm"
+          data-testid="dashboard-land-button"
+          disabled={isPending}
+          onClick={() => void land(f.id)}
+        >
+          {t("dispatch.tracking.land")}
+        </Button>
+      );
+    } else if (stage === "boarded") {
+      actions = (
+        <Button
+          size="sm"
+          data-testid="dashboard-start-button"
+          disabled={isPending}
+          onClick={() => void start(f.id)}
+        >
+          {t("dispatch.tracking.start")}
+        </Button>
+      );
+    } else if (stage === "assigned" || stage === "boarding") {
+      actions = (
+        <Button asChild variant="outline" size="sm">
+          <Link to="/dispatch/checkin">{t("dispatch.common.goToCheckin")}</Link>
+        </Button>
+      );
+    } else {
+      actions = (
+        <Button asChild variant="outline" size="sm">
+          <Link to="/dispatch/planning">{t("dispatch.common.goToPlanning")}</Link>
+        </Button>
+      );
+    }
+
+    return (
+      <FlightCard
+        key={f.id}
+        flight={f}
+        stage={stage}
+        aircraft={aircraft}
+        pilot={pilot}
+        load={load}
+        actions={actions}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.dashboard")}</h1>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {kpis.map(({ key, value, sub }) => (
-          <Card key={key}>
-            <CardHeader>
-              <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
-                {t(`dispatch.dashboard.kpi.${key}`)}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-1">
-              <span className="text-3xl font-bold" data-testid={`kpi-${key}`}>
-                {value}
-              </span>
-              <span className="text-muted-foreground text-xs">{sub}</span>
-            </CardContent>
-          </Card>
-        ))}
+        {kpis.map(({ key, value, sub, to }) => {
+          const card = (
+            <Card className={cn(to && "hover:bg-accent/50 transition-colors")}>
+              <CardHeader>
+                <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
+                  {t(`dispatch.dashboard.kpi.${key}`)}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-1">
+                <span className="text-3xl font-bold" data-testid={`kpi-${key}`}>
+                  {value}
+                </span>
+                <span className="text-muted-foreground text-xs">{sub}</span>
+              </CardContent>
+            </Card>
+          );
+          return to ? (
+            <Link key={key} to={to} data-testid={`kpi-link-${key}`}>
+              {card}
+            </Link>
+          ) : (
+            <div key={key}>{card}</div>
+          );
+        })}
       </div>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">{t("dispatch.dashboard.flights.title")}</h2>
-        {sortedActive.length === 0 ? (
+      {sortedActive.length === 0 ? (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg font-medium">{t("dispatch.dashboard.flights.title")}</h2>
           <EmptyState
             data-testid="dashboard-flights-empty"
             message={t("dispatch.dashboard.flights.empty")}
@@ -166,76 +255,31 @@ export function DashboardPage() {
               </Button>
             }
           />
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {sortedActive.map((f) => {
-              const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
-              const pilot = pilots.find((p) => p.id === f.pilotId);
-              const flightGuests = f.guestIds
-                .map((id) => guests.find((g) => g.id === id))
-                .filter((g): g is Guest => !!g);
-              const load = computeFlightLoad(f, aircraft, pilot, flightGuests);
-              const stage = deriveFlightStage(f, flightGuests);
-              const isPending = pending.has(f.id);
-
-              // One primary action per stage — always the actual next thing to
-              // do, never a disabled dead-end button. "assigned"/"boarding"
-              // used to render a disabled "Start nicht möglich" button here;
-              // now they point straight at Check-in, since that's what's
-              // actually blocking the start.
-              let actions;
-              if (stage === "airborne") {
-                actions = (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    data-testid="dashboard-land-button"
-                    disabled={isPending}
-                    onClick={() => void land(f.id)}
-                  >
-                    {t("dispatch.tracking.land")}
-                  </Button>
-                );
-              } else if (stage === "boarded") {
-                actions = (
-                  <Button
-                    size="sm"
-                    data-testid="dashboard-start-button"
-                    disabled={isPending}
-                    onClick={() => void start(f.id)}
-                  >
-                    {t("dispatch.tracking.start")}
-                  </Button>
-                );
-              } else if (stage === "assigned" || stage === "boarding") {
-                actions = (
-                  <Button asChild variant="outline" size="sm">
-                    <Link to="/dispatch/checkin">{t("dispatch.common.goToCheckin")}</Link>
-                  </Button>
-                );
-              } else {
-                actions = (
-                  <Button asChild variant="outline" size="sm">
-                    <Link to="/dispatch/planning">{t("dispatch.common.goToPlanning")}</Link>
-                  </Button>
-                );
-              }
-
-              return (
-                <FlightCard
-                  key={f.id}
-                  flight={f}
-                  stage={stage}
-                  aircraft={aircraft}
-                  pilot={pilot}
-                  load={load}
-                  actions={actions}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          {liveFlights.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-lg font-medium">
+                {t("dispatch.dashboard.flights.liveTitle")} ({liveFlights.length})
+              </h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {liveFlights.map((f) => renderFlightCard(f))}
+              </div>
+            </div>
+          )}
+          {planningFlights.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-muted-foreground text-sm font-medium">
+                {t("dispatch.dashboard.flights.planningTitle")} ({planningFlights.length})
+              </h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {planningFlights.map((f) => renderFlightCard(f))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

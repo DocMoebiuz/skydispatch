@@ -42,6 +42,8 @@
       },
       "flights": {
         "title": "Live-Flüge",
+        "liveTitle": "Live",
+        "planningTitle": "In Vorbereitung",
         "empty": "Noch keine Flüge geplant."
       }
     },
