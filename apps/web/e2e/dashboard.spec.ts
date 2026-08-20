@@ -92,9 +92,11 @@ test("dashboard shows a flight card and lands an airborne flight via a quick act
     await expect(card.getByTestId("flight-card-seats")).toHaveAttribute("data-used", "1");
 
     await card.getByTestId("dashboard-land-button").click();
-    // Landed flights aren't "active" any more — the card leaves the dashboard's
-    // pipeline entirely (only non-completed flights are shown there).
-    await expect(page.getByTestId("flight-card").filter({ hasText: flight.code })).toHaveCount(0);
+    // A just-landed flight stays in the Live lane (boarding/boarded/airborne/
+    // landed all count as "live" — see DashboardPage's LIVE_STAGES), just with
+    // an updated status and no more quick action, not removed from view.
+    await expect(card.getByTestId("flight-card-status")).toContainText("Gelandet");
+    await expect(card.getByTestId("dashboard-land-button")).toHaveCount(0);
 
     const landed = await fetch(`http://localhost:4280/api/flights`).then(
       (r) => r.json() as Promise<{ id: string; status: string }[]>,

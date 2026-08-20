@@ -359,6 +359,7 @@ reporting), per the manual and `docs/static-html-app/`:
 | `POST /api/flights/{id}/actions/assign` | Assign a guest or a whole group, enforcing hard seat/weight limits, greedy partial-fit for groups; returns `{assigned, rejected: [{guestId, reason}]}` |
 | `POST /api/flights/{id}/actions/set-ready`, `.../unready` | Ready requires guests > 0 and weight within payload (server-checked) |
 | `POST /api/flights/{id}/actions/start`, `.../land` | Start requires ready + all assigned guests checked in; landing marks the flight completed and every guest flown |
+| `POST /api/admin/actions/reset-database` | Full wipe of every document (any type, any `flightDayId`) — backs Setup's "Gefahrenzone" reset button; no server-side confirmation of its own, the UI's type-to-confirm dialog is the only guard (see § Open decisions #1 on the lack of auth generally) |
 
 No `PUT`/edit on any entity (only create, list, delete, and the specific action
 endpoints above) — not needed yet, and not the same gap as the accepted technical

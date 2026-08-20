@@ -71,6 +71,10 @@ export function SetupPage() {
   const [fuelEditValue, setFuelEditValue] = useState("");
   const [savingFuel, setSavingFuel] = useState(false);
 
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetConfirmValue, setResetConfirmValue] = useState("");
+  const [resettingDatabase, setResettingDatabase] = useState(false);
+
   // `cancelled` guard on each fetch — required, not decorative: React
   // StrictMode's dev-mode double mount/unmount/remount runs this effect
   // twice, and a stale wave's .then() can fire after addPilot/addAircraft
@@ -281,6 +285,20 @@ export function SetupPage() {
       }
     } finally {
       setSavingFuel(false);
+    }
+  }
+
+  // Full wipe (see apps/api admin.ts's resetDatabase) — a page reload after a
+  // successful reset is simpler and more trustworthy than trying to hand-reset
+  // every piece of local state (flightDay/pilots/aircraft/flights/all the
+  // create-form fields) to match a now-empty database.
+  async function resetDatabase() {
+    setResettingDatabase(true);
+    try {
+      const response = await fetch("/api/admin/actions/reset-database", { method: "POST" });
+      if (response.ok) window.location.reload();
+    } finally {
+      setResettingDatabase(false);
     }
   }
 
@@ -679,6 +697,59 @@ export function SetupPage() {
               onClick={() => void addAircraft()}
             >
               {t("dispatch.setup.aircraft.add")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="text-destructive">{t("dispatch.setup.danger.title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between gap-4">
+          <p className="text-muted-foreground text-sm">{t("dispatch.setup.danger.description")}</p>
+          <Button
+            variant="destructive"
+            data-testid="open-reset-database"
+            onClick={() => setResetDialogOpen(true)}
+          >
+            {t("dispatch.setup.danger.reset")}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={resetDialogOpen}
+        onOpenChange={(open) => {
+          setResetDialogOpen(open);
+          if (!open) setResetConfirmValue("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">
+              {t("dispatch.setup.danger.confirmTitle")}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm">{t("dispatch.setup.danger.confirmText")}</p>
+          <div className="grid gap-2">
+            <Label htmlFor="reset-confirm">{t("dispatch.setup.danger.confirmLabel")}</Label>
+            <Input
+              id="reset-confirm"
+              data-testid="reset-confirm-input"
+              value={resetConfirmValue}
+              onChange={(e) => setResetConfirmValue(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="destructive"
+              data-testid="confirm-reset-database"
+              disabled={resetConfirmValue !== "RESET" || resettingDatabase}
+              onClick={() => void resetDatabase()}
+            >
+              {t("dispatch.setup.danger.reset")}
             </Button>
           </DialogFooter>
         </DialogContent>

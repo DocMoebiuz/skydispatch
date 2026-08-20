@@ -24,7 +24,8 @@
     },
     "common": {
       "goToPlanning": "Zur Flugplanung",
-      "goToGuests": "Zu den Gästen"
+      "goToGuests": "Zu den Gästen",
+      "goToCheckin": "Zum Check-in"
     },
     "stage": {
       "new": "Neu",
@@ -47,10 +48,10 @@
         "utilizationSub": "aktive Flüge"
       },
       "flights": {
-        "title": "Live-Flüge",
         "liveTitle": "Live",
         "planningTitle": "In Vorbereitung",
-        "empty": "Noch keine Flüge geplant."
+        "liveEmpty": "Gerade kein Flug im Boarding, in der Luft oder gelandet.",
+        "planningEmpty": "Nichts in Vorbereitung — alle Flüge sind live oder es gibt noch keine."
       }
     },
     "setup": {
@@ -106,6 +107,14 @@
           "avgas": "Avgas",
           "diesel": "Diesel"
         }
+      },
+      "danger": {
+        "title": "Gefahrenzone",
+        "description": "Löscht unwiderruflich alle Daten – Flugtag, Piloten, Flugzeuge, Gäste und Flüge – und beginnt bei Null.",
+        "reset": "Datenbank zurücksetzen",
+        "confirmTitle": "Datenbank wirklich zurücksetzen?",
+        "confirmText": "Diese Aktion kann nicht rückgängig gemacht werden. Alle Flugtag-, Piloten-, Flugzeug-, Gäste- und Flugdaten werden dauerhaft gelöscht.",
+        "confirmLabel": "Zum Bestätigen \"RESET\" eingeben"
       }
     },
     "planning": {

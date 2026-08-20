@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { deriveFlightStage, type Guest, type Aircraft, type Pilot, type Flight } from "shared";
+import {
+  deriveFlightStage,
+  type Guest,
+  type Aircraft,
+  type Pilot,
+  type Flight,
+  type FlightStage,
+} from "shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -149,14 +156,24 @@ export function DashboardPage() {
     { key: "utilization", value: `${utilization}%`, sub: t("dispatch.dashboard.kpi.utilizationSub") },
   ];
 
-  const sortedActive = [...activeFlights].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
-  // Live (airborne or fully boarded, about to depart) needs eyes-on-it
-  // attention right now; still-in-planning flights don't, so they get a
-  // secondary, less prominent section instead of blending into one grid.
-  const liveFlights = sortedActive.filter((f) => f.status === "airborne" || f.status === "ready");
-  const planningFlights = sortedActive.filter(
-    (f) => f.status !== "airborne" && f.status !== "ready",
-  );
+  // Live = actively happening or just wrapped up (boarding underway, fully
+  // boarded, airborne, or landed) — this is the "eyes on it right now" bucket,
+  // stage-based rather than raw status so a flight only half-checked-in still
+  // counts as live, not stuck in planning. Everything before boarding starts
+  // (new/planning/assigned-but-untouched) is still prep work, not yet live.
+  const LIVE_STAGES: FlightStage[] = ["boarding", "boarded", "airborne", "landed"];
+  const stagedFlights = [...flights]
+    .sort((a, b) => ORDER[a.status] - ORDER[b.status])
+    .map((f) => {
+      const flightGuests = f.guestIds
+        .map((id) => guests.find((g) => g.id === id))
+        .filter((g): g is Guest => !!g);
+      return { flight: f, stage: deriveFlightStage(f, flightGuests) };
+    });
+  const liveFlights = stagedFlights.filter((s) => LIVE_STAGES.includes(s.stage)).map((s) => s.flight);
+  const planningFlights = stagedFlights
+    .filter((s) => !LIVE_STAGES.includes(s.stage))
+    .map((s) => s.flight);
 
   // One primary action per stage — always the actual next thing to do, never
   // a disabled dead-end button. "assigned"/"boarding" used to render a
@@ -202,6 +219,10 @@ export function DashboardPage() {
           <Link to="/dispatch/checkin">{t("dispatch.common.goToCheckin")}</Link>
         </Button>
       );
+    } else if (stage === "landed") {
+      // Nothing left to do — no action slot at all, not a dead link back to
+      // Planning (this flight is done, not still being prepared).
+      actions = undefined;
     } else {
       actions = (
         <Button asChild variant="outline" size="sm">
@@ -258,43 +279,50 @@ export function DashboardPage() {
         })}
       </div>
 
-      {sortedActive.length === 0 ? (
-        <div className="flex flex-col gap-3">
-          <h2 className="text-lg font-medium">{t("dispatch.dashboard.flights.title")}</h2>
+      {/* Each lane always renders, with its own empty state + a button to
+          wherever fixes that emptiness — no single all-or-nothing empty
+          state hiding both sections. Same navigation-from-empty-state
+          pattern the rest of the app should use (see EmptyState). */}
+      <div className="flex flex-col gap-3">
+        <h2 className="text-lg font-medium">
+          {t("dispatch.dashboard.flights.liveTitle")} ({liveFlights.length})
+        </h2>
+        {liveFlights.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {liveFlights.map((f) => renderFlightCard(f))}
+          </div>
+        ) : (
           <EmptyState
-            data-testid="dashboard-flights-empty"
-            message={t("dispatch.dashboard.flights.empty")}
+            data-testid="dashboard-live-empty"
+            message={t("dispatch.dashboard.flights.liveEmpty")}
+            action={
+              <Button asChild size="sm" variant="outline">
+                <Link to="/dispatch/checkin">{t("dispatch.common.goToCheckin")}</Link>
+              </Button>
+            }
+          />
+        )}
+      </div>
+      <div className="flex flex-col gap-3">
+        <h2 className="text-muted-foreground text-sm font-medium">
+          {t("dispatch.dashboard.flights.planningTitle")} ({planningFlights.length})
+        </h2>
+        {planningFlights.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {planningFlights.map((f) => renderFlightCard(f))}
+          </div>
+        ) : (
+          <EmptyState
+            data-testid="dashboard-planning-empty"
+            message={t("dispatch.dashboard.flights.planningEmpty")}
             action={
               <Button asChild size="sm">
                 <Link to="/dispatch/planning">{t("dispatch.common.goToPlanning")}</Link>
               </Button>
             }
           />
-        </div>
-      ) : (
-        <>
-          {liveFlights.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <h2 className="text-lg font-medium">
-                {t("dispatch.dashboard.flights.liveTitle")} ({liveFlights.length})
-              </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {liveFlights.map((f) => renderFlightCard(f))}
-              </div>
-            </div>
-          )}
-          {planningFlights.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <h2 className="text-muted-foreground text-sm font-medium">
-                {t("dispatch.dashboard.flights.planningTitle")} ({planningFlights.length})
-              </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {planningFlights.map((f) => renderFlightCard(f))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
