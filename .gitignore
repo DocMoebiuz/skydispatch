@@ -2,8 +2,16 @@
 node_modules/
 .pnpm-store/
 
-# Azurite (Storage emulator) local data/debug log
+# Azurite (Storage emulator) local data/debug log — `.azurite/` is where this
+# project's own `pnpm azurite` script points it (see root package.json), but
+# VS Code's built-in Azurite extension auto-starts its own instance and
+# defaults to writing straight into whatever folder is open (confirmed:
+# landed in apps/api/) — these patterns catch that regardless of location.
 .azurite/
+AzuriteConfig
+__azurite_db_*__.json
+__blobstorage__/
+__queuestorage__/
 
 # Build output
 dist/
