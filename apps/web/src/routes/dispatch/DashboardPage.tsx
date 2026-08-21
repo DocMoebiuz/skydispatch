@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad, aircraftHasOtherAirborneFlight } from "@/lib/flightLoad";
+import { elapsedMinutes } from "@/lib/flightTime";
 import { cn } from "@/lib/utils";
 
 // Static lookup, not `` `border-l-${key}-500` `` — Tailwind's JIT can't see
@@ -53,6 +54,9 @@ export function DashboardPage() {
   // optimistic or a small button-local spinner, never a full-page loading
   // state again. Same pattern as Planning's initialLoading.
   const [initialLoading, setInitialLoading] = useState(true);
+  // See the poll effect below — read there (not during render) because
+  // calling Date.now() during render is impure. Same pattern as Tracking.
+  const [now, setNow] = useState(() => Date.now());
 
   function reload(): Promise<void> {
     return Promise.all([
@@ -100,9 +104,14 @@ export function DashboardPage() {
   // Polling (not fetch-once) so another dispatcher's action elsewhere — or
   // another browser tab — shows up here without a manual refresh. Separate
   // from the mount effect above (which owns initialLoading); reload() here
-  // just re-fetches, no loading-state flicker on every tick.
+  // just re-fetches, no loading-state flicker on every tick. Also refreshes
+  // `now`, for the live lane's airborne flight-time figure — see Tracking's
+  // identical comment.
   useEffect(() => {
-    const interval = setInterval(() => void reload(), 15_000);
+    const interval = setInterval(() => {
+      void reload();
+      setNow(Date.now());
+    }, 15_000);
     return () => clearInterval(interval);
     }, []);
 
@@ -208,16 +217,32 @@ export function DashboardPage() {
 
     let actions;
     if (stage === "airborne") {
+      // Left: flight time since takeoff. Right (ml-auto): land — same
+      // layout as Tracking's own airborne row, so every airborne card reads
+      // consistently regardless of which page it's on. Land stays right
+      // even here where it's currently the only other element, not just
+      // when flight time happens to be shown alongside it.
       actions = (
-        <Button
-          variant="destructive"
-          size="sm"
-          data-testid="dashboard-land-button"
-          disabled={isPending}
-          onClick={() => void land(f.id)}
-        >
-          {t("dispatch.tracking.land")}
-        </Button>
+        <>
+          {f.offBlock && (
+            <span
+              className="text-muted-foreground text-sm tabular-nums"
+              data-testid="dashboard-flight-time-elapsed"
+            >
+              {t("dispatch.tracking.flightTime", { minutes: elapsedMinutes(f.offBlock, now) })}
+            </span>
+          )}
+          <Button
+            variant="destructive"
+            size="sm"
+            className="ml-auto"
+            data-testid="dashboard-land-button"
+            disabled={isPending}
+            onClick={() => void land(f.id)}
+          >
+            {t("dispatch.tracking.land")}
+          </Button>
+        </>
       );
     } else if (stage === "boarded") {
       // Mid-refuel-break, or the same aircraft already airborne on another

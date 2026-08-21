@@ -90,7 +90,14 @@ export function ReportingPage() {
   const completed = flights.filter((f) => f.status === "completed");
   const flown = guests.filter((g) => g.flown).length;
   const noShows = guests.filter((g) => g.noShow).length;
-  const revenue = flown * (flightDay?.pricePerGuestEur ?? 0);
+  // Counted on `paid`, not `flown` — the money changes hands at mark-paid,
+  // independent of whether the flight has happened yet. A no-show who
+  // already paid still counts as revenue; a flown guest who somehow wasn't
+  // marked paid doesn't (shouldn't happen in practice — assigning a guest to
+  // a flight already requires paid, see apps/api guests.ts — but revenue
+  // should reflect what was actually collected, not what should have been).
+  const paidCount = guests.filter((g) => g.paid).length;
+  const revenue = paidCount * (flightDay?.pricePerGuestEur ?? 0);
   const utilization = completed.length
     ? Math.round(
         (completed.reduce((sum, f) => {

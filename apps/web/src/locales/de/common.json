@@ -200,6 +200,7 @@
       "landing": "Landung",
       "estimatedDeparture": "Vorauss. Abflug",
       "land": "Landung erfassen",
+      "flightTime": "{{minutes}} Min.",
       "start": "Start erfassen",
       "startBlocked": "Start nicht möglich",
       "startBlockedRefueling": "Flugzeug wird betankt",

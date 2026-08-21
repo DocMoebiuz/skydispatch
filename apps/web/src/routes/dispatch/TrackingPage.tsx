@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad, aircraftHasOtherAirborneFlight } from "@/lib/flightLoad";
+import { elapsedMinutes } from "@/lib/flightTime";
 
 type TimeField = "offBlock" | "onBlock";
 
@@ -68,6 +69,9 @@ export function TrackingPage() {
   const [timeEditValue, setTimeEditValue] = useState("");
   const [savingTime, setSavingTime] = useState(false);
   const [filter, setFilter] = useState<FilterKey>("active");
+  // See the poll effect below — read there (not in elapsedMinutes) because
+  // calling Date.now() during render is impure.
+  const [now, setNow] = useState(() => Date.now());
 
   function reload(): Promise<void> {
     return Promise.all([
@@ -117,9 +121,15 @@ export function TrackingPage() {
   // Polling (not fetch-once) so another dispatcher's start/land elsewhere —
   // or another tab — shows up here without a manual refresh. The inline
   // takeoff/landing time editor (editingTime/timeEditValue) is its own
-  // separate state, untouched by a poll landing mid-edit.
+  // separate state, untouched by a poll landing mid-edit. Also refreshes
+  // `now` — the airborne action row's flight-time figure needs a fresh
+  // clock reading each cycle, and `Date.now()` can't be called during
+  // render (impure), so it's read here instead and passed down as data.
   useEffect(() => {
-    const interval = setInterval(() => void reload(), 15_000);
+    const interval = setInterval(() => {
+      void reload();
+      setNow(Date.now());
+    }, 15_000);
     return () => clearInterval(interval);
     }, []);
 
@@ -305,15 +315,34 @@ export function TrackingPage() {
             let actions;
             if (stage === "airborne") {
               actions = (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  data-testid="land-button"
-                  disabled={isPending}
-                  onClick={() => void land(f.id)}
-                >
-                  {t("dispatch.tracking.land")}
-                </Button>
+                <>
+                  {/* Left, where the "Start erfassen" button sat before
+                      takeoff — flight time ticks up from f.offBlock, refreshed
+                      for free by the page's own 15s poll (reload() above sets
+                      a fresh flights array every cycle, which re-renders this
+                      even though offBlock itself hasn't changed). Land moves
+                      to the right (ml-auto) so takeoff-side info stays left,
+                      landing-side action stays right, matching the flight's
+                      own before/after order. */}
+                  {f.offBlock && (
+                    <span
+                      className="text-muted-foreground text-sm tabular-nums"
+                      data-testid="flight-time-elapsed"
+                    >
+                      {t("dispatch.tracking.flightTime", { minutes: elapsedMinutes(f.offBlock, now) })}
+                    </span>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="ml-auto"
+                    data-testid="land-button"
+                    disabled={isPending}
+                    onClick={() => void land(f.id)}
+                  >
+                    {t("dispatch.tracking.land")}
+                  </Button>
+                </>
               );
             } else if (stage !== "landed") {
               actions = (

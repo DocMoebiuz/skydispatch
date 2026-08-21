@@ -16,14 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
 
 // A public departure board doesn't need the full 7-value FlightStage or the
 // 5-value persisted Flight.status — a flight that's still being assembled
@@ -285,54 +277,70 @@ export function BoardPage() {
   ) {
     return (
       <>
-        <div className="hidden overflow-x-auto sm:block">
-          <Table>
-            {options.showHeader && (
-              <TableHeader>
-                <TableRow className="border-slate-800 hover:bg-transparent">
-                  <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
-                    {t("board.table.flight")}
-                  </TableHead>
-                  <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
-                    {t("board.table.aircraft")}
-                  </TableHead>
-                  <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
-                    {t("board.table.time")}
-                  </TableHead>
-                  <TableHead className="text-xs tracking-widest text-slate-500 uppercase">
-                    {t("board.table.status")}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-            )}
-            <TableBody>
-              {entries.map(({ flight: f, status }) => {
-                const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
-                const { iso, isEstimate } = timeOf(f);
-                return (
-                  <TableRow
-                    key={f.id}
-                    data-testid="board-flight-row"
-                    className="border-slate-800 font-mono text-lg hover:bg-slate-900/60"
-                  >
-                    <TableCell className="font-bold tracking-wide text-amber-300">{f.code}</TableCell>
-                    <TableCell className="text-slate-300">{aircraft?.reg ?? "—"}</TableCell>
-                    <TableCell className="tabular-nums text-slate-300">
-                      {timeCell(iso, isEstimate, true)}
-                    </TableCell>
-                    <TableCell>{statusBadge(status)}</TableCell>
-                  </TableRow>
-                );
-              })}
-              {entries.length === 0 && options.emptyMessage && (
-                <TableRow className="border-slate-800">
-                  <TableCell colSpan={4} className="text-slate-500">
-                    {options.emptyMessage}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        {/* flex-col of flex-row "rows", not a <table> — departures and
+            "kürzlich gelandet" are two independent instances of this markup
+            (one per renderBoardSection call, so the header can be hidden on
+            the second), and a <table>'s columns are auto-sized from that
+            table's own content alone: two tables stacked to look like one
+            grid drift out of alignment the moment their rows differ (FL-001's
+            shorter reg/badge than the scheduled rows above it pulled its
+            columns narrower — confirmed live) unless every width is pinned
+            explicitly, which a plain table can't do without a colgroup fighting
+            the browser at every turn. Flex widths are just CSS on each row,
+            identical by construction since both calls share this same
+            function — no layout algorithm to fight. FLUG/FLUGZEUG/STATUS get
+            a fixed width (shrink-0, so a long value truncates instead of
+            squeezing its neighbors — see min-w-0 note below); ZEIT grows
+            (flex-1) to fill whatever's left, same "let the value that varies
+            most in length own the flexible column" as FlightCard's own
+            code/reg pairing. */}
+        <div className="hidden flex-col sm:flex">
+          {options.showHeader && (
+            <div className="flex items-center gap-4 border-b border-slate-800 px-2 h-10">
+              <span className="w-24 shrink-0 text-xs tracking-widest text-slate-500 uppercase">
+                {t("board.table.flight")}
+              </span>
+              <span className="w-32 shrink-0 text-xs tracking-widest text-slate-500 uppercase">
+                {t("board.table.aircraft")}
+              </span>
+              <span className="flex-1 text-xs tracking-widest text-slate-500 uppercase">
+                {t("board.table.time")}
+              </span>
+              <span className="w-32 shrink-0 text-right text-xs tracking-widest text-slate-500 uppercase">
+                {t("board.table.status")}
+              </span>
+            </div>
+          )}
+          {entries.map(({ flight: f, status }) => {
+            const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
+            const { iso, isEstimate } = timeOf(f);
+            return (
+              <div
+                key={f.id}
+                data-testid="board-flight-row"
+                className="flex items-center gap-4 border-b border-slate-800 px-2 py-2 font-mono text-lg hover:bg-slate-900/60"
+              >
+                <span className="w-24 shrink-0 truncate font-bold tracking-wide text-amber-300">
+                  {f.code}
+                </span>
+                <span className="w-32 shrink-0 truncate text-slate-300">{aircraft?.reg ?? "—"}</span>
+                {/* min-w-0: a flex item won't shrink below its own content's
+                    width by default, so without it a long "ca. HH:MM AM"
+                    (unlikely here, but see FlightCard's identical fix)
+                    would push STATUS out past the row instead of truncating
+                    in its own flex-1 column. */}
+                <span className="min-w-0 flex-1 truncate tabular-nums text-slate-300">
+                  {timeCell(iso, isEstimate, true)}
+                </span>
+                <span className="w-32 shrink-0 text-right">{statusBadge(status)}</span>
+              </div>
+            );
+          })}
+          {entries.length === 0 && options.emptyMessage && (
+            <div className="border-b border-slate-800 px-2 py-2 text-slate-500">
+              {options.emptyMessage}
+            </div>
+          )}
         </div>
 
         {/* Mobile — a 4-column table doesn't fit a narrow screen without
