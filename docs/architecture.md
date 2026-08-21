@@ -414,6 +414,21 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
    rejects. And `ENTRA_AUDIENCE` is the bare client-ID GUID
    (`4ea8e208-ad25-4ed5-a909-2b67299af2e6`), not the `api://...` scope URI —
    despite the scope itself (`VITE_ENTRA_API_SCOPE`) being that full URI.
+
+   A third, bigger one, production-only: Azure Static Web Apps' managed-Functions
+   proxy overwrites the standard `Authorization` header with its own internal
+   Easy Auth token before forwarding the request to the Function — by-design
+   platform behavior, not a bug in this app or a config mistake (confirmed by a
+   Microsoft engineer on [Azure/static-web-apps#34](https://github.com/Azure/static-web-apps/issues/34);
+   also confirmed live here by sending a proven-valid, freshly-verified token
+   straight at the deployed API with `curl` — still 401'd). Local dev via the
+   SWA CLI proxy never hit this, which is why it only showed up after a real
+   deploy. Fix: `apiFetch.ts` sends the token as `X-Authorization` instead —
+   Microsoft's own recommended workaround, since only the literal
+   `Authorization` name gets touched — and `auth.ts`'s `extractBearerToken`
+   checks `x-authorization` first, falling back to `authorization` (costs
+   nothing, and local dev's proxy hasn't been confirmed to *not* have the same
+   override).
 2. **IndexedDB ⇄ Cosmos sync strategy.** What happens when a Dispatcher-App tablet
    goes offline mid-check-in and comes back — last-write-wins? Queued mutation replay?
    Does the API need idempotency keys? Not designed yet; the NFR only establishes that

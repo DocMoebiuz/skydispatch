@@ -7,6 +7,17 @@ import { msalInstance, API_SCOPES } from "@/lib/authConfig";
 // that earns its keep, since all of them need the identical new behavior (see
 // docs/architecture.md § Open decisions #1). Not used by RegisterPage/BoardPage —
 // those stay on plain unauthenticated fetch, they're public surfaces.
+//
+// Sent as X-Authorization, not the standard Authorization header — confirmed
+// live (see docs/architecture.md § Open decisions #1) that Azure Static Web
+// Apps' managed-Functions proxy overwrites Authorization with its own internal
+// Easy Auth token before forwarding to the Function, which made every
+// protected route 401 in production even for a genuinely valid token
+// (reproduced by sending a proven-valid token straight at the deployed API via
+// curl — still 401'd). This is documented, by-design Azure platform behavior
+// (Azure/static-web-apps#34), not a bug in this app — a custom header name is
+// Microsoft's own recommended workaround, since only the literal
+// "Authorization" name gets touched.
 export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const account = msalInstance.getActiveAccount() ?? msalInstance.getAllAccounts()[0];
   let token: string | undefined;
@@ -25,6 +36,6 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
     }
   }
   const headers = new Headers(init.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (token) headers.set("X-Authorization", `Bearer ${token}`);
   return fetch(input, { ...init, headers });
 }

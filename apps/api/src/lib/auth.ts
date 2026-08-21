@@ -34,8 +34,16 @@ function getJwks(): Promise<{ jwks: JWTVerifyGetKey; issuer: string }> {
   return jwksPromise;
 }
 
+// x-authorization first, not just authorization — Azure Static Web Apps'
+// managed-Functions proxy overwrites the standard Authorization header with
+// its own internal Easy Auth token before forwarding to the Function, which
+// is documented, by-design platform behavior (Azure/static-web-apps#34), not
+// something this app can opt out of. apiFetch.ts sends the real bearer token
+// as x-authorization for exactly this reason. authorization is still checked
+// as a fallback — the local SWA CLI proxy hasn't been confirmed to have the
+// same override, and it costs nothing to accept either.
 function extractBearerToken(request: HttpRequest): string | null {
-  const header = request.headers.get("authorization");
+  const header = request.headers.get("x-authorization") ?? request.headers.get("authorization");
   return header?.match(/^Bearer (.+)$/i)?.[1] ?? null;
 }
 
