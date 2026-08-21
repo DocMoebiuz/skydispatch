@@ -2,11 +2,15 @@ import { defineConfig, devices } from "@playwright/test";
 
 process.env.COSMOS_DATABASE_ID = "skydispatch.test";
 // e2e specs navigate straight into /dispatch/* and call its API routes with no
-// login flow — this is the same bypass requireRole() checks for (see
-// apps/api/src/lib/auth.ts and docs/architecture.md § Open decisions #1), set here
-// rather than in local.settings.json.example so it only ever applies to this test
-// run's own webServer process, never a developer's regular `pnpm dev`.
+// login flow — two bypasses for the two layers that gate that (see
+// apps/api/src/lib/auth.ts's requireRole and apps/web RequireAuth.tsx, both
+// tied to docs/architecture.md § Open decisions #1), set here rather than in
+// local.settings.json.example/.env so they only ever apply to this test run's
+// own webServer process, never a developer's regular `pnpm dev`. Vite exposes
+// any VITE_-prefixed process.env var to import.meta.env automatically, same as
+// E2E_BYPASS_AUTH already reaching the Functions host below.
 process.env.E2E_BYPASS_AUTH = "true";
+process.env.VITE_E2E_BYPASS_AUTH = "true";
 
 export default defineConfig({
   testDir: "./apps/web/e2e",

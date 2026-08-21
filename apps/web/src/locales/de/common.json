@@ -29,6 +29,11 @@
       "goToBoarding": "Zum Boarding",
       "goToTracking": "Zum Tracking"
     },
+    "auth": {
+      "forbiddenTitle": "Kein Zugriff",
+      "forbiddenMessage": "Angemeldet als {{name}}, aber ohne Dispatcher-Berechtigung. Bitte an einen Administrator wenden.",
+      "logout": "Abmelden"
+    },
     "stage": {
       "new": "Neu",
       "planning": "In Planung",

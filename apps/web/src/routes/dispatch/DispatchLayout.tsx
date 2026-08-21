@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useMsal } from "@azure/msal-react";
 import type { FlightDay } from "shared";
 import {
   LayoutDashboard,
@@ -11,7 +12,9 @@ import {
   Radar,
   BarChart3,
   Fuel,
+  LogOut,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   SidebarProvider,
   Sidebar,
@@ -27,6 +30,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { apiFetch } from "@/lib/apiFetch";
 
 // Full dispatcher shell matching docs/static-html-app/SkyDispatch-UI-Mockup.html's
 // nav areas — Dashboard/Setup/Gäste/Planung/Boarding/Tracking/Reporting — so the
@@ -52,6 +56,11 @@ const NAV_ITEMS = [
 export function DispatchLayout() {
   const { t } = useTranslation();
   const location = useLocation();
+  // Empty when running under VITE_E2E_BYPASS_AUTH (RequireAuth's bypass never
+  // signs anyone in via MSAL) — accountName stays undefined and this block
+  // just renders nothing, no special-casing needed.
+  const { instance, accounts } = useMsal();
+  const accountName = accounts[0]?.name ?? accounts[0]?.username;
   const [now, setNow] = useState(new Date());
   const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
 
@@ -67,7 +76,7 @@ export function DispatchLayout() {
   useEffect(() => {
     let cancelled = false;
     function poll() {
-      fetch("/api/flightday")
+      apiFetch("/api/flightday")
         .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
         .then((d) => {
           if (!cancelled) setFlightDay(d);
@@ -151,6 +160,24 @@ export function DispatchLayout() {
                 UTC
               </span>
             </span>
+            {accountName && (
+              <span
+                className="text-muted-foreground hidden max-w-32 truncate text-sm md:block"
+                data-testid="header-account-name"
+              >
+                {accountName}
+              </span>
+            )}
+            {accountName && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t("dispatch.auth.logout")}
+                onClick={() => void instance.logoutRedirect()}
+              >
+                <LogOut aria-hidden />
+              </Button>
+            )}
             <ThemeToggle />
           </div>
         </header>

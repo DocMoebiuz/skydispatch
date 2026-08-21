@@ -13,6 +13,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { downloadCsv } from "@/lib/csv";
+import { apiFetch } from "@/lib/apiFetch";
 import { cn } from "@/lib/utils";
 
 // Static lookup, not `` `border-l-${key}-500` `` — Tailwind's JIT can't see
@@ -51,10 +52,10 @@ export function ReportingPage() {
 
   function reload(cancelledRef?: { current: boolean }) {
     void Promise.all([
-      fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
       if (cancelledRef?.current) return;
       setGuests(g);
@@ -63,7 +64,7 @@ export function ReportingPage() {
       setFlights(f);
     });
     // 404 means no flight day configured yet — price falls back to 0.
-    fetch("/api/flightday")
+    apiFetch("/api/flightday")
       .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
       .then((d) => {
         if (!cancelledRef?.current) setFlightDay(d);

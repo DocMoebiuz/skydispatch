@@ -46,6 +46,7 @@ import { AssignableUnitCard, AssignableMemberRow } from "@/components/flight/Ass
 import { Skeleton } from "@/components/ui/skeleton";
 import { computeFlightLoad, type FlightLoad } from "@/lib/flightLoad";
 import { groupIntoUnits, unitFitsAnywhereWhole, type AssignableUnit } from "@/lib/assignableUnits";
+import { apiFetch } from "@/lib/apiFetch";
 import { cn } from "@/lib/utils";
 
 const ORDER: Record<Flight["status"], number> = {
@@ -153,13 +154,13 @@ export function PlanningPage() {
 
   function reload(): Promise<void> {
     return Promise.all([
-      fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
       // 404 means no flight day configured yet — falls back to the DEFAULT_*
       // reserve/duration constants below.
-      fetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+      apiFetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
     ]).then(([g, a, p, f, d]) => {
       setGuests(g);
       setAircraftList(a);
@@ -183,11 +184,11 @@ export function PlanningPage() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-      fetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+      apiFetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
     ])
       .then(([g, a, p, f, d]) => {
         if (cancelled) return;
@@ -424,7 +425,7 @@ export function PlanningPage() {
     setCreatingFlight(true);
     setCreateFlightError(false);
     try {
-      const response = await fetch("/api/flights", {
+      const response = await apiFetch("/api/flights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -470,7 +471,7 @@ export function PlanningPage() {
       ),
     );
     try {
-      const response = await fetch(`/api/flights/${flightId}/actions/assign`, {
+      const response = await apiFetch(`/api/flights/${flightId}/actions/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guestIds: unit.members.map((m) => m.id) }),
@@ -526,7 +527,7 @@ export function PlanningPage() {
     );
     try {
       const responses = await Promise.all(
-        unit.members.map((m) => fetch(`/api/guests/${m.id}/actions/unassign`, { method: "POST" })),
+        unit.members.map((m) => apiFetch(`/api/guests/${m.id}/actions/unassign`, { method: "POST" })),
       );
       if (responses.some((r) => !r.ok)) {
         setGuests(previousGuests);
@@ -546,7 +547,7 @@ export function PlanningPage() {
     const key = `status:${flightId}`;
     markPending(key, true);
     try {
-      const response = await fetch(`/api/flights/${flightId}/actions/${action}`, { method: "POST" });
+      const response = await apiFetch(`/api/flights/${flightId}/actions/${action}`, { method: "POST" });
       if (response.ok) await reload();
     } finally {
       markPending(key, false);

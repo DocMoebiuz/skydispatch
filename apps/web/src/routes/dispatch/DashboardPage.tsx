@@ -17,6 +17,7 @@ import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad, aircraftHasOtherAirborneFlight } from "@/lib/flightLoad";
 import { elapsedMinutes } from "@/lib/flightTime";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/apiFetch";
 
 // Static lookup, not `` `border-l-${key}-500` `` — Tailwind's JIT can't see
 // interpolated class names (see docs/architecture.md), so each KPI's full
@@ -60,10 +61,10 @@ export function DashboardPage() {
 
   function reload(): Promise<void> {
     return Promise.all([
-      fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
       setGuests(g);
       setAircraftList(a);
@@ -84,10 +85,10 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
       if (cancelled) return;
       setGuests(g);
@@ -118,7 +119,7 @@ export function DashboardPage() {
   async function start(flightId: string) {
     setPending((prev) => new Set(prev).add(flightId));
     try {
-      const response = await fetch(`/api/flights/${flightId}/actions/start`, { method: "POST" });
+      const response = await apiFetch(`/api/flights/${flightId}/actions/start`, { method: "POST" });
       if (response.ok) await reload();
     } finally {
       setPending((prev) => {
@@ -132,7 +133,7 @@ export function DashboardPage() {
   async function land(flightId: string) {
     setPending((prev) => new Set(prev).add(flightId));
     try {
-      const response = await fetch(`/api/flights/${flightId}/actions/land`, { method: "POST" });
+      const response = await apiFetch(`/api/flights/${flightId}/actions/land`, { method: "POST" });
       if (response.ok) await reload();
     } finally {
       setPending((prev) => {

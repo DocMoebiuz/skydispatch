@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { apiFetch } from "@/lib/apiFetch";
 
 // Refueling — its own page, not part of Setup: starting/ending a refuel
 // break is a during-the-day operational event (like check-in or tracking),
@@ -40,8 +41,8 @@ export function RefuelingPage() {
 
   function reload(): Promise<void> {
     return Promise.all([
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([a, f]) => {
       setAircraftList(a);
       setFlights(f);
@@ -51,8 +52,8 @@ export function RefuelingPage() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([a, f]) => {
       if (cancelled) return;
       setAircraftList(a);
@@ -103,7 +104,7 @@ export function RefuelingPage() {
     if (!estimatedMinutesValue || !Number.isFinite(minutes) || minutes < 1) return;
     markPending(aircraftId, true);
     try {
-      const response = await fetch(`/api/aircraft/${aircraftId}/actions/start-refuel-break`, {
+      const response = await apiFetch(`/api/aircraft/${aircraftId}/actions/start-refuel-break`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estimatedMinutes: Math.round(minutes) }),
@@ -123,7 +124,7 @@ export function RefuelingPage() {
     markPending(aircraftId, true);
     try {
       const body = endMode === "delta" ? { deltaL: value } : { fuelOnBoardL: value };
-      const response = await fetch(`/api/aircraft/${aircraftId}/actions/end-refuel-break`, {
+      const response = await apiFetch(`/api/aircraft/${aircraftId}/actions/end-refuel-break`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

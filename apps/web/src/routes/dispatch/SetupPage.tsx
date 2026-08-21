@@ -36,6 +36,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Trash2, UserRound, Plane, Coffee, Fuel } from "lucide-react";
+import { apiFetch } from "@/lib/apiFetch";
 
 // Increment 3 prerequisite — entity setup (flight day/pilots/aircraft). A
 // scenic-flight day realistically has single-digit pilots/aircraft (5-10
@@ -108,7 +109,7 @@ export function SetupPage() {
     // 404 means no flight day configured yet — not an error, just nothing to
     // prefill (see apps/api flightday.ts's getFlightDay for why this isn't a
     // 200+null body).
-    fetch("/api/flightday")
+    apiFetch("/api/flightday")
       .then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null))
       .then((d) => {
         if (cancelledRef?.current || !d) return;
@@ -127,19 +128,19 @@ export function SetupPage() {
         setReserveFuelMinutes(String(d.reserveFuelMinutes ?? DEFAULT_RESERVE_FUEL_MINUTES));
       })
       .catch(() => undefined);
-    fetch("/api/pilots")
+    apiFetch("/api/pilots")
       .then((r) => r.json() as Promise<Pilot[]>)
       .then((p) => {
         if (!cancelledRef?.current) setPilots(p);
       })
       .catch(() => undefined);
-    fetch("/api/aircraft")
+    apiFetch("/api/aircraft")
       .then((r) => r.json() as Promise<Aircraft[]>)
       .then((a) => {
         if (!cancelledRef?.current) setAircraft(a);
       })
       .catch(() => undefined);
-    fetch("/api/flights")
+    apiFetch("/api/flights")
       .then((r) => r.json() as Promise<Flight[]>)
       .then((f) => {
         if (!cancelledRef?.current) setFlights(f);
@@ -187,7 +188,7 @@ export function SetupPage() {
     }
     setSavingDay(true);
     try {
-      const response = await fetch("/api/flightday", {
+      const response = await apiFetch("/api/flightday", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -209,7 +210,7 @@ export function SetupPage() {
   async function toggleDayStatus() {
     const action = flightDay?.status === "active" ? "end" : "start";
     if (action === "end" && !confirm(t("dispatch.setup.flightDay.endConfirm"))) return;
-    const response = await fetch(`/api/flightday/actions/${action}`, { method: "POST" });
+    const response = await apiFetch(`/api/flightday/actions/${action}`, { method: "POST" });
     if (response.ok) setFlightDay((await response.json()) as FlightDay);
   }
 
@@ -218,14 +219,14 @@ export function SetupPage() {
   // Enforced server-side too (nfr.md § Reliability & safety), see
   // createGuest's own check.
   async function toggleRegistrationPause() {
-    const response = await fetch("/api/flightday/actions/toggle-registration-pause", {
+    const response = await apiFetch("/api/flightday/actions/toggle-registration-pause", {
       method: "POST",
     });
     if (response.ok) setFlightDay((await response.json()) as FlightDay);
   }
 
   async function togglePilotAvailable(pilotId: string) {
-    const response = await fetch(`/api/pilots/${pilotId}/actions/toggle-available`, {
+    const response = await apiFetch(`/api/pilots/${pilotId}/actions/toggle-available`, {
       method: "POST",
     });
     if (response.ok) {
@@ -257,12 +258,12 @@ export function SetupPage() {
     try {
       const body = JSON.stringify({ name: pilotName, license: pilotLicense, weightKg: weightNum });
       const response = editingPilotId
-        ? await fetch(`/api/pilots/${editingPilotId}`, {
+        ? await apiFetch(`/api/pilots/${editingPilotId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body,
           })
-        : await fetch("/api/pilots", {
+        : await apiFetch("/api/pilots", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body,
@@ -283,7 +284,7 @@ export function SetupPage() {
     if (!confirm(t("dispatch.setup.pilots.deleteConfirm"))) return;
     setDeletingPilot(true);
     try {
-      const response = await fetch(`/api/pilots/${pilotId}`, { method: "DELETE" });
+      const response = await apiFetch(`/api/pilots/${pilotId}`, { method: "DELETE" });
       if (response.ok) {
         setPilots((prev) => prev.filter((p) => p.id !== pilotId));
         setPilotDialogOpen(false);
@@ -349,12 +350,12 @@ export function SetupPage() {
         ...(fuelBurnLPerHour && { fuelBurnLPerHour: Number(fuelBurnLPerHour) }),
       });
       const response = editingAircraftId
-        ? await fetch(`/api/aircraft/${editingAircraftId}`, {
+        ? await apiFetch(`/api/aircraft/${editingAircraftId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body,
           })
-        : await fetch("/api/aircraft", {
+        : await apiFetch("/api/aircraft", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body,
@@ -375,7 +376,7 @@ export function SetupPage() {
     if (!confirm(t("dispatch.setup.aircraft.deleteConfirm"))) return;
     setDeletingAircraft(true);
     try {
-      const response = await fetch(`/api/aircraft/${aircraftId}`, { method: "DELETE" });
+      const response = await apiFetch(`/api/aircraft/${aircraftId}`, { method: "DELETE" });
       if (response.ok) {
         setAircraft((prev) => prev.filter((a) => a.id !== aircraftId));
         setAircraftDialogOpen(false);
@@ -394,7 +395,7 @@ export function SetupPage() {
   async function resetDatabase() {
     setResettingDatabase(true);
     try {
-      const response = await fetch("/api/system/actions/reset-database", { method: "POST" });
+      const response = await apiFetch("/api/system/actions/reset-database", { method: "POST" });
       if (response.ok) window.location.reload();
     } finally {
       setResettingDatabase(false);

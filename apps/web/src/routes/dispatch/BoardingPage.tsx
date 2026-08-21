@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FlightCard } from "@/components/flight/FlightCard";
 import { computeFlightLoad } from "@/lib/flightLoad";
+import { apiFetch } from "@/lib/apiFetch";
 
 // Boarding — matches the prototype's flow: check in assigned guests (or mark a
 // no-show, which immediately frees the seat — see apps/api guests.ts). "Boarding"
@@ -31,10 +32,10 @@ export function BoardingPage() {
 
   function reload(): Promise<void> {
     return Promise.all([
-      fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
       setGuests(g);
       setAircraftList(a);
@@ -52,10 +53,10 @@ export function BoardingPage() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
-      fetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
-      fetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/guests").then((r) => r.json() as Promise<Guest[]>),
+      apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
+      apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ]).then(([g, a, p, f]) => {
       if (cancelled) return;
       setGuests(g);
@@ -104,14 +105,14 @@ export function BoardingPage() {
 
   async function checkIn(guestId: string) {
     setPendingFor(guestId, true);
-    const response = await fetch(`/api/guests/${guestId}/actions/check-in`, { method: "POST" });
+    const response = await apiFetch(`/api/guests/${guestId}/actions/check-in`, { method: "POST" });
     if (response.ok) await reload();
     setPendingFor(guestId, false);
   }
 
   async function undoCheckIn(guestId: string) {
     setPendingFor(guestId, true);
-    const response = await fetch(`/api/guests/${guestId}/actions/undo-check-in`, {
+    const response = await apiFetch(`/api/guests/${guestId}/actions/undo-check-in`, {
       method: "POST",
     });
     if (response.ok) await reload();
@@ -120,7 +121,7 @@ export function BoardingPage() {
 
   async function noShow(guestId: string) {
     setPendingFor(guestId, true);
-    const response = await fetch(`/api/guests/${guestId}/actions/no-show`, { method: "POST" });
+    const response = await apiFetch(`/api/guests/${guestId}/actions/no-show`, { method: "POST" });
     if (response.ok) await reload();
     setPendingFor(guestId, false);
   }
@@ -141,7 +142,7 @@ export function BoardingPage() {
       .map((g) => g.id);
     await Promise.all(
       checkedInGuestIds.map((id) =>
-        fetch(`/api/guests/${id}/actions/undo-check-in`, { method: "POST" }),
+        apiFetch(`/api/guests/${id}/actions/undo-check-in`, { method: "POST" }),
       ),
     );
     await reload();

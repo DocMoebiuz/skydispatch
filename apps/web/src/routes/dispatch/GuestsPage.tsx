@@ -6,6 +6,7 @@ import { deriveGuestStatus, type Guest, type Flight, type GuestStatus } from "sh
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { apiFetch } from "@/lib/apiFetch";
 import {
   Table,
   TableHeader,
@@ -68,11 +69,11 @@ export function GuestsPage() {
 
   function reload(cancelledRef?: { current: boolean }) {
     void Promise.all([
-      fetch("/api/guests").then((res) => {
+      apiFetch("/api/guests").then((res) => {
         if (!res.ok) throw new Error(`GET /api/guests failed: ${res.status}`);
         return res.json() as Promise<Guest[]>;
       }),
-      fetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
+      apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
     ])
       .then(([g, f]) => {
         if (cancelledRef?.current) return;
@@ -128,7 +129,7 @@ export function GuestsPage() {
     markPending(guestId, true);
     markError(guestId, false);
     try {
-      const response = await fetch(`/api/guests/${guestId}/${path}`, {
+      const response = await apiFetch(`/api/guests/${guestId}/${path}`, {
         method: "POST",
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
@@ -158,7 +159,7 @@ export function GuestsPage() {
     markPending(guestId, true);
     markError(guestId, false);
     try {
-      const response = await fetch(`/api/guests/${guestId}`, { method: "DELETE" });
+      const response = await apiFetch(`/api/guests/${guestId}`, { method: "DELETE" });
       if (!response.ok) throw new Error(`delete failed: ${response.status}`);
       setGuests((prev) => prev?.filter((g) => g.id !== guestId) ?? prev);
     } catch {
