@@ -26,7 +26,11 @@ test("registration writes through the API into Cosmos and appears on /dispatch",
     const row = page.getByTestId("guest-row").filter({ hasText: guestName });
     await expect(row).toBeVisible();
     await expect(row).toContainText(code);
-    await expect(row).toContainText("75"); // declared weight
+    // Declared weight lives in the weigh-input's actual value, not the
+    // row's text content — a plain toContainText("75") never matches an
+    // <input>'s value (it isn't a text node), see GuestsPage's
+    // renderWeightEditor.
+    await expect(row.getByTestId("weigh-input")).toHaveValue("75");
     await expect(row).toContainText("registriert"); // paid:false -> status "registered"
   } finally {
     await deleteGuestByEmail(email);

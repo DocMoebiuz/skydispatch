@@ -217,8 +217,14 @@ export function GuestsPage() {
           type="number"
           className="h-8 w-16"
           data-testid={testIds ? "weigh-input" : undefined}
-          placeholder={String(guest.declaredWeightKg)}
-          value={weighInputs[guest.id] ?? ""}
+          // The real value, not just a placeholder — an empty input's
+          // up/down spinner has nothing to step from (browsers jump to an
+          // arbitrary default, not the placeholder text, which was never a
+          // real value to begin with). Starting the field genuinely
+          // populated with the declared weight makes the spinner buttons
+          // work as expected, and confirming with no edits at all now does
+          // exactly what it looks like it does.
+          value={weighInputs[guest.id] ?? String(guest.declaredWeightKg)}
           onChange={(e) =>
             setWeighInputs((prev) => ({
               ...prev,
