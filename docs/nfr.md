@@ -94,8 +94,10 @@ These are hard product requirements carried over from the manual, not aspiration
 - Secrets (Cosmos connection string, SWA deploy token, future payment provider keys)
   are never committed — see [tech-stack.md](./tech-stack.md) for how dev/CI/prod handle
   them.
-- _Open decision: does the internal Dispatcher-App require authentication (vs. the
-  manual's "just open it" model)? See [architecture.md](./architecture.md#open-decisions)._
+- The internal Dispatcher-App (`/dispatch/*`) requires authentication — OIDC against
+  Microsoft Entra External ID, gated by an explicitly-assigned app role, not just
+  tenant sign-in. See [architecture.md § Open decisions #1](./architecture.md#open-decisions)
+  for the full design; `/register` and `/board` stay intentionally public.
 
 ## Accessibility
 

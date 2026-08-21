@@ -45,6 +45,22 @@ re-justifying simplicity per decision.
   and because the whole system's real-time needs (a few concurrent users on one flight
   day) don't justify a separate backend hosting story.
 
+## Authentication
+
+- **Microsoft Entra External ID** (OIDC), gating only `/dispatch/*` — `/register` and
+  `/board` stay public. App registration is a single-page/public client (PKCE, no
+  secret), not SWA's built-in auth: that would need a confidential-client secret and
+  can't gate by HTTP method, which several routes need (e.g. `GET /api/flights`
+  public for `/board`, `POST /api/flights` dispatch-only, same path). See
+  [architecture.md § Open decisions #1](./architecture.md#open-decisions) for the
+  full design.
+- **`@azure/msal-browser` + `@azure/msal-react`** in the SPA — the official React
+  pairing, handles redirect-response processing and active-account tracking rather
+  than hand-rolling that against `msal-browser` alone.
+- **`jose`** in the API for JWT/JWKS verification — chosen over the older
+  `jsonwebtoken` + `jwks-rsa` pair for a single, actively-maintained,
+  promise-based package.
+
 ## Data
 
 - **Azure Cosmos DB** is the durable backend store.

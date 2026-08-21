@@ -365,7 +365,7 @@ reporting), per the manual and `docs/static-html-app/`:
 | `POST /api/flights/{id}/actions/set-ready`, `.../unready` | Ready requires guests > 0 and weight within payload (server-checked) |
 | `POST /api/flights/{id}/actions/start`, `.../land` | Start requires ready + all assigned guests checked in; landing marks the flight completed and every guest flown |
 | `POST /api/flights/{id}/actions/adjust-times` | Corrects offBlock/onBlock after the fact (Tracking's click-to-edit time fields) — either field optional, no state-machine checks; deliberately does NOT recompute the fuel `landFlight` already deducted off the original pair |
-| `POST /api/system/actions/reset-database` | Full wipe of every document (any type, any `flightDayId`) — backs Setup's "Gefahrenzone" reset button; no server-side confirmation of its own, the UI's type-to-confirm dialog is the only guard (see § Open decisions #1 on the lack of auth generally). Route deliberately isn't under `/api/admin/...` — Azure Functions Core Tools' local host reserves any route starting with `admin` for its own built-in management API (`/admin/functions`, `/admin/host/...`) even under the `/api` prefix, so that shape 404s unconditionally; confirmed live via `/admin/functions`, not guessed |
+| `POST /api/system/actions/reset-database` | Full wipe of every document (any type, any `flightDayId`) — backs Setup's "Gefahrenzone" reset button; gated by `requireRole` like every other dispatch-only mutation (see § Open decisions #1), but no server-side confirmation beyond that — the UI's type-to-confirm dialog is still the only guard against an authorized dispatcher's own misclick. Route deliberately isn't under `/api/admin/...` — Azure Functions Core Tools' local host reserves any route starting with `admin` for its own built-in management API (`/admin/functions`, `/admin/host/...`) even under the `/api` prefix, so that shape 404s unconditionally; confirmed live via `/admin/functions`, not guessed |
 
 No `PUT`/edit on any entity (only create, list, delete, and the specific action
 endpoints above) — not needed yet, and not the same gap as the accepted technical
@@ -377,15 +377,32 @@ robustness under concurrency, not missing functionality.
 
 These are flagged, not resolved — don't assume an answer exists in code yet.
 
-1. **Dispatcher-App authentication.** The manual's prototype has none — "just open the
-   file." The real system, with a shared Cosmos backend reachable over the network,
-   needs *something* so a random visitor to the SWA URL can't modify a live flight
-   day. **OIDC is the intended direction** (SWA's built-in auth providers support it,
-   or a standalone provider) — narrowed from an open menu of options, but explicitly
-   **not MVP**: `/dispatch` stays unauthenticated through the registration/grouping/
-   assignment increments currently being built. That's an accepted, documented gap,
-   not an oversight — revisit before `/dispatch` goes to a real, unsupervised
-   deployment.
+1. **Dispatcher-App authentication.** ~~Not MVP~~ — resolved. `/dispatch/*` is now
+   gated by OIDC against Microsoft Entra External ID: MSAL.js (`@azure/msal-browser`
+   + `@azure/msal-react`) in the SPA, an app registered as a single-page/public
+   client (PKCE, no secret). `apps/web/src/routes/dispatch/RequireAuth.tsx` wraps
+   every `/dispatch` route (see `App.tsx`) — redirects to login if signed out, shows
+   a distinct "no access" state (not a login loop) if signed in without the required
+   role, otherwise renders the page.
+
+   Login alone isn't authorization — Entra External ID (CIAM) tenants commonly allow
+   self-service sign-up right on the hosted login page, so "has a valid token for
+   this tenant" would be no real access control. Authorization is a separate Entra
+   app role, `full_access` (display name "Dispatcher"), explicitly assigned per-user
+   by an admin; it lands in the token's `roles` claim, which both `RequireAuth`
+   (client-side) and `apps/api/src/lib/auth.ts`'s `requireRole` (server-side, the
+   actual enforcement boundary) check. Both take the required role(s) as a
+   parameter rather than hardcoding one name — a future handler/pilot/viewer role
+   is a new array passed to an existing function, not a rework of either.
+
+   Not every API route needed gating — `/register` and `/board` share several exact
+   same routes with `/dispatch` (e.g. `GET /api/flights`, `GET /api/guests`), so
+   protection is per-route (each handler's own `requireRole(request, [...])` call),
+   not per-file; see the API surface table above for which routes stayed anonymous.
+   `apps/web/.env.example` and `apps/api/local.settings.json.example` document the
+   env vars a real deployment needs. `VITE_E2E_BYPASS_AUTH`/`E2E_BYPASS_AUTH`
+   (set only by `playwright.config.ts`, never in a real build) skip both gates for
+   the e2e suite, which has no login flow of its own.
 2. **IndexedDB ⇄ Cosmos sync strategy.** What happens when a Dispatcher-App tablet
    goes offline mid-check-in and comes back — last-write-wins? Queued mutation replay?
    Does the API need idempotency keys? Not designed yet; the NFR only establishes that
@@ -438,8 +455,10 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
    server-side, not just withheld in the UI); `actions/end-refuel-break`
    *requires* the new `fuelOnBoardL` in its body — there's no way to close a
    break without reporting a real number. Framed in the UI as the pilot's
-   report (Setup's copy says so), but not access-controlled — the app has no
-   login/user-identity system anywhere yet (planned separately, via OIDC).
+   report (Setup's copy says so) — `requireRole` (see § Open decisions #1)
+   now confirms the caller is *a* dispatcher, but not specifically *this
+   flight's* pilot; nothing ties a refuel-break report to an individual
+   crew member's identity.
    `emptyWeightKg`/`maxTakeoffMassKg`/`fuelType` are required on Setup's
    aircraft form now (there's no meaningful payload without them);
    `fuelOnBoardL` stays nullable — genuinely unknown until dipped — and
