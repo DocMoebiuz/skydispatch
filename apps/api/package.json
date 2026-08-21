@@ -10,8 +10,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@azure/functions": "^4.6.0",
     "@azure/cosmos": "^4.2.0",
+    "@azure/functions": "^4.6.0",
+    "jose": "^6.2.9",
     "shared": "workspace:*"
   },
   "devDependencies": {

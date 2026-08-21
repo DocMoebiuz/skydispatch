@@ -4,6 +4,9 @@
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "COSMOS_CONNECTION_STRING": "",
-    "COSMOS_DATABASE_ID": "skydispatch.dev"
+    "COSMOS_DATABASE_ID": "skydispatch.dev",
+    "ENTRA_AUTHORITY": "",
+    "ENTRA_AUDIENCE": "",
+    "E2E_BYPASS_AUTH": ""
   }
 }
