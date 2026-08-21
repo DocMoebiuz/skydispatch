@@ -14,7 +14,10 @@ function collectConsoleErrors(page: Page): string[] {
 }
 
 const routes: { path: string; heading: string }[] = [
-  { path: "/", heading: "SkyDispatch" },
+  // Redirects straight to /board (a walk-up visitor should land on the
+  // departure board, not a links page) — same expected heading as /board
+  // below, deliberately, to prove the redirect actually lands there.
+  { path: "/", heading: "Abflugtafel" },
   { path: "/register", heading: "Rundflug-Anmeldung" },
   { path: "/dispatch", heading: "Dashboard" },
   { path: "/dispatch/setup", heading: "Setup" },

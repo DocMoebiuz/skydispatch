@@ -8,9 +8,6 @@
       "toDark": "Zu dunklem Design wechseln"
     }
   },
-  "home": {
-    "intro": "Wählen Sie einen Bereich:"
-  },
   "dispatch": {
     "title": "Dispatcher",
     "nav": {
@@ -388,6 +385,11 @@
       "landed": "Gelandet"
     },
     "recentlyLanded": "Kürzlich gelandet",
+    "registerCta": {
+      "title": "Lust zu fliegen?",
+      "body": "Sichern Sie sich jetzt Ihren Platz für den nächsten Rundflug!",
+      "button": "Jetzt anmelden"
+    },
     "lookup": {
       "title": "Wann bin ich an der Reihe?",
       "submit": "Anzeigen",

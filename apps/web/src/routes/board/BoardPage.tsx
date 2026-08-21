@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   deriveFlightStage,
@@ -11,7 +11,7 @@ import {
   type Flight,
   type FlightDay,
 } from "shared";
-import { PlaneTakeoff } from "lucide-react";
+import { PlaneTakeoff, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -498,82 +498,104 @@ export function BoardPage() {
           </div>
         )}
 
-        <div className="flex flex-col gap-3 border-t border-slate-800 pt-6">
-          <h2 className="text-lg font-medium text-slate-200">{t("board.lookup.title")}</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              className="w-full border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-600 sm:w-40"
-              placeholder="z. B. 7K3Q"
-              data-testid="board-lookup-input"
-              value={lookupCode}
-              onChange={(e) => setLookupCode(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && runLookup(lookupCode, guests)}
-            />
-            <Button
-              data-testid="board-lookup-button"
-              onClick={() => runLookup(lookupCode, guests)}
-            >
-              {t("board.lookup.submit")}
+        {/* Two columns, not stacked — "when's my turn" (a returning guest's
+            question) and "register now" (a walk-up visitor's, the CTA the
+            user asked to add here so someone standing in front of the board
+            with no guest ID yet still has an obvious next step) answer
+            different people, so they read as two side-by-side answers, not
+            one flow. Left keeps its own border-t divider from the sections
+            above; the right column gets its own left border at sm+ instead
+            of stacking below, so both are visible without scrolling on the
+            board's own (large, landscape) display. */}
+        <div className="grid grid-cols-1 gap-6 border-t border-slate-800 pt-6 sm:grid-cols-2">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-lg font-medium text-slate-200">{t("board.lookup.title")}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className="w-full border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-600 sm:w-40"
+                placeholder="z. B. 7K3Q"
+                data-testid="board-lookup-input"
+                value={lookupCode}
+                onChange={(e) => setLookupCode(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && runLookup(lookupCode, guests)}
+              />
+              <Button
+                data-testid="board-lookup-button"
+                onClick={() => runLookup(lookupCode, guests)}
+              >
+                {t("board.lookup.submit")}
+              </Button>
+            </div>
+            {lookupResult === "not-found" && (
+              <div
+                className={cn("rounded-xl border p-4", LOOKUP_VARIANT_CLASS.bad)}
+                data-testid="board-lookup-result"
+              >
+                <p className="text-base font-bold text-slate-100">
+                  <span aria-hidden>❌</span> {t("board.lookup.notFound")}
+                </p>
+              </div>
+            )}
+            {lookupResult && lookupResult !== "not-found" && (
+              <div className="flex flex-col gap-2" data-testid="board-lookup-result">
+                {lookupResult.groupName && groupMembers.length > 1 && (
+                  <p className="text-sm font-medium text-slate-200">
+                    {t("board.lookup.groupHeading", { group: lookupResult.groupName })}
+                  </p>
+                )}
+                {groupMembers.map((g) => {
+                  const presentation = presentGuest(g);
+                  return (
+                    <div
+                      key={g.id}
+                      className={cn("rounded-xl border p-4", LOOKUP_VARIANT_CLASS[presentation.variant])}
+                      data-testid="board-lookup-member"
+                    >
+                      <p className="text-base font-bold text-slate-100 sm:text-lg">
+                        <span aria-hidden>{presentation.icon}</span> {presentation.headline}
+                      </p>
+                      {presentation.detail && (
+                        <p className="mt-1 text-sm text-slate-300">{presentation.detail}</p>
+                      )}
+                      {presentation.kv && presentation.kv.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+                          {presentation.kv.map((item) => (
+                            <div key={item.label}>
+                              <div className="text-[11px] tracking-wide text-slate-400 uppercase">
+                                {item.label}
+                              </div>
+                              <div
+                                className={cn(
+                                  "text-lg font-bold tabular-nums",
+                                  item.muted ? "text-slate-200" : "text-amber-300",
+                                )}
+                              >
+                                {item.value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {presentation.hint && (
+                        <p className="mt-3 text-xs text-slate-400">{presentation.hint}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col justify-center gap-3 sm:border-l sm:border-slate-800 sm:pl-6">
+            <h2 className="text-lg font-medium text-slate-200">{t("board.registerCta.title")}</h2>
+            <p className="text-sm text-slate-400">{t("board.registerCta.body")}</p>
+            <Button asChild className="w-fit" data-testid="board-register-cta">
+              <Link to="/register">
+                <UserPlus aria-hidden />
+                {t("board.registerCta.button")}
+              </Link>
             </Button>
           </div>
-          {lookupResult === "not-found" && (
-            <div
-              className={cn("rounded-xl border p-4", LOOKUP_VARIANT_CLASS.bad)}
-              data-testid="board-lookup-result"
-            >
-              <p className="text-base font-bold text-slate-100">
-                <span aria-hidden>❌</span> {t("board.lookup.notFound")}
-              </p>
-            </div>
-          )}
-          {lookupResult && lookupResult !== "not-found" && (
-            <div className="flex flex-col gap-2" data-testid="board-lookup-result">
-              {lookupResult.groupName && groupMembers.length > 1 && (
-                <p className="text-sm font-medium text-slate-200">
-                  {t("board.lookup.groupHeading", { group: lookupResult.groupName })}
-                </p>
-              )}
-              {groupMembers.map((g) => {
-                const presentation = presentGuest(g);
-                return (
-                  <div
-                    key={g.id}
-                    className={cn("rounded-xl border p-4", LOOKUP_VARIANT_CLASS[presentation.variant])}
-                    data-testid="board-lookup-member"
-                  >
-                    <p className="text-base font-bold text-slate-100 sm:text-lg">
-                      <span aria-hidden>{presentation.icon}</span> {presentation.headline}
-                    </p>
-                    {presentation.detail && (
-                      <p className="mt-1 text-sm text-slate-300">{presentation.detail}</p>
-                    )}
-                    {presentation.kv && presentation.kv.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
-                        {presentation.kv.map((item) => (
-                          <div key={item.label}>
-                            <div className="text-[11px] tracking-wide text-slate-400 uppercase">
-                              {item.label}
-                            </div>
-                            <div
-                              className={cn(
-                                "text-lg font-bold tabular-nums",
-                                item.muted ? "text-slate-200" : "text-amber-300",
-                              )}
-                            >
-                              {item.value}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {presentation.hint && (
-                      <p className="mt-3 text-xs text-slate-400">{presentation.hint}</p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
     </main>

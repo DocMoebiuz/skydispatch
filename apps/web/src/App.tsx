@@ -1,5 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { HomePage } from "@/routes/home/HomePage";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { RequireAuth } from "@/routes/dispatch/RequireAuth";
 import { DispatchLayout } from "@/routes/dispatch/DispatchLayout";
 import { DashboardPage } from "@/routes/dispatch/DashboardPage";
@@ -19,7 +18,13 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        {/* No landing page — the base URL is what a walk-up visitor (or a
+            browser's own home-button/history) actually lands on, and that
+            should be the public departure board, not a links page. Guests
+            reach /register via the QR codes printed for that purpose, not by
+            navigating here first; dispatchers already know the /dispatch
+            URL. */}
+        <Route path="/" element={<Navigate to="/board" replace />} />
         <Route path="/dispatch" element={<RequireAuth roles={["full_access"]} />}>
           <Route element={<DispatchLayout />}>
             <Route index element={<DashboardPage />} />
