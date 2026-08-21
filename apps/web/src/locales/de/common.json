@@ -296,7 +296,7 @@
   },
   "register": {
     "title": "Rundflug-Anmeldung",
-    "lead": "Sichern Sie sich Ihren Platz für einen Rundflug. Bezahlt wird vor Ort am Check-in.",
+    "lead": "Sichere dir deinen Platz für einen Rundflug. Bezahlt wird vor Ort am Check-in.",
     "steps": {
       "passenger": "Angaben zur Person",
       "address": "Adresse",
@@ -321,7 +321,7 @@
       "zipCode": "PLZ",
       "city": "Ort",
       "reuseAddress": "Gleiche Adresse wie erste Person der Gruppe",
-      "declaredWeightKg": "Ihr Gewicht (kg)",
+      "declaredWeightKg": "Dein Gewicht (kg)",
       "declaredWeightKgHint": "Selbstauskunft – wird beim Check-in nochmals durch Wiegen geprüft.",
       "waiverTitle": "Einverständnis- und Haftungserklärung",
       "waiverText": "Ich erkläre hiermit (bei Minderjährigen mit dem Einverständnis meiner Erziehungsberechtigten), dass ich aus Interesse am Luftsport an einem Einführungsflug teilnehmen will. Ich erkläre (bei Minderjährigen mit dem Einverständnis meiner Erziehungsberechtigten), dass ich – außer in Fällen von Vorsatz oder grober Fahrlässigkeit – auf Schadensersatzansprüche gegenüber dem LSV Backnang-Heiningen e.V., dem BWLV e.V., deren Organen und Erfüllungsgehilfen verzichte. Dieser Verzicht erstreckt sich auch auf Ansprüche Dritter, die aus einem Unfall eigene Ansprüche herleiten können. Der Verzicht gilt nicht so weit und in der Höhe, als die Ersatzpflichtigen durch eine Versicherung gedeckt sind.",
@@ -338,13 +338,13 @@
       "street": "Bitte eine Straße angeben.",
       "zipCode": "Bitte eine Postleitzahl angeben.",
       "city": "Bitte einen Ort angeben.",
-      "consent": "Bitte stimmen Sie der Erklärung zu.",
+      "consent": "Bitte stimme der Erklärung zu.",
       "guardianConsent": "Für minderjährige Teilnehmer ist die Zustimmung einer erziehungsberechtigten Person erforderlich.",
       "submit": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
     },
     "success": {
       "title": "Anmeldung abgeschlossen!",
-      "lead": "Vielen Dank, {{name}}. Ihre Fluggast-ID lautet:",
+      "lead": "Vielen Dank, {{name}}. Deine Fluggast-ID lautet:",
       "note": "Bitte am Flugplatz beim Check-in melden und wiegen lassen.",
       "again": "Weitere Person anmelden",
       "finish": "Anmeldung abschließen",
@@ -353,15 +353,15 @@
     },
     "done": {
       "title": "Nächste Schritte",
-      "step1": "Gehen Sie zur Rundflugstation und bezahlen Sie dort.",
-      "step2": "Verfolgen Sie die Abflugtafel, um Ihre Abflugzeit zu sehen.",
-      "summaryHeading": "Ihre Anmeldung(en):",
+      "step1": "Geh zur Rundflugstation und bezahle dort.",
+      "step2": "Verfolge die Abflugtafel, um deine Abflugzeit zu sehen.",
+      "summaryHeading": "Deine Anmeldung(en):",
       "boardLink": "Zur Abflugtafel"
     },
     "group": {
       "prompt": {
         "title": "Gruppenname",
-        "lead": "Da Sie eine weitere Person anmelden, fassen wir alle gemeinsam angemeldeten Personen als Gruppe zusammen. Bitte vergeben Sie einen Namen für die Gruppe.",
+        "lead": "Da du eine weitere Person anmeldest, fassen wir alle gemeinsam angemeldeten Personen als Gruppe zusammen. Bitte vergib einen Namen für die Gruppe.",
         "label": "Gruppenname",
         "error": "Bitte einen Gruppennamen angeben.",
         "submitError": "Gruppenname konnte nicht gespeichert werden. Bitte erneut versuchen.",
@@ -387,31 +387,31 @@
     "recentlyLanded": "Kürzlich gelandet",
     "registerCta": {
       "title": "Lust zu fliegen?",
-      "body": "Sichern Sie sich jetzt Ihren Platz für den nächsten Rundflug!",
+      "body": "Sichere dir jetzt deinen Platz für den nächsten Rundflug!",
       "button": "Jetzt anmelden"
     },
     "lookup": {
       "title": "Wann bin ich an der Reihe?",
       "submit": "Anzeigen",
       "notFound": "ID nicht gefunden.",
-      "flown": "{{name}} – Ihr Rundflug ist abgeschlossen.",
+      "flown": "{{name}} – Dein Rundflug ist abgeschlossen.",
       "noShow": "{{name}} wurde als nicht erschienen markiert. Bitte am Check-in melden.",
       "waiting": "{{name}} – noch keinem Flug zugewiesen.",
       "waitingHint": "Status: {{items}}",
       "needsPayment": "Zahlung offen",
       "needsWeight": "noch nicht gewogen",
-      "airborne": "{{name}} – Ihr Flug {{flight}} ist in der Luft.",
+      "airborne": "{{name}} – Dein Flug {{flight}} ist in der Luft.",
       "departedAt": "Startzeit war {{time}} Uhr.",
       "boarding": "JETZT BOARDING – {{name}}",
-      "boardingHint": "Bitte begeben Sie sich jetzt zu Ihrem Flugzeug.",
-      "scheduled": "{{name}} – Ihr Flug ist eingeplant",
+      "boardingHint": "Bitte begib dich jetzt zu deinem Flugzeug.",
+      "scheduled": "{{name}} – Dein Flug ist eingeplant",
       "arriveHint": "Bitte spätestens 15 Minuten vor dem Start einfinden. Zeiten können sich kurzfristig ändern.",
       "kv": {
         "flight": "Flug",
         "estimatedDeparture": "vorauss. Abflug",
         "beThereBy": "Bitte da sein bis"
       },
-      "groupHeading": "Gruppe {{group}} – Status Ihrer Mitreisenden:"
+      "groupHeading": "Gruppe {{group}} – Status deiner Mitreisenden:"
     }
   }
 }

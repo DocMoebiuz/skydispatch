@@ -23,7 +23,7 @@ interface RegisterFields {
 // instead, with no address inputs to fill at all.
 export async function fillRegistrationForm(page: Page, fields: RegisterFields): Promise<void> {
   await page.getByLabel("Vor- und Nachname").fill(fields.name);
-  await page.getByLabel("Ihr Gewicht (kg)").fill(fields.weightKg);
+  await page.getByLabel("Dein Gewicht (kg)").fill(fields.weightKg);
   await fillDateOfBirth(page, fields.dateOfBirth ?? "1990-05-14");
   await page.getByLabel("E-Mail-Adresse").fill(fields.email);
   await page.getByRole("button", { name: "Weiter" }).click();

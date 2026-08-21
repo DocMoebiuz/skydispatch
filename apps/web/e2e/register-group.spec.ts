@@ -31,7 +31,7 @@ test("group registration: first 'add another' asks for a group name, applies to 
   ) {
     // "passenger" step — name/weight/DOB/optional email, all together.
     await page.getByLabel("Vor- und Nachname").fill(name);
-    await page.getByLabel("Ihr Gewicht (kg)").fill(weight);
+    await page.getByLabel("Dein Gewicht (kg)").fill(weight);
     await fillDateOfBirth(page, "1990-05-14");
     await page.getByLabel("E-Mail-Adresse").fill(email);
     await page.getByRole("button", { name: "Weiter" }).click();

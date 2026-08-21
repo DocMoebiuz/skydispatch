@@ -125,39 +125,112 @@ export function ReportingPage() {
     .sort((a, b) => b.minutes - a.minutes);
   const MEDALS = ["🥇", "🥈", "🥉"];
 
+  // Every Flight field, plus the human-readable form of its two foreign keys
+  // (pilot/aircraft name+license+model+seats, not the raw IDs — those aren't
+  // meaningful on their own once exported to a spreadsheet). Not aircraft's
+  // own fuel/weight figures, though — that's aircraft data, not flight data;
+  // a separate export if that's ever needed.
   function exportFlightsCsv() {
     const rows: unknown[][] = [
-      ["Flug", "Pilot", "Kennzeichen", "Start", "Landung", "Pax", "Status"],
+      [
+        "Flug",
+        "Status",
+        "Pilot",
+        "Pilotenlizenz",
+        "Kennzeichen",
+        "Flugzeugtyp",
+        "Sitze",
+        "Start",
+        "Landung",
+        "Flugdauer (Min.)",
+        "Pax",
+        "Fluggäste",
+        "Angelegt am",
+        "Aktualisiert am",
+      ],
     ];
     for (const f of flights) {
       const aircraft = aircraftList.find((a) => a.id === f.aircraftId);
       const pilot = pilots.find((p) => p.id === f.pilotId);
+      const flightGuestNames = f.guestIds
+        .map((id) => guests.find((g) => g.id === id)?.name)
+        .filter((name): name is string => !!name)
+        .join(", ");
       rows.push([
         f.code,
+        f.status,
         pilot?.name ?? "",
+        pilot?.license ?? "",
         aircraft?.reg ?? "",
+        aircraft?.model ?? "",
+        aircraft?.seats ?? "",
         f.offBlock ?? "",
         f.onBlock ?? "",
+        f.offBlock && f.onBlock ? Math.round(flightMinutes(f)) : "",
         f.guestIds.length,
-        f.status,
+        flightGuestNames,
+        f.createdAt,
+        f.updatedAt,
       ]);
     }
     downloadCsv(rows, "SkyDispatch-Fluege.csv");
   }
 
+  // Every Guest field, including the ones the on-screen table doesn't show
+  // (address, consent flags, newsletter opt-in, timestamps) — this export is
+  // meant to be the complete record, not just what's glanceable in the UI.
   function exportGuestsCsv() {
     const rows: unknown[][] = [
-      ["ID", "Name", "Gewicht", "Status", "Gruppe", "Bezahlt", "Geflogen"],
+      [
+        "ID",
+        "Name",
+        "E-Mail",
+        "Telefon",
+        "Geburtsdatum",
+        "Straße",
+        "PLZ",
+        "Ort",
+        "Gewicht angegeben (kg)",
+        "Gewicht gewogen (kg)",
+        "Status",
+        "Bezahlt",
+        "Einverständnis",
+        "Einverständnis Erziehungsberechtigte",
+        "Newsletter",
+        "Gruppe",
+        "Eingecheckt",
+        "No-Show",
+        "Geflogen",
+        "Flug",
+        "Angemeldet am",
+        "Aktualisiert am",
+      ],
     ];
     for (const g of guests) {
+      const assignedFlight = flights.find((f) => f.id === g.assignedFlightId);
       rows.push([
         g.code,
         g.name,
-        g.weightKg ?? g.declaredWeightKg,
+        g.email ?? "",
+        g.phone ?? "",
+        g.dateOfBirth,
+        g.address.street,
+        g.address.zipCode,
+        g.address.city,
+        g.declaredWeightKg,
+        g.weightKg ?? "",
         g.noShow ? "No-Show" : g.flown ? "geflogen" : g.checkedIn ? "eingecheckt" : "offen",
-        g.groupName ?? "",
         g.paid ? "ja" : "nein",
+        g.consent ? "ja" : "nein",
+        g.guardianConsent == null ? "" : g.guardianConsent ? "ja" : "nein",
+        g.newsletter ? "ja" : "nein",
+        g.groupName ?? "",
+        g.checkedIn ? "ja" : "nein",
+        g.noShow ? "ja" : "nein",
         g.flown ? "ja" : "nein",
+        assignedFlight?.code ?? "",
+        g.createdAt,
+        g.updatedAt,
       ]);
     }
     downloadCsv(rows, "SkyDispatch-Fluggaeste.csv");

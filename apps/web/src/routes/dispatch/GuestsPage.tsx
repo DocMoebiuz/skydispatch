@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { UserPlus, Check, Banknote, EyeOff, Trash2 } from "lucide-react";
+import { UserPlus, Check, Banknote, Trash2 } from "lucide-react";
 import { deriveGuestStatus, type Guest, type Flight, type GuestStatus } from "shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,9 +18,10 @@ import {
 
 // Increment 1/1b/2/3 + functional completeness pass — real persistence throughout:
 // registration → API → Cosmos → this list, mark-paid, group display, weighing,
-// no-show (frees the seat immediately, matches the prototype), delete (blocked if
-// assigned to an active flight), and filter/search. See docs/architecture.md and
-// nfr.md § Reliability & safety.
+// delete (blocked if assigned to an active flight), and filter/search. No-show
+// lives on Boarding instead (removed from here on request) — frees the seat
+// immediately, matches the prototype, see apps/api guests.ts. See
+// docs/architecture.md and nfr.md § Reliability & safety.
 
 const STATUS_VARIANT: Record<GuestStatus, "default" | "secondary" | "destructive" | "outline"> = {
   registered: "outline",
@@ -294,19 +295,6 @@ export function GuestsPage() {
     const canDelete = !guest.flown;
     return (
       <div className="flex min-w-16 flex-wrap items-center gap-1">
-        {!guest.noShow && !guest.flown && (
-          <Button
-            size="icon"
-            variant="outline"
-            data-testid={testIds ? "no-show-button" : undefined}
-            disabled={isPending}
-            aria-label={t("dispatch.guests.noShow")}
-            title={t("dispatch.guests.noShow")}
-            onClick={() => void callAction(guest.id, "actions/no-show")}
-          >
-            <EyeOff className="size-4" />
-          </Button>
-        )}
         {canDelete && (
           <Button
             size="icon"
