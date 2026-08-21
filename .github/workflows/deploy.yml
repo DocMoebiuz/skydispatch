@@ -25,6 +25,21 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
+        env:
+          # Vite inlines import.meta.env.VITE_* into the built JS at build
+          # time, not runtime — deploy.yml builds apps/web itself and just
+          # uploads the resulting dist/ (skip_app_build: true below), so
+          # these have to be present for *this* step or the deployed bundle
+          # silently ships with an empty/undefined MSAL config. Repo
+          # Variables, not Secrets — none of these are actually secret (no
+          # client secret exists for a SPA/public-client registration, and
+          # every one of these values is visible in the deployed bundle's own
+          # source/network requests regardless). VITE_E2E_BYPASS_AUTH is
+          # deliberately not set here — see docs/architecture.md § Open
+          # decisions #1 for why that must never reach a real deployed build.
+          VITE_ENTRA_CLIENT_ID: ${{ vars.VITE_ENTRA_CLIENT_ID }}
+          VITE_ENTRA_AUTHORITY: ${{ vars.VITE_ENTRA_AUTHORITY }}
+          VITE_ENTRA_API_SCOPE: ${{ vars.VITE_ENTRA_API_SCOPE }}
       - run: pnpm --filter api deploy --prod ./api-deploy
 
       - name: Vendor the shared package for Oryx's npm install
