@@ -5,6 +5,7 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { getOperationsContainer } from "../lib/cosmos";
+import { requireRole } from "../lib/auth";
 
 // Full wipe of every document in the operations container — every FlightDay,
 // Pilot, Aircraft, Guest, Flight, and FlightCodeCounter, regardless of
@@ -12,13 +13,17 @@ import { getOperationsContainer } from "../lib/cosmos";
 // Open decisions #4), so "reset the database" means "start a clean flight day
 // from scratch," not "clear one day among several." The dispatcher UI (Setup's
 // "Gefahrenzone") requires typing a confirmation phrase before calling this —
-// there's no server-side confirmation of its own, matching this API's existing
-// unauthenticated posture (see § Open decisions #1); this endpoint is exactly
-// as exposed as every other one here, not specially locked down.
+// there's no server-side confirmation of its own beyond requireRole below, so
+// the UI's type-to-confirm dialog is still the only guard against an
+// authorized dispatcher's own misclick, same as before; what requireRole adds
+// is that it's no longer reachable by an unauthenticated caller at all (see
+// docs/architecture.md § Open decisions #1, now resolved).
 export async function resetDatabase(
-  _request: HttpRequest,
+  request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const container = await getOperationsContainer();
   const { resources } = await container.items
     .query<{ id: string; flightDayId: string }>({ query: "SELECT c.id, c.flightDayId FROM c" })

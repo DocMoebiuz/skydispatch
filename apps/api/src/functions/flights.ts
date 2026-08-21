@@ -26,6 +26,7 @@ import type { Container } from "@azure/cosmos";
 import { getOperationsContainer } from "../lib/cosmos";
 import { recomputeBoardingStatus } from "../lib/flightBoardingStatus";
 import { hasAirborneFlight } from "../lib/activeFlightGuard";
+import { requireRole } from "../lib/auth";
 
 const MAX_COUNTER_ATTEMPTS = 10;
 
@@ -126,6 +127,8 @@ export async function createFlight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   let body: unknown;
   try {
     body = await request.json();
@@ -205,6 +208,8 @@ export async function assignToFlight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const flightId = request.params.id;
   if (!flightId) {
     return { status: 400, jsonBody: { error: "missing-id" } };
@@ -336,6 +341,8 @@ export async function lockFlight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const flightId = request.params.id;
   if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
 
@@ -389,6 +396,8 @@ export async function unlockFlight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const flightId = request.params.id;
   if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
   const flightDayId = DEFAULT_FLIGHT_DAY_ID;
@@ -412,6 +421,8 @@ export async function startFlight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const flightId = request.params.id;
   if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
   const flightDayId = DEFAULT_FLIGHT_DAY_ID;
@@ -465,6 +476,8 @@ export async function landFlight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const flightId = request.params.id;
   if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
   const flightDayId = DEFAULT_FLIGHT_DAY_ID;
@@ -527,6 +540,8 @@ export async function adjustFlightTimes(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const flightId = request.params.id;
   if (!flightId) return { status: 400, jsonBody: { error: "missing-id" } };
   let body: unknown;

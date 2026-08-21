@@ -14,11 +14,14 @@ import {
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
 import { isReferencedByActiveFlight, hasAirborneFlight } from "../lib/activeFlightGuard";
+import { requireRole } from "../lib/auth";
 
 export async function createAircraft(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   let body: unknown;
   try {
     body = await request.json();
@@ -67,6 +70,8 @@ export async function updateAircraft(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const aircraftId = request.params.id;
   if (!aircraftId) return { status: 400, jsonBody: { error: "missing-id" } };
   let body: unknown;
@@ -113,6 +118,8 @@ export async function startRefuelBreak(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const aircraftId = request.params.id;
   if (!aircraftId) return { status: 400, jsonBody: { error: "missing-id" } };
   let body: unknown;
@@ -157,6 +164,8 @@ export async function endRefuelBreak(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const aircraftId = request.params.id;
   if (!aircraftId) return { status: 400, jsonBody: { error: "missing-id" } };
   let body: unknown;
@@ -209,6 +218,8 @@ export async function deleteAircraft(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const aircraftId = request.params.id;
   if (!aircraftId) return { status: 400, jsonBody: { error: "missing-id" } };
   if (await isReferencedByActiveFlight("aircraftId", aircraftId)) {

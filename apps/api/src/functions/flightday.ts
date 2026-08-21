@@ -6,6 +6,7 @@ import {
 } from "@azure/functions";
 import { DEFAULT_FLIGHT_DAY_ID, flightDayUpsertRequestSchema, type FlightDay } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
+import { requireRole } from "../lib/auth";
 
 // One flight day (DEFAULT_FLIGHT_DAY_ID) — upsert, not create-with-generated-id.
 // See docs/architecture.md § Open decisions #4 (multi-day not resolved).
@@ -13,6 +14,8 @@ export async function upsertFlightDay(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   let body: unknown;
   try {
     body = await request.json();
@@ -68,9 +71,11 @@ export async function getFlightDay(
 }
 
 export async function startDay(
-  _request: HttpRequest,
+  request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const container = await getOperationsContainer();
   const { resource: existing } = await container
     .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)
@@ -82,9 +87,11 @@ export async function startDay(
 }
 
 export async function endDay(
-  _request: HttpRequest,
+  request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const container = await getOperationsContainer();
   const { resource: existing } = await container
     .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)
@@ -96,9 +103,11 @@ export async function endDay(
 }
 
 export async function toggleRegistrationPause(
-  _request: HttpRequest,
+  request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const container = await getOperationsContainer();
   const { resource: existing } = await container
     .item(DEFAULT_FLIGHT_DAY_ID, DEFAULT_FLIGHT_DAY_ID)

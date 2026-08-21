@@ -1,6 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
 process.env.COSMOS_DATABASE_ID = "skydispatch.test";
+// e2e specs navigate straight into /dispatch/* and call its API routes with no
+// login flow — this is the same bypass requireRole() checks for (see
+// apps/api/src/lib/auth.ts and docs/architecture.md § Open decisions #1), set here
+// rather than in local.settings.json.example so it only ever applies to this test
+// run's own webServer process, never a developer's regular `pnpm dev`.
+process.env.E2E_BYPASS_AUTH = "true";
 
 export default defineConfig({
   testDir: "./apps/web/e2e",

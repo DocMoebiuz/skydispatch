@@ -13,11 +13,17 @@ import {
 } from "shared";
 import { getOperationsContainer } from "../lib/cosmos";
 import { isReferencedByActiveFlight } from "../lib/activeFlightGuard";
+import { requireRole } from "../lib/auth";
 
+// Entire file is dispatch-only — no public surface (/register, /board) touches
+// /api/pilots at all, unlike aircraft/flights/guests/flightday where some routes
+// stay anonymous for those surfaces.
 export async function createPilot(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   let body: unknown;
   try {
     body = await request.json();
@@ -44,9 +50,11 @@ export async function createPilot(
 }
 
 export async function listPilots(
-  _request: HttpRequest,
+  request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const container = await getOperationsContainer();
   const { resources } = await container.items
     .query<Pilot>({
@@ -61,6 +69,8 @@ export async function togglePilotAvailability(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const pilotId = request.params.id;
   if (!pilotId) return { status: 400, jsonBody: { error: "missing-id" } };
   const flightDayId = DEFAULT_FLIGHT_DAY_ID;
@@ -80,6 +90,8 @@ export async function setPilotWeight(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const pilotId = request.params.id;
   if (!pilotId) return { status: 400, jsonBody: { error: "missing-id" } };
   let body: unknown;
@@ -110,6 +122,8 @@ export async function updatePilot(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const pilotId = request.params.id;
   if (!pilotId) return { status: 400, jsonBody: { error: "missing-id" } };
   let body: unknown;
@@ -140,6 +154,8 @@ export async function deletePilot(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const pilotId = request.params.id;
   if (!pilotId) return { status: 400, jsonBody: { error: "missing-id" } };
   if (await isReferencedByActiveFlight("pilotId", pilotId)) {

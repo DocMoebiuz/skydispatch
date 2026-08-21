@@ -17,6 +17,7 @@ import {
 import { getOperationsContainer } from "../lib/cosmos";
 import { randomCode } from "../lib/randomCode";
 import { recomputeBoardingStatus } from "../lib/flightBoardingStatus";
+import { requireRole } from "../lib/auth";
 
 // Shared shape for the many "flip one boolean on a guest" actions below (checkin,
 // undo-checkin — mark-paid/weigh predate this helper and aren't worth churning).
@@ -212,6 +213,8 @@ export async function markGuestPaid(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const guestId = request.params.id;
   if (!guestId) {
     return { status: 400, jsonBody: { error: "missing-id" } };
@@ -236,6 +239,8 @@ export async function weighGuest(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const guestId = request.params.id;
   if (!guestId) {
     return { status: 400, jsonBody: { error: "missing-id" } };
@@ -272,6 +277,8 @@ export async function checkInGuest(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const guestId = request.params.id;
   if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
   const updated = await updateGuest(guestId, { checkedIn: true });
@@ -289,6 +296,8 @@ export async function undoCheckInGuest(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const guestId = request.params.id;
   if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
   const updated = await updateGuest(guestId, { checkedIn: false });
@@ -309,6 +318,8 @@ export async function markNoShow(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const guestId = request.params.id;
   if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
 
@@ -368,6 +379,8 @@ export async function unassignGuest(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const guestId = request.params.id;
   if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
 
@@ -427,6 +440,8 @@ export async function deleteGuest(
   request: HttpRequest,
   _context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
   const guestId = request.params.id;
   if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
 
