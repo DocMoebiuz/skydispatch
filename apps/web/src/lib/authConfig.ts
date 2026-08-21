@@ -11,8 +11,19 @@ const apiScope = import.meta.env.VITE_ENTRA_API_SCOPE;
 // apps/api/src/lib/auth.ts's own comment on why this is a plain API-access
 // scope, not a role. Authorization (who's allowed to actually do anything) is
 // the separate `roles` claim, checked by RequireAuth (client-side) and
-// requireRole (server-side), not this scope.
+// requireRole (server-side), not this scope. Kept separate from LOGIN_SCOPES
+// below — an access token minted for this one resource has no business also
+// carrying openid/profile/email's OIDC scopes, even though Entra tolerates
+// mixing them.
 export const API_SCOPES = apiScope ? [apiScope] : [];
+
+// What RequireAuth's loginRedirect actually requests: the API scope (so the
+// resulting session can silently mint access tokens for it later) plus
+// `email` — `openid`/`profile`/`offline_access` are added automatically by
+// MSAL on every interactive request, but `email` isn't one of its defaults,
+// so DispatchLayout's account.idTokenClaims.email stays undefined without
+// asking for it explicitly.
+export const LOGIN_SCOPES = [...API_SCOPES, "email"];
 
 const msalConfig: Configuration = {
   auth: {

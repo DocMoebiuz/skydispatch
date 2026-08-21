@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
+import { InteractionStatus } from "@azure/msal-browser";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { API_SCOPES } from "@/lib/authConfig";
+import { LOGIN_SCOPES } from "@/lib/authConfig";
 
 interface RequireAuthProps {
   // Every /dispatch/* route needs exactly one role today ("full_access", Entra
@@ -23,15 +24,25 @@ interface RequireAuthProps {
 // whole feature.
 export function RequireAuth({ roles }: RequireAuthProps) {
   const { t } = useTranslation();
-  const { instance, accounts } = useMsal();
+  const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
   const bypass = import.meta.env.VITE_E2E_BYPASS_AUTH === "true";
 
   useEffect(() => {
-    if (bypass || isAuthenticated) return;
-    void instance.loginRedirect({ scopes: API_SCOPES });
-  }, [bypass, isAuthenticated, instance]);
+    // inProgress guard is required, not decorative — MSAL's own redirect
+    // handling (processing the #code=... it lands back with) itself causes
+    // several re-renders while inProgress walks through its own states
+    // before settling on "none". Without this check, isAuthenticated is still
+    // momentarily false on each of those intermediate renders, so this effect
+    // fired loginRedirect() again on top of the in-flight one — confirmed
+    // live via MSAL's own "interaction_in_progress" error, and the repeated
+    // Entra round-trips that produces are exactly what looked like "many
+    // many refetches." loginRedirect is only ever safe to call once MSAL
+    // itself is idle.
+    if (bypass || isAuthenticated || inProgress !== InteractionStatus.None) return;
+    void instance.loginRedirect({ scopes: LOGIN_SCOPES });
+  }, [bypass, isAuthenticated, inProgress, instance]);
 
   if (bypass) return <Outlet />;
 

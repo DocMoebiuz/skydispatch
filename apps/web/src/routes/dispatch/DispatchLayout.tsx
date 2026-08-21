@@ -13,6 +13,7 @@ import {
   BarChart3,
   Fuel,
   LogOut,
+  CircleUserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,7 +61,14 @@ export function DispatchLayout() {
   // signs anyone in via MSAL) — accountName stays undefined and this block
   // just renders nothing, no special-casing needed.
   const { instance, accounts } = useMsal();
-  const accountName = accounts[0]?.name ?? accounts[0]?.username;
+  const account = accounts[0];
+  const accountName = account?.name ?? account?.username;
+  // `email` only lands in idTokenClaims because RequireAuth's loginRedirect
+  // explicitly requests it (authConfig.ts's LOGIN_SCOPES) — MSAL doesn't add
+  // it by default like openid/profile. Falls back to username, which for
+  // this tenant's sign-in method already is the email address.
+  const accountEmail =
+    typeof account?.idTokenClaims?.email === "string" ? account.idTokenClaims.email : account?.username;
   const [now, setNow] = useState(new Date());
   const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
 
@@ -162,10 +170,15 @@ export function DispatchLayout() {
             </span>
             {accountName && (
               <span
-                className="text-muted-foreground hidden max-w-32 truncate text-sm md:block"
+                className="text-muted-foreground hidden max-w-40 items-center gap-1.5 truncate text-sm md:flex"
+                title={accountEmail}
                 data-testid="header-account-name"
               >
-                {accountName}
+                <CircleUserRound className="size-4 shrink-0" aria-hidden />
+                {/* min-w-0, not just truncate — a flex item won't shrink below
+                    its own text's width otherwise (same fix as
+                    AssignableUnitCard's group-name label). */}
+                <span className="min-w-0 truncate">{accountName}</span>
               </span>
             )}
             {accountName && (

@@ -403,6 +403,17 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
    env vars a real deployment needs. `VITE_E2E_BYPASS_AUTH`/`E2E_BYPASS_AUTH`
    (set only by `playwright.config.ts`, never in a real build) skip both gates for
    the e2e suite, which has no login flow of its own.
+
+   Two non-obvious values, confirmed against a real issued token rather than
+   guessed (`.example` files can't hold comments — JSON — so recorded here
+   instead): `ENTRA_AUTHORITY`'s discovery fetch must hit
+   `<authority>/v2.0/.well-known/openid-configuration` — the unversioned
+   `/.well-known/openid-configuration` path also resolves, but to a stale
+   v1-style document whose `issuer` doesn't match what the v2.0 token endpoint
+   (what MSAL actually calls) issues, which `jwtVerify`'s issuer check then
+   rejects. And `ENTRA_AUDIENCE` is the bare client-ID GUID
+   (`4ea8e208-ad25-4ed5-a909-2b67299af2e6`), not the `api://...` scope URI —
+   despite the scope itself (`VITE_ENTRA_API_SCOPE`) being that full URI.
 2. **IndexedDB ⇄ Cosmos sync strategy.** What happens when a Dispatcher-App tablet
    goes offline mid-check-in and comes back — last-write-wins? Queued mutation replay?
    Does the API need idempotency keys? Not designed yet; the NFR only establishes that

@@ -15,7 +15,14 @@ function getJwks(): Promise<{ jwks: JWTVerifyGetKey; issuer: string }> {
       if (!authority) {
         throw new Error("ENTRA_AUTHORITY is not set — see apps/api/local.settings.json.example.");
       }
-      const wellKnownUrl = `${authority.replace(/\/$/, "")}/.well-known/openid-configuration`;
+      // /v2.0/.well-known/..., not /.well-known/... — the plain (unversioned)
+      // path resolves too, but to a stale v1-style discovery doc whose issuer
+      // lacks the /v2.0 suffix (confirmed live: real tokens MSAL issues via
+      // the v2.0 token endpoint carry iss ending in /v2.0, and jwtVerify's
+      // issuer check rejected every one of them against the unversioned
+      // doc's issuer — a genuine "which discovery document" bug, not a wrong
+      // ENTRA_AUTHORITY value).
+      const wellKnownUrl = `${authority.replace(/\/$/, "")}/v2.0/.well-known/openid-configuration`;
       const res = await fetch(wellKnownUrl);
       if (!res.ok) {
         throw new Error(`Failed to fetch ${wellKnownUrl}: ${res.status}`);
@@ -48,6 +55,7 @@ export async function verifyToken(
   keys: { jwks: JWTVerifyGetKey; issuer: string; audience: string },
 ): Promise<AuthResult> {
   if (!token) {
+    console.warn("[requireRole] no Authorization: Bearer header on the request");
     return { ok: false, response: { status: 401, jsonBody: { error: "unauthorized" } } };
   }
 
@@ -57,7 +65,15 @@ export async function verifyToken(
       issuer: keys.issuer,
       audience: keys.audience,
     }));
-  } catch {
+  } catch (err) {
+    // Logged, not swallowed — jose's errors name the exact problem (expired,
+    // wrong issuer, wrong audience, bad signature, ...) and a bare 401 gives
+    // the caller no way to tell which; this is what actually gets read when
+    // diagnosing a real "why is my token rejected" case.
+    console.error("[requireRole] token verification failed:", err, "expected:", {
+      issuer: keys.issuer,
+      audience: keys.audience,
+    });
     return { ok: false, response: { status: 401, jsonBody: { error: "unauthorized" } } };
   }
 
