@@ -429,6 +429,26 @@ These are flagged, not resolved — don't assume an answer exists in code yet.
    checks `x-authorization` first, falling back to `authorization` (costs
    nothing, and local dev's proxy hasn't been confirmed to *not* have the same
    override).
+
+   A fourth, client-side: `RequireAuth.tsx` used to read
+   `accounts[0]?.idTokenClaims?.roles` synchronously — but `@azure/msal-react`'s
+   `useIsAuthenticated()` is purely `accounts.length > 0` (confirmed by reading
+   its source), no token-validity concept at all, and MSAL keeps the bare
+   account cache entry noticeably longer than the ID token's own claims
+   survive. So a merely-stale (not fully signed-out) session read as
+   authenticated-but-wrong-role instead of needs-renewal — landing on the
+   "Kein Zugriff" screen, whose own "Abmelden" button made things worse
+   (`logoutRedirect` clears Entra's SSO cookie too, forcing a real email+OTP
+   login next time instead of the fast silent one that cookie would otherwise
+   allow). Fixed by never trusting the synchronous read: `RequireAuth` now
+   calls `acquireTokenSilent` first (same call `apiFetch.ts` makes for every
+   API request) and decides authorized/forbidden from *that* result's fresh
+   claims. This matches MSAL's own documented recovery chain — `acquireTokenSilent`
+   itself already attempts silent SSO recovery (a hidden iframe) before ever
+   throwing `InteractionRequiredAuthError`, and only on that error does
+   `RequireAuth` fall back to `loginRedirect`, letting Entra's own session
+   cookie decide server-side whether to skip straight through or prompt for
+   real credentials (see MSAL's [token-lifetimes.md](https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/token-lifetimes.md)).
 2. **IndexedDB ⇄ Cosmos sync strategy.** What happens when a Dispatcher-App tablet
    goes offline mid-check-in and comes back — last-write-wins? Queued mutation replay?
    Does the API need idempotency keys? Not designed yet; the NFR only establishes that

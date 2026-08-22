@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
-import { InteractionStatus } from "@azure/msal-browser";
+import { InteractionRequiredAuthError, InteractionStatus } from "@azure/msal-browser";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LOGIN_SCOPES } from "@/lib/authConfig";
@@ -15,6 +15,8 @@ interface RequireAuthProps {
   roles: string[];
 }
 
+type Status = "checking" | "authorized" | "forbidden";
+
 // Gate for every /dispatch/* route (see App.tsx) — three states, not two:
 // signed out (redirect to login), signed in without the required role (show it,
 // don't loop back into login — they ARE authenticated, looping would just show
@@ -26,27 +28,73 @@ export function RequireAuth({ roles }: RequireAuthProps) {
   const { t } = useTranslation();
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
-
   const bypass = import.meta.env.VITE_E2E_BYPASS_AUTH === "true";
 
+  // Deliberately NOT read synchronously off accounts[0].idTokenClaims — MSAL
+  // keeps the bare account entry in its cache noticeably longer than the ID
+  // token's own claims survive, so useIsAuthenticated() (just
+  // accounts.length > 0, no token-validity concept at all) can read `true`
+  // while idTokenClaims has already gone stale/empty. Trusting that stale
+  // read here misdiagnosed "session needs silent renewal" as "wrong role" —
+  // confirmed live: leaving /dispatch open ~5min landed on this component's
+  // own forbidden screen, and its "Abmelden" button made things worse
+  // (logoutRedirect clears Entra's own SSO session too, forcing a real
+  // email+OTP login next time instead of the fast silent one Entra's cookie
+  // would otherwise have allowed). See docs/architecture.md § Open decisions
+  // #1. `status` only ever reflects a *confirmed*, freshly-checked outcome.
+  const [status, setStatus] = useState<Status>("checking");
+
   useEffect(() => {
-    // inProgress guard is required, not decorative — MSAL's own redirect
-    // handling (processing the #code=... it lands back with) itself causes
-    // several re-renders while inProgress walks through its own states
-    // before settling on "none". Without this check, isAuthenticated is still
-    // momentarily false on each of those intermediate renders, so this effect
-    // fired loginRedirect() again on top of the in-flight one — confirmed
-    // live via MSAL's own "interaction_in_progress" error, and the repeated
-    // Entra round-trips that produces are exactly what looked like "many
-    // many refetches." loginRedirect is only ever safe to call once MSAL
-    // itself is idle.
-    if (bypass || isAuthenticated || inProgress !== InteractionStatus.None) return;
-    void instance.loginRedirect({ scopes: LOGIN_SCOPES });
-  }, [bypass, isAuthenticated, inProgress, instance]);
+    // inProgress guard — see the identical reasoning already proven necessary
+    // for the loginRedirect call below (confirmed live: MSAL's own redirect
+    // handling causes several intermediate re-renders before settling, and
+    // calling into MSAL again mid-that produces "interaction_in_progress").
+    if (bypass || inProgress !== InteractionStatus.None) return;
+
+    if (!isAuthenticated) {
+      void instance.loginRedirect({ scopes: LOGIN_SCOPES });
+      return;
+    }
+
+    const account = accounts[0];
+    let cancelled = false;
+    void (async () => {
+      try {
+        // Same call apiFetch.ts makes for every API request — succeeds
+        // whether the access token was still valid or needed silent renewal
+        // via the refresh token, MSAL handles both identically. result's own
+        // idTokenClaims are this response's fresh claims, not whatever was
+        // cached before this call.
+        const result = await instance.acquireTokenSilent({ scopes: LOGIN_SCOPES, account });
+        if (cancelled) return;
+        const claims = result.idTokenClaims as { roles?: unknown };
+        const freshRoles = Array.isArray(claims.roles) ? (claims.roles as string[]) : [];
+        setStatus(roles.some((r) => freshRoles.includes(r)) ? "authorized" : "forbidden");
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof InteractionRequiredAuthError) {
+          // Refresh token's dead too (or truly signed out) — recover via a
+          // real redirect to Entra, not a manual button. Entra's own SSO
+          // cookie decides for itself whether to skip straight through
+          // (still has a session) or show a real prompt (fully expired) —
+          // this is the "forward once to Entra, recover the session from
+          // there" behavior, same as the not-authenticated branch above.
+          void instance.loginRedirect({ scopes: LOGIN_SCOPES });
+          return;
+        }
+        // Unexpected error — fail closed to the forbidden screen rather than
+        // spinning forever.
+        setStatus("forbidden");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bypass, isAuthenticated, inProgress, accounts, instance, roles]);
 
   if (bypass) return <Outlet />;
 
-  if (!isAuthenticated) {
+  if (status === "checking") {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="text-muted-foreground size-6 animate-spin" aria-hidden />
@@ -54,13 +102,8 @@ export function RequireAuth({ roles }: RequireAuthProps) {
     );
   }
 
-  const account = accounts[0];
-  const accountRoles = Array.isArray(account?.idTokenClaims?.roles)
-    ? (account.idTokenClaims.roles as string[])
-    : [];
-  const authorized = roles.some((r) => accountRoles.includes(r));
-
-  if (!authorized) {
+  if (status === "forbidden") {
+    const account = accounts[0];
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-3 text-center">
         <p className="text-lg font-medium">{t("dispatch.auth.forbiddenTitle")}</p>
