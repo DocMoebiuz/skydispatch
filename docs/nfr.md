@@ -69,6 +69,55 @@ These are hard product requirements carried over from the manual, not aspiration
   landing, marking a guest No-Show, ending the flight day.
 - Only guests who are both paid and weighed can be assigned to a flight.
 
+### Blocking checks vs. advisory-only warnings (reference table)
+
+Every "safety-flavored" check in the app is one of two kinds, and the two are easy to
+conflate from the UI alone (both render as amber warning text) — this table is the
+disambiguator. Update it whenever a check's blocking/advisory status changes (e.g. the
+reserve-fuel projection below was a hard block until this was written, then
+deliberately relaxed to advisory-only — see git history on this file for the exact
+change if the reasoning is ever in question).
+
+**Blocking — the action is refused outright (409/400), server-side, not just a
+disabled button:**
+
+| Check | Enforced on | Refuses |
+|---|---|---|
+| Pilot assigned but has no `weightKg` on file | `actions/assign`, `actions/lock` | `409 pilot-weight-unknown` |
+| Aircraft `fuelOnBoardL` not known yet | `actions/assign`, `actions/lock` | `409 fuel-unknown` |
+| Guest not paid or not weighed | `actions/assign` | That guest only (`rejected: [{reason: "not-paid-or-weighed"}]`), not the whole request |
+| Assignment would exceed seat count | `actions/assign` | That guest only (`reason: "seats"`) |
+| Assignment would exceed dynamic payload (overweight) | `actions/assign` | That guest only (`reason: "weight"`) |
+| Roster empty, or total weight over dynamic payload | `actions/lock` | `409 not-ready` |
+| Flight not `"ready"`, or not every guest checked in | `actions/start` | `409 not-startable` |
+| **Aircraft mid-refuel-break ("fuel stop ongoing")** | `actions/start` only | `409 aircraft-refueling` — deliberately does NOT block `POST /api/flights` (create/queue) or `actions/assign`/`actions/lock`; see the advisory row below |
+| Aircraft already has another flight airborne | `actions/start` | `409 aircraft-already-airborne` |
+| Flight not airborne | `actions/land` | `409 not-airborne` |
+| Flight not currently locked | `actions/unlock` | `409 not-locked` |
+| Registration paused (Setup's dispatcher-controlled toggle) | `POST /api/guests` | `409 registration-paused` |
+| Guest already assigned to a flight | Re-weighing (correcting) an already-weighed guest, `actions/weigh` | `409 guest-assigned-to-flight` — the *first* weigh always happens pre-assignment (assign requires `weightKg` already set) and is unaffected; this only ever blocks a later correction |
+| Guest assigned to a non-completed flight | `DELETE /api/guests/{id}` | `409 guest-assigned-to-active-flight` |
+| Pilot assigned to a non-completed flight | `DELETE /api/pilots/{id}` | `409 pilot-assigned-to-active-flight` |
+| Aircraft assigned to a non-completed flight | `DELETE /api/aircraft/{id}` | `409 aircraft-assigned-to-active-flight` |
+| Aircraft airborne | `actions/start-refuel-break` | `409 aircraft-airborne` — the UI doesn't even offer the "start break" button in this state, it shows a note instead |
+| A refuel break is already active / no break is active | `actions/start-refuel-break` / `actions/end-refuel-break` | `409 refuel-break-already-active` / `409 no-refuel-break-active` |
+| Minor (per `isMinor(dateOfBirth)`) without `guardianConsent` checked | Registration, and the guest detail dialog's save | `400` schema validation |
+
+**Advisory only — shown to the dispatcher, never refuses anything:**
+
+| Warning | Shown where | Why it doesn't block |
+|---|---|---|
+| **Projected reserve-fuel breach** ("Nicht genug Sprit für einen weiteren Flug über der Reserve") | Planning's create-flight dialog; a small icon next to the fuel figure on every flight card (Dashboard/Planning/Tracking/Boarding) | Creating a flight is queuing it for later, not dispatching it now — by the time it's actually boarded the aircraft may well have been refuelled. The real, safety-critical check is `actions/start`'s own gates above, not this projection. |
+| **Aircraft mid-refuel-break, at flight-*creation* time** ("Das Flugzeug wird gerade betankt. Der Flug kann trotzdem angelegt werden.") | Planning's create-flight dialog | Same reasoning — only `actions/start` (the blocking row above) actually cares |
+| **Pilot flown 3+ hours today** ("Pause empfohlen") | Setup's pilot card | Pure nudge — nothing server-side ties flight-hours to anything; the pilot stays fully assignable to new flights. There is no "pilot break required" check anywhere in the system, only this hint plus the dispatcher-driven take-break/end-break toggle (which *is* logged for the day's record, see `Pilot.breaks`, but taking a break is never forced) |
+| Per-guest assign-rejection summary ("X Gast/Gäste passen nicht (Sitze/Gewicht) – nicht zugewiesen") | Flight card, after an `actions/assign` call | Reports blocks that already happened per-guest (the blocking rows above) — it's a summary, not itself a gate |
+
+Two amber warnings on the flight card are not in either table above because they're a
+direct readout of a blocking row rather than a separate check: "⚠ Pilotgewicht fehlt"
+*is* the pilot-weight-unknown block surfaced in place, and "⛽ Wird betankt – Start
+nicht möglich" *is* the mid-refuel-break block surfaced in place (both link straight to
+where they're fixed — Setup, and Refueling respectively).
+
 ## Security & Privacy
 
 - Guest registration collects PII (name, email, weight, date of birth, address —

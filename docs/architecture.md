@@ -341,35 +341,48 @@ reporting), per the manual and `docs/static-html-app/`:
 
 | Method & route | Purpose |
 |---|---|
-| `POST /api/guests` | Register a guest, solo or as a group member |
+| `POST /api/guests` | Register a guest, solo or as a group member; refuses (409 `registration-paused`) while Setup's registration-pause toggle is on |
 | `GET /api/guests` | List today's guests; `?groupId=` filters |
+| `PUT /api/guests/{id}` | Full-field edit of a guest's own personal info (name/email/phone/DOB/address/consent/newsletter) from Guests' detail dialog — "fix a passenger's own mistake" after the fact. Deliberately excludes `weightKg` (that's `actions/weigh` below, with its own assignment guard) and every operational field (paid/checkedIn/...) |
 | `DELETE /api/guests/{id}` | Remove a guest; blocked (409) if assigned to a non-completed flight |
 | `POST /api/guests/{id}/actions/start-group` | Retroactively turn an already-registered guest into the first member of a new group (server generates the `groupId`) |
 | `POST /api/guests/{id}/actions/mark-paid` | Front-desk marks a guest paid |
-| `POST /api/guests/{id}/actions/weigh` | Staff-verified weight (distinct from self-reported `declaredWeightKg`) |
+| `POST /api/guests/{id}/actions/weigh` | Staff-verified weight (distinct from self-reported `declaredWeightKg`). The *first* weigh always happens before assignment is even possible (assign requires it set); a *correction* to an already-weighed guest refuses (409 `guest-assigned-to-flight`) once that guest is actually on a flight, since payload is computed live off this value |
 | `POST /api/guests/{id}/actions/check-in` / `.../undo-check-in` | Boarding |
 | `POST /api/guests/{id}/actions/no-show` | Marks no-show and immediately frees the seat on its flight, if any |
 | `POST /api/guests/{id}/actions/unassign` | Removes a guest from its flight (correction path) |
 | `POST /api/pilots`, `GET /api/pilots` | Create/list pilots |
 | `PUT /api/pilots/{id}` | Full-field edit (name/license/weight) from Setup's pilot details dialog — a plain PUT, not another `/actions/` endpoint, since there's no branching server logic, just "replace these editable fields" |
-| `POST /api/pilots/{id}/actions/toggle-available`, `DELETE /api/pilots/{id}` | Availability toggle; delete blocked (409) if on a non-completed flight |
-| `POST /api/pilots/{id}/actions/set-weight` | Backfill/correct a pilot's weight after creation — real records created before `weightKg` existed had no other way to get one. `assign`/`set-ready` both refuse (409 `pilot-weight-unknown`) while a pilot with no weight on file is assigned to the flight, rather than silently treating it as 0kg |
+| `POST /api/pilots/{id}/actions/toggle-available`, `DELETE /api/pilots/{id}` | Take/end a break — also appends/closes an entry on `Pilot.breaks` so the day's breaks stay documented after they end, not just a live flag (Reporting's pilot-breaks table/export). Never itself required by anything server-side — see nfr.md's blocking-vs-advisory table. Delete blocked (409) if on a non-completed flight |
+| `POST /api/pilots/{id}/actions/set-weight` | Backfill/correct a pilot's weight after creation — real records created before `weightKg` existed had no other way to get one. `assign`/`lock` both refuse (409 `pilot-weight-unknown`) while a pilot with no weight on file is assigned to the flight, rather than silently treating it as 0kg |
 | `POST /api/aircraft`, `GET /api/aircraft` | Create/list aircraft |
 | `PUT /api/aircraft/{id}` | Full-field edit from Setup's aircraft details dialog, same reasoning as pilots' PUT above — deliberately never touches `fuelOnBoardL` (see `actions/refuel` below) |
 | `DELETE /api/aircraft/{id}` | Blocked (409) if on a non-completed flight |
 | `POST /api/aircraft/{id}/actions/refuel` | Dispatcher sets the absolute liters on board (read off the fuel truck's meter, not a delta) — kept separate from the PUT above since refueling is a distinct, frequent real-world action that shouldn't require reopening the full edit form |
-| `POST /api/flightday`, `GET /api/flightday` | Upsert/read the one flight day's settings (date/airfield) — status untouched |
+| `POST /api/aircraft/{id}/actions/start-refuel-break` | Marks the aircraft mid-refuel; refuses (409) if a break is already active or the aircraft is currently airborne. Blocks `actions/start` on any of its flights (409 `aircraft-refueling`) — deliberately does NOT block creating/queuing a new flight for it, or `assign`/`lock`; see nfr.md's blocking-vs-advisory table |
+| `POST /api/aircraft/{id}/actions/end-refuel-break` | Closes the break, requires the new fuel level (absolute or delta) in the body — refuses (409) if no break is active |
+| `POST /api/flightday`, `GET /api/flightday` | Upsert/read the one flight day's settings (date/airfield/schedule/reserve) — status untouched |
 | `POST /api/flightday/actions/start`, `.../end` | Flight day status transitions |
-| `POST /api/flights`, `GET /api/flights` | Create/list flights |
+| `POST /api/flightday/actions/toggle-registration-pause` | Dispatcher-controlled circuit breaker for `POST /api/guests` (see above) — independent of day status |
+| `POST /api/flights`, `GET /api/flights` | Create/list flights. A projected reserve-fuel breach on the target aircraft (or one mid-refuel-break) is surfaced client-side as a note but never refuses creation — see nfr.md's blocking-vs-advisory table for why |
 | `POST /api/flights/{id}/actions/assign` | Assign a guest or a whole group, enforcing hard seat/weight limits, greedy partial-fit for groups; returns `{assigned, rejected: [{guestId, reason}]}` |
-| `POST /api/flights/{id}/actions/set-ready`, `.../unready` | Ready requires guests > 0 and weight within payload (server-checked) |
-| `POST /api/flights/{id}/actions/start`, `.../land` | Start requires ready + all assigned guests checked in; landing marks the flight completed and every guest flown |
+| `POST /api/flights/{id}/actions/lock`, `.../unlock` | Locking (created → assigned) requires guests > 0 and weight within payload (server-checked); unlocking refuses (409 `not-locked`) from `airborne`/`completed` |
+| `POST /api/flights/{id}/actions/start`, `.../land` | Start requires the roster locked+fully boarded, refuses on a mid-refuel-break or already-airborne aircraft; landing marks the flight completed and every guest flown |
 | `POST /api/flights/{id}/actions/adjust-times` | Corrects offBlock/onBlock after the fact (Tracking's click-to-edit time fields) — either field optional, no state-machine checks; deliberately does NOT recompute the fuel `landFlight` already deducted off the original pair |
 | `POST /api/system/actions/reset-database` | Full wipe of every document (any type, any `flightDayId`) — backs Setup's "Gefahrenzone" reset button; gated by `requireRole` like every other dispatch-only mutation (see § Open decisions #1), but no server-side confirmation beyond that — the UI's type-to-confirm dialog is still the only guard against an authorized dispatcher's own misclick. Route deliberately isn't under `/api/admin/...` — Azure Functions Core Tools' local host reserves any route starting with `admin` for its own built-in management API (`/admin/functions`, `/admin/host/...`) even under the `/api` prefix, so that shape 404s unconditionally; confirmed live via `/admin/functions`, not guessed |
 
-No `PUT`/edit on any entity (only create, list, delete, and the specific action
-endpoints above) — not needed yet, and not the same gap as the accepted technical
-debt in [tech-stack.md § Known cross-cutting risks](./tech-stack.md#known-cross-cutting-risks)
+Every 409/400 above, plus every advisory-only warning that looks similar but doesn't
+block anything, is enumerated in one place in
+[nfr.md § Reliability & safety](./nfr.md#blocking-checks-vs-advisory-only-warnings-reference-table)
+— check there before assuming a given amber warning is (or isn't) enforced server-side.
+
+Guests/pilots/aircraft each get a generic full-field `PUT` for "the passenger/staff
+just made a mistake, fix it in place" edits (see their rows above) — but Flight does
+not: every Flight mutation above is a real state transition (`assign`, `lock`, `start`,
+...) with its own server logic, never a bare field replace, so a generic
+`PUT /api/flights/{id}` was never added and isn't planned. This is a deliberate
+asymmetry, not an oversight, and not the same gap as the accepted technical debt in
+[tech-stack.md § Known cross-cutting risks](./tech-stack.md#known-cross-cutting-risks)
 (non-atomic `code` generation, non-transactional assignment writes), which is about
 robustness under concurrency, not missing functionality.
 
