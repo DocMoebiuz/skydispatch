@@ -1,8 +1,12 @@
 import {
   availablePayloadKg,
   staticAvailablePayloadKg,
+  wouldBreachReserve,
+  DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+  DEFAULT_RESERVE_FUEL_MINUTES,
   type Aircraft,
   type Flight,
+  type FlightDay,
   type Guest,
   type Pilot,
 } from "shared";
@@ -37,6 +41,13 @@ export interface FlightLoad {
   // refuses server-side the same way it does for fuelUnknown, see
   // apps/api/src/functions/flights.ts's startFlight.
   refuelBreakActive: boolean;
+  // Projected to drop this aircraft below the event's fuel reserve on its
+  // next average-length flight (shared/weightAndBalance.ts's
+  // wouldBreachReserve) — purely informational here, same as Planning's
+  // new-flight note: it's never a reason to block anything on this card, just
+  // a heads-up next to the fuel figure so it's visible everywhere the
+  // aircraft shows up, not only in the create-flight dialog.
+  belowReserve: boolean;
 }
 
 // Aggregate seats/weight for one flight — pilot weight counts toward payload
@@ -48,6 +59,11 @@ export function computeFlightLoad(
   aircraft: Aircraft | undefined,
   pilot: Pilot | undefined,
   flightGuests: Guest[],
+  // Optional — callers that haven't loaded FlightDay yet (or never need to)
+  // fall back to the same DEFAULT_* constants the rest of the app uses when
+  // it's unset, so the reserve projection is always at least approximately
+  // right rather than skipped outright.
+  flightDay?: Pick<FlightDay, "averageFlightDurationMinutes" | "reserveFuelMinutes"> | null,
 ): FlightLoad {
   const pilotWeightUnknown = !!flight.pilotId && !pilot?.weightKg;
   const usedSeats = flightGuests.length;
@@ -62,6 +78,13 @@ export function computeFlightLoad(
   const pct = maxPayloadKg > 0 ? Math.round((usedWeightKg / maxPayloadKg) * 100) : 0;
   const over = maxPayloadKg > 0 && usedWeightKg > maxPayloadKg;
   const refuelBreakActive = !!aircraft?.refuelBreakActive;
+  const belowReserve = aircraft
+    ? wouldBreachReserve(
+        aircraft,
+        flightDay?.averageFlightDurationMinutes ?? DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
+        flightDay?.reserveFuelMinutes ?? DEFAULT_RESERVE_FUEL_MINUTES,
+      )
+    : false;
 
   return {
     usedSeats,
@@ -74,6 +97,7 @@ export function computeFlightLoad(
     pilotWeightUnknown,
     fuelUnknown,
     refuelBreakActive,
+    belowReserve,
   };
 }
 

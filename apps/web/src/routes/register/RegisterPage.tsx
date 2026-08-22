@@ -10,7 +10,7 @@ import {
   type Guest,
   type FlightDay,
 } from "shared";
-import { CalendarDays, MapPin } from "lucide-react";
+import { CalendarDays, MapPin, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -474,6 +474,18 @@ export function RegisterPage() {
                 <span>{t("register.done.step2")}</span>
               </li>
             </ol>
+            {/* Registration itself isn't a confirmed seat — money changes
+                hands at check-in (step 1 above), not here — so this has to
+                say so plainly, not just imply it via the steps. Amber, not a
+                plain paragraph, since this is the one thing on this screen
+                that actually matters if skimmed. */}
+            <div
+              className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300"
+              data-testid="payment-disclaimer"
+            >
+              <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p>{t("register.done.paymentDisclaimer")}</p>
+            </div>
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium">{t("register.done.summaryHeading")}</p>
               <ul className="text-sm">

@@ -43,6 +43,7 @@ export async function createPilot(
     license: parsed.data.license,
     weightKg: parsed.data.weightKg,
     available: true,
+    breaks: [],
   };
   const container = await getOperationsContainer();
   await container.items.create(pilot);
@@ -65,6 +66,9 @@ export async function listPilots(
   return { status: 200, jsonBody: resources };
 }
 
+// Toggles between "flying" and "on break" — and, unlike Aircraft's refuel
+// break, keeps every break on record instead of discarding it on end, so the
+// day's breaks stay documented afterward (Reporting's pilot-breaks export).
 export async function togglePilotAvailability(
   request: HttpRequest,
   _context: InvocationContext,
@@ -77,7 +81,19 @@ export async function togglePilotAvailability(
   const container = await getOperationsContainer();
   const { resource: pilot } = await container.item(pilotId, flightDayId).read<Pilot>();
   if (!pilot) return { status: 404, jsonBody: { error: "not-found" } };
-  const updated: Pilot = { ...pilot, available: !pilot.available };
+  const breaks = pilot.breaks ?? [];
+  const nowIso = new Date().toISOString();
+  const updated: Pilot = pilot.available
+    ? // Going unavailable — a new break starts.
+      { ...pilot, available: false, breaks: [...breaks, { startedAt: nowIso, endedAt: null }] }
+    : // Coming back — close the most recent open break, if any (a record
+      // missing its break entirely, from before this field existed,
+      // shouldn't crash the toggle — it just has nothing to close).
+      {
+        ...pilot,
+        available: true,
+        breaks: breaks.map((b, i) => (i === breaks.length - 1 && b.endedAt === null ? { ...b, endedAt: nowIso } : b)),
+      };
   await container.item(pilotId, flightDayId).replace(updated);
   return { status: 200, jsonBody: updated };
 }

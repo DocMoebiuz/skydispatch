@@ -57,8 +57,16 @@ export function estimateDepartures(
     // long, or a refuel break's estimate has already elapsed, the next real
     // slot is "now", not a stale computed time.
     let cursor = now.getTime();
+    // Whether something ahead of this aircraft (an airborne leg, a refuel
+    // break) already pushes the cursor out. If nothing does — a brand-new
+    // flight queued on an otherwise-idle aircraft — the cursor is still
+    // "now", which would estimate departure with zero boarding time. Add
+    // that buffer explicitly below in that case; the chained cycleMs step
+    // in the loop already covers it for every flight after the first.
+    let aheadOfAircraft = false;
     if (airborne?.offBlock) {
       cursor = Math.max(cursor, Date.parse(airborne.offBlock) + cycleMs);
+      aheadOfAircraft = true;
     }
     const aircraft = aircraftById.get(aircraftId);
     if (
@@ -70,6 +78,10 @@ export function estimateDepartures(
         cursor,
         Date.parse(aircraft.refuelBreakStartedAt) + aircraft.refuelBreakEstimatedMinutes * 60_000,
       );
+      aheadOfAircraft = true;
+    }
+    if (!aheadOfAircraft) {
+      cursor += settings.boardingMinutes * 60_000;
     }
 
     for (const flight of queue) {

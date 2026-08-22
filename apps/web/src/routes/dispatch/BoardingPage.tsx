@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { deriveFlightStage, type Guest, type Aircraft, type Pilot, type Flight } from "shared";
+import { deriveFlightStage, type Guest, type Aircraft, type Pilot, type Flight, type FlightDay } from "shared";
 import { Check, X, Undo2, Loader2, CircleCheck, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ export function BoardingPage() {
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState<Set<string>>(new Set());
 
@@ -36,11 +37,15 @@ export function BoardingPage() {
       apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, a, p, f]) => {
+      // 404 means no flight day configured yet (see apps/api flightday.ts's
+      // getFlightDay) — falls back to the DEFAULT_* schedule constants below.
+      apiFetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+    ]).then(([g, a, p, f, d]) => {
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
+      setFlightDay(d);
     });
   }
 
@@ -57,12 +62,14 @@ export function BoardingPage() {
       apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, a, p, f]) => {
+      apiFetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+    ]).then(([g, a, p, f, d]) => {
       if (cancelled) return;
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
+      setFlightDay(d);
     });
     return () => {
       cancelled = true;
@@ -185,7 +192,7 @@ export function BoardingPage() {
                 .filter((g): g is Guest => !!g);
               const visibleGuests = flightGuestsForCard.filter(matchesSearch);
               if (search.trim() && visibleGuests.length === 0) return null;
-              const load = computeFlightLoad(f, aircraft, pilot, flightGuestsForCard);
+              const load = computeFlightLoad(f, aircraft, pilot, flightGuestsForCard, flightDay);
               const stage = deriveFlightStage(f, flightGuestsForCard);
 
               return (
@@ -300,7 +307,7 @@ export function BoardingPage() {
               const flightGuestsForCard = f.guestIds
                 .map((id) => guestById.get(id))
                 .filter((g): g is Guest => !!g);
-              const load = computeFlightLoad(f, aircraft, pilot, flightGuestsForCard);
+              const load = computeFlightLoad(f, aircraft, pilot, flightGuestsForCard, flightDay);
               const stage = deriveFlightStage(f, flightGuestsForCard);
               const isResetting = pending.has(`reset:${f.id}`);
               return (

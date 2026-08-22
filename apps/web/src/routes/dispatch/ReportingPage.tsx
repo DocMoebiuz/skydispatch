@@ -42,6 +42,11 @@ function flightMinutes(f: Flight): number {
   return Math.max(0, (Date.parse(f.onBlock) - Date.parse(f.offBlock)) / 60_000);
 }
 
+function breakMinutes(b: { startedAt: string; endedAt: string | null }): number {
+  const end = b.endedAt ? Date.parse(b.endedAt) : Date.now();
+  return Math.max(0, (end - Date.parse(b.startedAt)) / 60_000);
+}
+
 export function ReportingPage() {
   const { t } = useTranslation();
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -124,6 +129,14 @@ export function ReportingPage() {
     .filter((s) => s.flights > 0)
     .sort((a, b) => b.minutes - a.minutes);
   const MEDALS = ["🥇", "🥈", "🥉"];
+
+  // Flattened one-row-per-break, newest first — this is the "documented at
+  // the end of the day" view the pilot-break toggle exists to feed (see
+  // pilots.ts's togglePilotAvailability, which is what actually appends to
+  // p.breaks).
+  const pilotBreaks = pilots
+    .flatMap((p) => (p.breaks ?? []).map((b) => ({ pilot: p, break: b })))
+    .sort((a, b) => Date.parse(b.break.startedAt) - Date.parse(a.break.startedAt));
 
   // Every Flight field, plus the human-readable form of its two foreign keys
   // (pilot/aircraft name+license+model+seats, not the raw IDs — those aren't
@@ -236,6 +249,24 @@ export function ReportingPage() {
     downloadCsv(rows, "SkyDispatch-Fluggaeste.csv");
   }
 
+  // Every break taken today, across every pilot — the "documented at the end
+  // of the day" record the pilot-break toggle exists to feed (see
+  // pilots.ts's togglePilotAvailability). Includes still-open breaks (no
+  // "Ende" yet) rather than waiting for them to close.
+  function exportPilotBreaksCsv() {
+    const rows: unknown[][] = [["Pilot", "Lizenz", "Beginn", "Ende", "Dauer (Min.)"]];
+    for (const { pilot, break: b } of pilotBreaks) {
+      rows.push([
+        pilot.name,
+        pilot.license,
+        b.startedAt,
+        b.endedAt ?? "",
+        Math.round(breakMinutes(b)),
+      ]);
+    }
+    downloadCsv(rows, "SkyDispatch-Pilotenpausen.csv");
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.reporting")}</h1>
@@ -302,6 +333,9 @@ export function ReportingPage() {
         <Button variant="outline" data-testid="export-guests-csv" onClick={exportGuestsCsv}>
           {t("dispatch.reporting.exportGuests")}
         </Button>
+        <Button variant="outline" data-testid="export-pilot-breaks-csv" onClick={exportPilotBreaksCsv}>
+          {t("dispatch.reporting.exportPilotBreaks")}
+        </Button>
       </div>
 
       {aircraftStats.length > 0 && (
@@ -340,6 +374,52 @@ export function ReportingPage() {
                 </span>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {pilotBreaks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("dispatch.reporting.pilotBreaks")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("dispatch.reporting.table.pilot")}</TableHead>
+                  <TableHead>{t("dispatch.reporting.table.breakStart")}</TableHead>
+                  <TableHead>{t("dispatch.reporting.table.breakEnd")}</TableHead>
+                  <TableHead>{t("dispatch.reporting.table.breakDuration")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pilotBreaks.map(({ pilot, break: b }, i) => (
+                  <TableRow key={`${pilot.id}-${b.startedAt}-${i}`} data-testid="pilot-break-row">
+                    <TableCell className="font-medium">{pilot.name}</TableCell>
+                    <TableCell>
+                      {new Date(b.startedAt).toLocaleTimeString("de-DE", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      {b.endedAt ? (
+                        new Date(b.endedAt).toLocaleTimeString("de-DE", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-500" data-testid="pilot-break-ongoing">
+                          {t("dispatch.reporting.breakOngoing")}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="tabular-nums">{fmtDuration(breakMinutes(b))}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

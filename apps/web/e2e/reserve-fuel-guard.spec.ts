@@ -3,17 +3,22 @@ import { DEFAULT_FLIGHT_DAY_ID } from "shared";
 import { selectByText } from "./helpers/select";
 import { deleteById } from "./helpers/cosmos";
 
-// "It doesn't make sense to create a flight for a plane when we know it will
-// have to take a refuel break" (the user's own words) — createFlight refuses
-// (409, hard block) an aircraft whose current dynamic fuel can't cover one
-// more average flight and still clear the event's reserve. Uses the seeded
-// FlightDay defaults (15 min avg flight, 30 min reserve — see
-// flightday-schedule-settings.spec.ts's note on why this suite never diverges
-// those) rather than an aircraft's fuelBurnLPerHour of 40 L/h: consumption =
-// 40 * 15/60 = 10L, reserve = 40 * 30/60 = 20L, so anything under 30L on
-// board breaches (current - consumption < reserve).
+// A projected reserve breach is a non-blocking NOTE, not a hard block — the
+// dispatcher's own call: "allow new flight creation even when exceeding the
+// reserve, just note it; the pilot gets reminded and refuels before the
+// flight actually boards." createFlight never 409s for this (see
+// apps/api/src/functions/flights.ts's own comment), and Create stays
+// enabled — the note is purely informational, both in the create-flight
+// dialog and (as a small icon next to the fuel figure) on the flight card
+// itself once it exists.
+//
+// Uses the seeded FlightDay defaults (15 min avg flight, 30 min reserve —
+// see flightday-schedule-settings.spec.ts's note on why this suite never
+// diverges those) rather than an aircraft's fuelBurnLPerHour of 40 L/h:
+// consumption = 40 * 15/60 = 10L, reserve = 40 * 30/60 = 20L, so anything
+// under 30L on board breaches (current - consumption < reserve).
 
-test("a flight can't be created for an aircraft that would drop below reserve — until it's refuelled", async ({
+test("creating a flight for an aircraft below reserve shows a note but is never blocked, in the dialog or on the card", async ({
   page,
 }) => {
   const stamp = Date.now();
@@ -49,25 +54,29 @@ test("a flight can't be created for an aircraft that would drop below reserve �
     }).then((r) => r.json());
     aircraftId = aircraft.id;
 
-    // --- UI: the dialog warns and disables Create for this aircraft ---
+    // --- UI: the dialog warns but Create stays enabled ---
     await page.goto("/dispatch/planning");
     await page.getByTestId("open-create-flight").click();
     await selectByText(page, "new-flight-aircraft", `${reg} — Cessna 172`);
     await expect(page.getByTestId("new-flight-reserve-warning")).toBeVisible();
-    await expect(page.getByTestId("create-flight")).toBeDisabled();
+    await expect(page.getByTestId("create-flight")).toBeEnabled();
 
-    // Server-side enforcement, not just the UI not offering it (nfr.md §
-    // Reliability & safety) — a direct API call must refuse too.
-    const blockedCreate = await fetch("http://localhost:4280/api/flights", {
+    // Server-side: no 409 either — creating is queuing, not dispatching.
+    const response = await fetch("http://localhost:4280/api/flights", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ aircraftId, pilotId }),
     });
-    expect(blockedCreate.status).toBe(409);
-    const blockedBody = await blockedCreate.json();
-    expect(blockedBody.error).toBe("would-breach-reserve");
+    expect(response.status).toBe(201);
+    const created = (await response.json()) as { id: string };
+    flightId = created.id;
 
-    // --- Refuel past the threshold (100L) — the dialog clears and creation works ---
+    // --- The card itself carries the same note as a small icon ---
+    await page.goto("/dispatch/planning");
+    const card = page.getByTestId("flight-card").filter({ hasText: reg });
+    await expect(card.getByTestId("flight-card-reserve-warning")).toBeVisible();
+
+    // --- Refuel past the threshold (100L) — both notes clear ---
     await fetch(`http://localhost:4280/api/aircraft/${aircraftId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -84,16 +93,12 @@ test("a flight can't be created for an aircraft that would drop below reserve �
     });
 
     await page.goto("/dispatch/planning");
+    await expect(
+      page.getByTestId("flight-card").filter({ hasText: reg }).getByTestId("flight-card-reserve-warning"),
+    ).toHaveCount(0);
     await page.getByTestId("open-create-flight").click();
     await selectByText(page, "new-flight-aircraft", `${reg} — Cessna 172`);
     await expect(page.getByTestId("new-flight-reserve-warning")).toHaveCount(0);
-    await page.getByTestId("create-flight").click();
-    await expect(page.getByTestId("create-flight")).not.toBeVisible();
-    const createdFlight = await fetch("http://localhost:4280/api/flights")
-      .then((r) => r.json() as Promise<{ id: string; aircraftId: string }[]>)
-      .then((list) => list.find((f) => f.aircraftId === aircraftId));
-    flightId = createdFlight?.id;
-    expect(flightId).toBeTruthy();
   } finally {
     if (flightId) await deleteById(flightId, DEFAULT_FLIGHT_DAY_ID);
     if (aircraftId) await deleteById(aircraftId, DEFAULT_FLIGHT_DAY_ID);

@@ -24,9 +24,11 @@ function flight(
 }
 
 describe("estimateDepartures", () => {
-  it("a ready flight with an idle aircraft can depart now", () => {
+  it("a ready flight on an idle aircraft still needs its boarding buffer before departure", () => {
     const result = estimateDepartures([flight({ id: "f1", status: "ready" })], new Map(), NOW, SETTINGS);
-    expect(result.get("f1")).toBe(NOW.toISOString());
+    // Nothing ahead of this aircraft, but boarding isn't instantaneous —
+    // 10:00 + 5 min boarding = 10:05.
+    expect(result.get("f1")).toBe("2026-08-20T10:05:00.000Z");
   });
 
   it("ignores flights that are airborne, completed, or not yet locked", () => {
@@ -81,9 +83,10 @@ describe("estimateDepartures", () => {
       NOW,
       SETTINGS,
     );
-    expect(result.get("first")).toBe("2026-08-20T10:00:00.000Z");
-    expect(result.get("second")).toBe("2026-08-20T10:20:00.000Z");
-    expect(result.get("third")).toBe("2026-08-20T10:40:00.000Z");
+    // Idle aircraft, so "first" also gets the boarding buffer: 10:00 + 5 = 10:05.
+    expect(result.get("first")).toBe("2026-08-20T10:05:00.000Z");
+    expect(result.get("second")).toBe("2026-08-20T10:25:00.000Z");
+    expect(result.get("third")).toBe("2026-08-20T10:45:00.000Z");
   });
 
   it("two different aircraft each depart on their own schedule, not serialized together", () => {
@@ -93,10 +96,11 @@ describe("estimateDepartures", () => {
       NOW,
       SETTINGS,
     );
-    // Both estimated to depart at the same moment — they don't wait on each
-    // other the way the old single global queue would have forced.
-    expect(result.get("a")).toBe(NOW.toISOString());
-    expect(result.get("b")).toBe(NOW.toISOString());
+    // Both estimated to depart at the same moment (now + boarding buffer) —
+    // they don't wait on each other the way the old single global queue
+    // would have forced.
+    expect(result.get("a")).toBe("2026-08-20T10:05:00.000Z");
+    expect(result.get("b")).toBe("2026-08-20T10:05:00.000Z");
   });
 
   it("a refuel break delays the aircraft's next departure until the break's estimated end", () => {
@@ -114,6 +118,16 @@ describe("estimateDepartures", () => {
     const result = estimateDepartures([flight({ id: "f1", status: "ready" })], aircraftById, NOW, SETTINGS);
     // 09:55 + 20 min = 10:15, after "now" (10:00).
     expect(result.get("f1")).toBe("2026-08-20T10:15:00.000Z");
+  });
+
+  it("still adds the boarding buffer for a brand-new flight on an aircraft with an otherwise-empty queue", () => {
+    const result = estimateDepartures(
+      [flight({ id: "f1", aircraftId: "ac1", status: "assigned" })],
+      new Map(),
+      NOW,
+      SETTINGS,
+    );
+    expect(result.get("f1")).toBe("2026-08-20T10:05:00.000Z");
   });
 
   it("honors per-event settings instead of a fixed 15+5", () => {

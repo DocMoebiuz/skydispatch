@@ -416,6 +416,16 @@ export function SetupPage() {
     return ms / (1000 * 60 * 60);
   }
 
+  // The currently-open break's start time, if this pilot is on one right
+  // now — used for the "seit HH:MM" hint on the pilot card. The full history
+  // (including closed breaks) lives on p.breaks itself; Reporting is where
+  // that gets surfaced end-to-end.
+  function onBreakSince(p: Pilot): string | null {
+    const open = p.breaks?.at(-1);
+    if (p.available || !open || open.endedAt !== null) return null;
+    return new Date(open.startedAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("dispatch.nav.setup")}</h1>
@@ -596,6 +606,14 @@ export function SetupPage() {
                           ? `${p.weightKg} kg`
                           : t("dispatch.setup.pilots.weightUnknown")}
                       </span>
+                      {onBreakSince(p) && (
+                        <span
+                          className="text-muted-foreground text-xs"
+                          data-testid="pilot-on-break-since"
+                        >
+                          {t("dispatch.setup.pilots.onBreakSince", { time: onBreakSince(p) })}
+                        </span>
+                      )}
                       {hoursFlownToday(p.id) >= 3 && (
                         <span
                           className="text-xs text-amber-600 dark:text-amber-500"

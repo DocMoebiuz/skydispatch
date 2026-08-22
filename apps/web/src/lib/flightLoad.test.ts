@@ -160,4 +160,26 @@ describe("computeFlightLoad", () => {
     const notRefueling = computeFlightLoad(flight, aircraft, pilot, []);
     expect(notRefueling.refuelBreakActive).toBe(false);
   });
+
+  it("belowReserve is informational only — never affects over/maxPayloadKg", () => {
+    // 20L on board, 40 L/h burn: same math as e2e/reserve-fuel-guard.spec.ts
+    // (consumption 10L, reserve 20L for the default 15/30 settings) — 20L
+    // on board breaches.
+    const low: Aircraft = { ...aircraft, fuelOnBoardL: 20, fuelBurnLPerHour: 40 };
+    const load = computeFlightLoad(flight, low, pilot, []);
+    expect(load.belowReserve).toBe(true);
+    expect(load.over).toBe(false);
+
+    // Custom FlightDay settings feed the same projection, not just the
+    // DEFAULT_* fallback.
+    const withCustomSettings = computeFlightLoad(flight, low, pilot, [], {
+      averageFlightDurationMinutes: 15,
+      reserveFuelMinutes: 5, // reserve drops to 40*5/60 ≈ 3.3L — no longer breaches
+    });
+    expect(withCustomSettings.belowReserve).toBe(false);
+
+    // No aircraft at all — nothing to project against.
+    const noAircraft = computeFlightLoad(flight, undefined, pilot, []);
+    expect(noAircraft.belowReserve).toBe(false);
+  });
 });

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { UserPlus, Check, Banknote, Trash2 } from "lucide-react";
-import { deriveGuestStatus, type Guest, type Flight, type GuestStatus } from "shared";
+import { UserPlus, Check, Banknote, Trash2, Pencil } from "lucide-react";
+import { deriveGuestStatus, ageFromDateOfBirth, type Guest, type Flight, type GuestStatus } from "shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,12 @@ export function GuestsPage() {
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<Set<string>>(new Set());
   const [weighInputs, setWeighInputs] = useState<Record<string, string>>({});
+  // A guest already weighed can still have their weight corrected — but
+  // only while unassigned (see renderWeightEditor's own comment on why).
+  // The first weigh doesn't go through this at all (guest.weightKg is still
+  // null then, same input+confirm UI either way); this only gates whether
+  // an *already-weighed* guest's number is editable again.
+  const [editingWeightIds, setEditingWeightIds] = useState<Set<string>>(new Set());
   // Only the very first load should ever show the full error state — a
   // background poll (below) failing once shouldn't nuke an already-working
   // page over a transient hiccup, it should just quietly retry next tick. A
@@ -125,8 +131,16 @@ export function GuestsPage() {
       return next;
     });
   }
+  function markEditingWeight(guestId: string, on: boolean) {
+    setEditingWeightIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(guestId);
+      else next.delete(guestId);
+      return next;
+    });
+  }
 
-  async function callAction(guestId: string, path: string, body?: unknown) {
+  async function callAction(guestId: string, path: string, body?: unknown): Promise<boolean> {
     markPending(guestId, true);
     markError(guestId, false);
     try {
@@ -138,8 +152,10 @@ export function GuestsPage() {
       if (!response.ok) throw new Error(`${path} failed: ${response.status}`);
       const updated = (await response.json()) as Guest;
       setGuests((prev) => prev?.map((g) => (g.id === guestId ? updated : g)) ?? prev);
+      return true;
     } catch {
       markError(guestId, true);
+      return false;
     } finally {
       markPending(guestId, false);
     }
@@ -148,11 +164,16 @@ export function GuestsPage() {
   async function confirmWeight(guestId: string, defaultKg: number) {
     const raw = weighInputs[guestId] ?? String(defaultKg);
     const weightKg = Number(raw);
-    if (!Number.isFinite(weightKg) || weightKg < 30 || weightKg > 200) {
+    if (!Number.isFinite(weightKg) || weightKg < 0 || weightKg > 200) {
       markError(guestId, true);
       return;
     }
-    await callAction(guestId, "actions/weigh", { weightKg });
+    const ok = await callAction(guestId, "actions/weigh", { weightKg });
+    // Re-weighing an already-weighed guest is edit-mode (see
+    // editingWeightIds below) — a successful confirm closes it back to the
+    // plain-number display; a failed one leaves it open so the dispatcher
+    // can just retry without having to click the edit icon again.
+    if (ok) markEditingWeight(guestId, false);
   }
 
   async function deleteGuest(guestId: string) {
@@ -204,13 +225,50 @@ export function GuestsPage() {
   // to stay covered, since it's the exact same state/handlers either way.
   function renderWeightEditor(guest: Guest, testIds: boolean) {
     const isPending = pending.has(guest.id);
+    const isAssigned = guest.assignedFlightId != null;
+    const editing = editingWeightIds.has(guest.id);
     // Available regardless of paid state — weighing doesn't require payment
     // server-side either (weighGuest has no such check), and the dispatcher
     // shouldn't have to do the two in a fixed order. Once actually weighed,
-    // this collapses to the plain number.
-    if (guest.weightKg != null) {
-      return guest.weightKg;
+    // this collapses to the plain number — but stays correctable via the
+    // edit icon as long as the guest isn't assigned to a flight yet.
+    // Once assigned, a flight's payload is computed live off guest.weightKg
+    // (no separate cached total on Flight itself — see lib/flightLoad.ts),
+    // so a change here could silently move an already-locked flight over its
+    // weight limit without going through assign/lock's own hard checks
+    // again. weighGuest refuses server-side too (nfr.md § Reliability &
+    // safety) — this isn't just withheld in the UI.
+    if (guest.weightKg != null && !editing) {
+      return (
+        <div className="flex items-center gap-1">
+          <span data-testid={testIds ? "guest-weight-value" : undefined}>{guest.weightKg}</span>
+          {!isAssigned && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              data-testid={testIds ? "edit-weight-button" : undefined}
+              aria-label={t("dispatch.guests.editWeight")}
+              title={t("dispatch.guests.editWeight")}
+              onClick={() => {
+                // Drop any stale typed-but-never-confirmed value from a
+                // previous edit so the input reopens on the current
+                // confirmed weight, not something left over.
+                setWeighInputs((prev) => {
+                  if (!(guest.id in prev)) return prev;
+                  const next = { ...prev };
+                  delete next[guest.id];
+                  return next;
+                });
+                markEditingWeight(guest.id, true);
+              }}
+            >
+              <Pencil className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      );
     }
+    const defaultKg = guest.weightKg ?? guest.declaredWeightKg;
     return (
       <div className="flex items-center gap-1">
         <Input
@@ -221,10 +279,11 @@ export function GuestsPage() {
           // up/down spinner has nothing to step from (browsers jump to an
           // arbitrary default, not the placeholder text, which was never a
           // real value to begin with). Starting the field genuinely
-          // populated with the declared weight makes the spinner buttons
-          // work as expected, and confirming with no edits at all now does
-          // exactly what it looks like it does.
-          value={weighInputs[guest.id] ?? String(guest.declaredWeightKg)}
+          // populated with the current weight (declared, if not weighed
+          // yet) makes the spinner buttons work as expected, and confirming
+          // with no edits at all now does exactly what it looks like it
+          // does.
+          value={weighInputs[guest.id] ?? String(defaultKg)}
           onChange={(e) =>
             setWeighInputs((prev) => ({
               ...prev,
@@ -239,7 +298,7 @@ export function GuestsPage() {
           disabled={isPending}
           aria-label={t("dispatch.guests.confirmWeight")}
           title={t("dispatch.guests.confirmWeight")}
-          onClick={() => void confirmWeight(guest.id, guest.declaredWeightKg)}
+          onClick={() => void confirmWeight(guest.id, defaultKg)}
         >
           <Check className="size-4" />
         </Button>
@@ -277,6 +336,30 @@ export function GuestsPage() {
         <Banknote className="size-4" />
         {t("dispatch.guests.markPaidAction")}
       </Button>
+    );
+  }
+
+  // Today's age, not the raw date of birth — a dispatcher scanning the list
+  // cares "is this a minor/child" at a glance, not the exact birthdate; DOB
+  // itself is still one hover away via the title attribute rather than gone
+  // entirely.
+  function renderAge(guest: Guest, testIds: boolean) {
+    return (
+      <span title={guest.dateOfBirth} data-testid={testIds ? "guest-age" : undefined}>
+        {ageFromDateOfBirth(guest.dateOfBirth)}
+      </span>
+    );
+  }
+
+  // Phone first, email as fallback — whichever's actually usable to reach the
+  // guest in person (front desk, boarding) beats a channel that isn't. Both
+  // are optional on the guest record itself; "—" only when neither exists.
+  function renderContact(guest: Guest, testIds: boolean) {
+    const contact = guest.phone || guest.email;
+    return (
+      <span className="truncate" data-testid={testIds ? "guest-contact" : undefined}>
+        {contact || "—"}
+      </span>
     );
   }
 
@@ -384,6 +467,8 @@ export function GuestsPage() {
               <TableRow>
                 <TableHead className="w-16">{t("dispatch.guests.table.code")}</TableHead>
                 <TableHead>{t("dispatch.guests.table.name")}</TableHead>
+                <TableHead className="w-16">{t("dispatch.guests.table.age")}</TableHead>
+                <TableHead className="w-40">{t("dispatch.guests.table.contact")}</TableHead>
                 <TableHead className="w-40">{t("dispatch.guests.table.payment")}</TableHead>
                 <TableHead className="w-32">{t("dispatch.guests.table.weight")}</TableHead>
                 <TableHead className="w-40">{t("dispatch.guests.table.status")}</TableHead>
@@ -414,6 +499,8 @@ export function GuestsPage() {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell>{renderAge(guest, true)}</TableCell>
+                    <TableCell className="whitespace-normal">{renderContact(guest, true)}</TableCell>
                     <TableCell data-testid="guest-payment">{renderPayment(guest, true)}</TableCell>
                     <TableCell data-testid="guest-weight">{renderWeightEditor(guest, true)}</TableCell>
                     <TableCell data-testid="guest-status">
@@ -448,9 +535,14 @@ export function GuestsPage() {
                       <span className="text-muted-foreground text-xs">
                         {guest.code}
                         {guest.groupName && ` · ${guest.groupName}`}
+                        {" · "}
+                        {renderAge(guest, false)}
                       </span>
                     </div>
                     <div className="shrink-0 text-sm">{renderWeightEditor(guest, false)}</div>
+                  </div>
+                  <div className="text-muted-foreground mt-1 text-xs">
+                    {renderContact(guest, false)}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {renderPayment(guest, false)}

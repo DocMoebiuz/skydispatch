@@ -302,7 +302,7 @@ export function TrackingPage() {
             const flightGuests = f.guestIds
               .map((id) => guestById.get(id))
               .filter((g): g is Guest => !!g);
-            const load = computeFlightLoad(f, aircraft, pilot, flightGuests);
+            const load = computeFlightLoad(f, aircraft, pilot, flightGuests, flightDay);
             const stage = deriveFlightStage(f, flightGuests);
             const notCheckedIn = flightGuests.filter((g) => !g.checkedIn).length;
             // Mid-refuel-break, or the same aircraft already airborne on

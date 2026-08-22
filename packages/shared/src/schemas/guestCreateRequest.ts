@@ -23,7 +23,10 @@ export const guestCreateRequestSchema = z
     // payload, apps/api guests.ts's `?? null`).
     email: z.union([z.email(), z.literal("")]).optional(),
     phone: z.string().trim().optional(),
-    declaredWeightKg: z.number().min(30).max(200),
+    // 0, not 30 — a passenger can be a child/infant, and self-reported weight
+    // is only ever a starting estimate anyway (staff-verified by weighing at
+    // check-in, see weighRequest.ts). 200 stays as the realistic upper bound.
+    declaredWeightKg: z.number().min(0).max(200),
     // "YYYY-MM-DD" — matches the native <input type="date"> value format directly, no
     // parsing/reformatting needed between form and wire. Must be a real calendar date
     // and not in the future. No blanket minimum age — minors CAN register, they just

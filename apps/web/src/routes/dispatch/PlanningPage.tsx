@@ -239,10 +239,10 @@ export function PlanningPage() {
       const flightGuests = f.guestIds
         .map((id) => guests.find((g) => g.id === id))
         .filter((g): g is Guest => !!g);
-      map.set(f.id, computeFlightLoad(f, aircraft, pilot, flightGuests));
+      map.set(f.id, computeFlightLoad(f, aircraft, pilot, flightGuests, flightDay));
     }
     return map;
-  }, [flights, aircraftList, pilots, guests]);
+  }, [flights, aircraftList, pilots, guests, flightDay]);
   // Three lanes by how much planning attention each status needs right now —
   // not just chronological order. "In Planung": the actual work (build/fill an
   // unlocked flight). "Bereit": locked ("assigned" or "ready" — Planning
@@ -411,9 +411,18 @@ export function PlanningPage() {
   // refuel break first — same reasoning/function as createFlight's own
   // server-side check (nfr.md § Reliability & safety), computed client-side
   // too so the dialog can explain *before* a rejected submit, not just after.
+  //
+  // Purely informational — creating a flight is queuing it for later, not
+  // dispatching it now, so a projected reserve breach never blocks Create
+  // (matches the server, which doesn't either — see flights.ts's
+  // createFlight). By the time this flight is actually boarded, the
+  // dispatcher will likely have refuelled already; the real,
+  // safety-critical check still happens at actions/start.
   const newFlightAircraft = aircraftList.find((a) => a.id === newFlightAircraftId);
+  const newFlightAircraftRefueling = !!newFlightAircraft?.refuelBreakActive;
   const newFlightWouldBreachReserve =
     !!newFlightAircraft &&
+    !newFlightAircraftRefueling &&
     wouldBreachReserve(
       newFlightAircraft,
       flightDay?.averageFlightDurationMinutes ?? DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
@@ -421,7 +430,7 @@ export function PlanningPage() {
     );
 
   async function createFlight() {
-    if (!newFlightAircraftId || newFlightWouldBreachReserve) return;
+    if (!newFlightAircraftId) return;
     setCreatingFlight(true);
     setCreateFlightError(false);
     try {
@@ -438,10 +447,10 @@ export function PlanningPage() {
         setNewFlightAircraftId("");
         setNewFlightPilotId("");
         setNewFlightDialogOpen(false);
-      } else if (response.status === 409) {
-        // Race with another dispatcher/tab, or aircraft/flight-day data
-        // changed between opening the dialog and submitting — the client-side
-        // check above already covers the common case.
+      } else {
+        // createFlight no longer has a reserve-breach 409 (that's a
+        // non-blocking note now, not a hard block) — this is just the
+        // generic failure path for anything else that goes wrong.
         setCreateFlightError(true);
       }
     } finally {
@@ -827,6 +836,15 @@ export function PlanningPage() {
                   </span>
                 </p>
               )}
+              {newFlightAircraftRefueling && (
+                <p
+                  className="flex items-start gap-1.5 text-sm text-amber-600 dark:text-amber-500"
+                  data-testid="new-flight-refueling-note"
+                >
+                  <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                  <span>{t("dispatch.planning.newFlight.refuelingNote")}</span>
+                </p>
+              )}
               {createFlightError && (
                 <p className="text-destructive text-sm" data-testid="create-flight-error">
                   {t("dispatch.planning.newFlight.createError")}
@@ -836,7 +854,7 @@ export function PlanningPage() {
             <DialogFooter>
               <Button
                 data-testid="create-flight"
-                disabled={!newFlightAircraftId || creatingFlight || newFlightWouldBreachReserve}
+                disabled={!newFlightAircraftId || creatingFlight}
                 onClick={() => void createFlight()}
               >
                 {creatingFlight && <Loader2 className="size-3.5 animate-spin" />}

@@ -263,6 +263,18 @@ export async function weighGuest(
   if (!guest) {
     return { status: 404, jsonBody: { error: "not-found" } };
   }
+  // The first weigh always happens before assignment (assignToFlight refuses
+  // an unweighed guest — guest.weightKg == null blocks it, see flights.ts).
+  // So this only ever refuses a *correction* to an already-weighed guest —
+  // and only once they're on a flight. A flight's payload is computed live
+  // off guest.weightKg (no separate cached total on Flight — see
+  // apps/web/src/lib/flightLoad.ts), so changing it after assignment could
+  // silently push an already-locked flight over its weight limit without
+  // going through assign/lock's own hard checks again (nfr.md § Reliability
+  // & safety) — refused server-side, not just withheld in the UI.
+  if (guest.assignedFlightId != null) {
+    return { status: 409, jsonBody: { error: "guest-assigned-to-flight" } };
+  }
 
   const updated: Guest = {
     ...guest,

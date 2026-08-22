@@ -96,6 +96,7 @@
         "takeBreak": "Pause machen",
         "endBreak": "Pause beenden",
         "breakHint": "Pause empfohlen (3+ Std. geflogen)",
+        "onBreakSince": "Pause seit {{time}}",
         "delete": "Pilot entfernen",
         "deleteConfirm": "Diesen Piloten wirklich entfernen?",
         "deleteError": "Pilot ist einem aktiven Flug zugeordnet."
@@ -153,6 +154,7 @@
         "create": "Flug anlegen",
         "reserveWarning": "Nicht genug Sprit für einen weiteren Flug über der Reserve.",
         "reserveWarningLink": "Zur Betankung",
+        "refuelingNote": "Das Flugzeug wird gerade betankt. Der Flug kann trotzdem angelegt werden.",
         "createError": "Flug konnte nicht angelegt werden."
       },
       "pool": {
@@ -177,7 +179,8 @@
         "unready": "Wieder öffnen",
         "pilotWeightUnknown": "⚠ Pilotgewicht fehlt – Anzeige unvollständig, Zuweisen/Fertigstellen nicht möglich.",
         "fuelUnknown": "⚠ Sprit-Stand unbekannt – Zuweisen/Fertigstellen nicht möglich.",
-        "refuelBreakActive": "⛽ Wird betankt – Start nicht möglich"
+        "refuelBreakActive": "⛽ Wird betankt – Start nicht möglich",
+        "belowReserve": "Unter Sprit-Reserve für einen weiteren Flug – rechtzeitig betanken."
       },
       "status": {
         "created": "geplant",
@@ -243,11 +246,18 @@
       "achievementFlights_other": "{{count}} Flüge",
       "exportFlights": "Flüge exportieren (CSV)",
       "exportGuests": "Fluggäste exportieren (CSV)",
+      "exportPilotBreaks": "Pilotenpausen exportieren (CSV)",
       "log": "Flugprotokoll",
+      "pilotBreaks": "Pilotenpausen",
+      "breakOngoing": "läuft",
       "table": {
         "flight": "Flug",
         "pax": "Pax",
-        "status": "Status"
+        "status": "Status",
+        "pilot": "Pilot",
+        "breakStart": "Beginn",
+        "breakEnd": "Ende",
+        "breakDuration": "Dauer"
       }
     },
     "guests": {
@@ -259,6 +269,8 @@
       "table": {
         "code": "ID",
         "name": "Name",
+        "age": "Alter",
+        "contact": "Kontakt",
         "payment": "Zahlung",
         "weight": "Gewicht (kg)",
         "status": "Status",
@@ -269,6 +281,7 @@
       "markPaidError": "Fehler beim Markieren als bezahlt.",
       "paidBadge": "Bezahlt",
       "confirmWeight": "Gewicht bestätigen",
+      "editWeight": "Gewicht korrigieren",
       "weighError": "Fehler beim Erfassen des Gewichts.",
       "status": {
         "registered": "registriert",
@@ -296,7 +309,7 @@
   },
   "register": {
     "title": "Rundflug-Anmeldung",
-    "lead": "Sichere dir deinen Platz für einen Rundflug. Bezahlt wird vor Ort am Check-in.",
+    "lead": "Melde dich für einen Rundflug an. Bezahlt wird vor Ort am Check-in.",
     "steps": {
       "passenger": "Angaben zur Person",
       "address": "Adresse",
@@ -333,7 +346,7 @@
     "errors": {
       "name": "Bitte Namen eingeben.",
       "email": "Bitte eine gültige E-Mail-Adresse angeben.",
-      "declaredWeightKg": "Bitte ein gültiges Gewicht zwischen 30 und 200 kg angeben.",
+      "declaredWeightKg": "Bitte ein gültiges Gewicht zwischen 0 und 200 kg angeben.",
       "dateOfBirth": "Bitte ein gültiges Geburtsdatum angeben (nicht in der Zukunft).",
       "street": "Bitte eine Straße angeben.",
       "zipCode": "Bitte eine Postleitzahl angeben.",
@@ -355,6 +368,7 @@
       "title": "Nächste Schritte",
       "step1": "Geh zur Rundflugstation und bezahle dort.",
       "step2": "Verfolge die Abflugtafel, um deine Abflugzeit zu sehen.",
+      "paymentDisclaimer": "Deine Anmeldung ist zunächst eine Reservierung. Ein verbindlicher Platz auf dem Rundflug besteht erst nach der Bezahlung vor Ort am Check-in.",
       "summaryHeading": "Deine Anmeldung(en):",
       "boardLink": "Zur Abflugtafel"
     },
@@ -387,7 +401,7 @@
     "recentlyLanded": "Kürzlich gelandet",
     "registerCta": {
       "title": "Lust zu fliegen?",
-      "body": "Sichere dir jetzt deinen Platz für den nächsten Rundflug!",
+      "body": "Melde dich jetzt für den nächsten Rundflug an!",
       "button": "Jetzt anmelden"
     },
     "lookup": {

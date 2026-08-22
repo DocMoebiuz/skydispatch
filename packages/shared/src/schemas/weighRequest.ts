@@ -4,7 +4,7 @@ import { z } from "zod";
 // self-reported declaredWeightKg captured at registration. Same bounds as
 // registration's declaredWeightKg for consistency.
 export const weighRequestSchema = z.object({
-  weightKg: z.number().min(30).max(200),
+  weightKg: z.number().min(0).max(200),
 });
 
 export type WeighRequest = z.infer<typeof weighRequestSchema>;

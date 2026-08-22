@@ -7,16 +7,12 @@ import {
 import { randomUUID } from "node:crypto";
 import {
   DEFAULT_FLIGHT_DAY_ID,
-  DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
-  DEFAULT_RESERVE_FUEL_MINUTES,
   flightCreateRequestSchema,
   assignRequestSchema,
   adjustFlightTimesRequestSchema,
   availablePayloadKg,
-  wouldBreachReserve,
   type Flight,
   type Aircraft,
-  type FlightDay,
   type Guest,
   type Pilot,
   type AssignResult,
@@ -143,25 +139,13 @@ export async function createFlight(
   const flightDayId = DEFAULT_FLIGHT_DAY_ID;
   const container = await getOperationsContainer();
 
-  // Don't plan a flight onto an aircraft that's already known to need a
-  // refuel break first — see wouldBreachReserve's own comment for why (an
-  // unplanned mid-day break cascades delays through every flight already
-  // queued behind it). Skips silently (never blocks) when there isn't
-  // enough data to project — see the function's own doc.
-  const [{ resource: reserveAircraft }, { resource: flightDay }] = await Promise.all([
-    container.item(parsed.data.aircraftId, flightDayId).read<Aircraft>(),
-    container.item(flightDayId, flightDayId).read<FlightDay>(),
-  ]);
-  if (
-    reserveAircraft &&
-    wouldBreachReserve(
-      reserveAircraft,
-      flightDay?.averageFlightDurationMinutes ?? DEFAULT_AVERAGE_FLIGHT_DURATION_MINUTES,
-      flightDay?.reserveFuelMinutes ?? DEFAULT_RESERVE_FUEL_MINUTES,
-    )
-  ) {
-    return { status: 409, jsonBody: { error: "would-breach-reserve" } };
-  }
+  // A projected reserve breach (or an active refuel break) on this aircraft
+  // is deliberately NOT a hard block here — this is create (queuing a flight
+  // for later), not start. The dispatcher gets the projection as a
+  // non-blocking note client-side (PlanningPage's reserve/refueling notes);
+  // by the time this flight is actually dispatched, the aircraft may well
+  // have been refueled already. The real, safety-critical fuel check still
+  // happens at actions/start against whatever's genuinely on board then.
 
   const code = await nextFlightCode(flightDayId);
   const now = new Date().toISOString();

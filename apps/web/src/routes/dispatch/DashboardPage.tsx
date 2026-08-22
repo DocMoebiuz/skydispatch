@@ -8,6 +8,7 @@ import {
   type Pilot,
   type Flight,
   type FlightStage,
+  type FlightDay,
 } from "shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -50,6 +51,7 @@ export function DashboardPage() {
   const [aircraftList, setAircraftList] = useState<Aircraft[]>([]);
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [flightDay, setFlightDay] = useState<FlightDay | null>(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
   // Only the very first load shows a skeleton — every action after that is
   // optimistic or a small button-local spinner, never a full-page loading
@@ -65,11 +67,15 @@ export function DashboardPage() {
       apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, a, p, f]) => {
+      // 404 means no flight day configured yet (see apps/api flightday.ts's
+      // getFlightDay) — falls back to the DEFAULT_* schedule constants below.
+      apiFetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+    ]).then(([g, a, p, f, d]) => {
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
+      setFlightDay(d);
     });
   }
 
@@ -89,12 +95,14 @@ export function DashboardPage() {
       apiFetch("/api/aircraft").then((r) => r.json() as Promise<Aircraft[]>),
       apiFetch("/api/pilots").then((r) => r.json() as Promise<Pilot[]>),
       apiFetch("/api/flights").then((r) => r.json() as Promise<Flight[]>),
-    ]).then(([g, a, p, f]) => {
+      apiFetch("/api/flightday").then((r) => (r.ok ? (r.json() as Promise<FlightDay>) : null)),
+    ]).then(([g, a, p, f, d]) => {
       if (cancelled) return;
       setGuests(g);
       setAircraftList(a);
       setPilots(p);
       setFlights(f);
+      setFlightDay(d);
       setInitialLoading(false);
     });
     return () => {
@@ -212,7 +220,7 @@ export function DashboardPage() {
     const flightGuests = f.guestIds
       .map((id) => guests.find((g) => g.id === id))
       .filter((g): g is Guest => !!g);
-    const load = computeFlightLoad(f, aircraft, pilot, flightGuests);
+    const load = computeFlightLoad(f, aircraft, pilot, flightGuests, flightDay);
     const stage = deriveFlightStage(f, flightGuests);
     const isPending = pending.has(f.id);
 

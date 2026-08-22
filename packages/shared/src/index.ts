@@ -1,5 +1,5 @@
 export type { Guest } from "./types/guest";
-export type { Pilot } from "./types/pilot";
+export type { Pilot, PilotBreak } from "./types/pilot";
 export type { Aircraft, FuelType } from "./types/aircraft";
 export type { Flight, AssignRejectReason, AssignResult } from "./types/flight";
 export type { FlightDay } from "./types/flightDay";

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plane, UserRound, Armchair, Fuel } from "lucide-react";
+import { Plane, UserRound, Armchair, Fuel, TriangleAlert } from "lucide-react";
 import type { Aircraft, Flight, FlightStage, Pilot } from "shared";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -220,6 +220,21 @@ export function FlightCard({
                 {load.over
                   ? `${load.usedWeightKg - load.maxPayloadKg} ${t("dispatch.planning.builder.weightOver")}`
                   : `${freeKg} ${t("dispatch.planning.builder.weightFree")}`}
+                {/* Informational only — never blocks anything on this card,
+                    see FlightLoad.belowReserve's own comment. Just a heads-up
+                    next to the fuel figure. */}
+                {load.belowReserve && (
+                  <span
+                    className="shrink-0"
+                    title={t("dispatch.planning.builder.belowReserve")}
+                    data-testid="flight-card-reserve-warning"
+                  >
+                    <TriangleAlert
+                      className="size-3 text-amber-600 dark:text-amber-500"
+                      aria-hidden
+                    />
+                  </span>
+                )}
               </span>
             )}
           </div>
