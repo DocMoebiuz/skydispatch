@@ -69,12 +69,17 @@ function flightRouteFor(status: Flight["status"]): string {
 // pilot/aircraft dialogs). Holding `id` in here too, not a separate
 // "which guest" state var, keeps the dialog's open/closed state and its
 // form data as one single source of truth (open iff non-null).
+//
+// No weight field here — weight already has exactly one editor, the same
+// renderWeightEditor the list itself uses, reused directly in the dialog's
+// "at a glance" section below. A second, separate weight input in this form
+// would show the same number twice and drift out of sync with it (an
+// unsaved edit here vs. the live value there) for no benefit.
 interface GuestEditForm {
   id: string;
   name: string;
   email: string;
   phone: string;
-  declaredWeightKg: string;
   dateOfBirth: string;
   street: string;
   zipCode: string;
@@ -239,7 +244,6 @@ export function GuestsPage() {
       name: guest.name,
       email: guest.email ?? "",
       phone: guest.phone ?? "",
-      declaredWeightKg: String(guest.declaredWeightKg),
       dateOfBirth: guest.dateOfBirth,
       street: guest.address.street,
       zipCode: guest.address.zipCode,
@@ -252,11 +256,11 @@ export function GuestsPage() {
 
   async function saveGuestDetails() {
     if (!guestForm) return;
-    const declaredWeightKg = Number(guestForm.declaredWeightKg);
-    if (!Number.isFinite(declaredWeightKg) || declaredWeightKg < 0 || declaredWeightKg > 200) {
-      setGuestDetailsError(true);
-      return;
-    }
+    // declaredWeightKg isn't part of this form (see GuestEditForm's own
+    // comment) but guestUpdateRequestSchema still requires it — pass the
+    // guest's current value through unchanged rather than dropping it.
+    const currentGuest = (guests ?? []).find((g) => g.id === guestForm.id);
+    if (!currentGuest) return;
     setSavingGuestDetails(true);
     setGuestDetailsError(false);
     try {
@@ -267,7 +271,7 @@ export function GuestsPage() {
           name: guestForm.name,
           email: guestForm.email,
           phone: guestForm.phone,
-          declaredWeightKg,
+          declaredWeightKg: currentGuest.declaredWeightKg,
           dateOfBirth: guestForm.dateOfBirth,
           address: { street: guestForm.street, zipCode: guestForm.zipCode, city: guestForm.city },
           consent: guestForm.consent,
@@ -752,31 +756,15 @@ export function GuestsPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="guest-detail-dob">{t("dispatch.guests.detail.dateOfBirth")}</Label>
-                  <Input
-                    id="guest-detail-dob"
-                    data-testid="guest-detail-dob"
-                    type="date"
-                    value={guestForm.dateOfBirth}
-                    onChange={(e) => setGuestForm({ ...guestForm, dateOfBirth: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="guest-detail-declared-weight">
-                    {t("dispatch.guests.detail.declaredWeightKg")}
-                  </Label>
-                  <Input
-                    id="guest-detail-declared-weight"
-                    data-testid="guest-detail-declared-weight"
-                    type="number"
-                    value={guestForm.declaredWeightKg}
-                    onChange={(e) =>
-                      setGuestForm({ ...guestForm, declaredWeightKg: e.target.value })
-                    }
-                  />
-                </div>
+              <div className="grid gap-2">
+                <Label htmlFor="guest-detail-dob">{t("dispatch.guests.detail.dateOfBirth")}</Label>
+                <Input
+                  id="guest-detail-dob"
+                  data-testid="guest-detail-dob"
+                  type="date"
+                  value={guestForm.dateOfBirth}
+                  onChange={(e) => setGuestForm({ ...guestForm, dateOfBirth: e.target.value })}
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="guest-detail-street">{t("dispatch.guests.detail.street")}</Label>
