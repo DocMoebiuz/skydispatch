@@ -1,11 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { UserPlus, Check, Banknote, Trash2, Pencil } from "lucide-react";
-import { deriveGuestStatus, ageFromDateOfBirth, type Guest, type Flight, type GuestStatus } from "shared";
+import { UserPlus, Check, Banknote, Trash2, Pencil, Eye } from "lucide-react";
+import {
+  deriveGuestStatus,
+  ageFromDateOfBirth,
+  isMinor,
+  type Guest,
+  type Flight,
+  type GuestStatus,
+} from "shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { apiFetch } from "@/lib/apiFetch";
 import {
   Table,
@@ -47,6 +63,27 @@ function flightRouteFor(status: Flight["status"]): string {
   return "/dispatch/tracking";
 }
 
+// The detail dialog's own local editing copy of a guest's personal-info
+// fields — not the same shape as Guest itself (numbers/address are flattened
+// to plain strings for controlled inputs, same convention as SetupPage's
+// pilot/aircraft dialogs). Holding `id` in here too, not a separate
+// "which guest" state var, keeps the dialog's open/closed state and its
+// form data as one single source of truth (open iff non-null).
+interface GuestEditForm {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  declaredWeightKg: string;
+  dateOfBirth: string;
+  street: string;
+  zipCode: string;
+  city: string;
+  consent: boolean;
+  guardianConsent: boolean;
+  newsletter: boolean;
+}
+
 export function GuestsPage() {
   const { t } = useTranslation();
   const [guests, setGuests] = useState<Guest[] | null>(null);
@@ -66,6 +103,11 @@ export function GuestsPage() {
   // null then, same input+confirm UI either way); this only gates whether
   // an *already-weighed* guest's number is editable again.
   const [editingWeightIds, setEditingWeightIds] = useState<Set<string>>(new Set());
+  // The detail dialog (view icon -> "all information at a glance, editable
+  // in case the passenger made a mistake") — see GuestEditForm above.
+  const [guestForm, setGuestForm] = useState<GuestEditForm | null>(null);
+  const [savingGuestDetails, setSavingGuestDetails] = useState(false);
+  const [guestDetailsError, setGuestDetailsError] = useState(false);
   // Only the very first load should ever show the full error state — a
   // background poll (below) failing once shouldn't nuke an already-working
   // page over a transient hiccup, it should just quietly retry next tick. A
@@ -190,6 +232,60 @@ export function GuestsPage() {
     }
   }
 
+  function openGuestDialog(guest: Guest) {
+    setGuestDetailsError(false);
+    setGuestForm({
+      id: guest.id,
+      name: guest.name,
+      email: guest.email ?? "",
+      phone: guest.phone ?? "",
+      declaredWeightKg: String(guest.declaredWeightKg),
+      dateOfBirth: guest.dateOfBirth,
+      street: guest.address.street,
+      zipCode: guest.address.zipCode,
+      city: guest.address.city,
+      consent: guest.consent,
+      guardianConsent: guest.guardianConsent ?? false,
+      newsletter: guest.newsletter,
+    });
+  }
+
+  async function saveGuestDetails() {
+    if (!guestForm) return;
+    const declaredWeightKg = Number(guestForm.declaredWeightKg);
+    if (!Number.isFinite(declaredWeightKg) || declaredWeightKg < 0 || declaredWeightKg > 200) {
+      setGuestDetailsError(true);
+      return;
+    }
+    setSavingGuestDetails(true);
+    setGuestDetailsError(false);
+    try {
+      const response = await apiFetch(`/api/guests/${guestForm.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: guestForm.name,
+          email: guestForm.email,
+          phone: guestForm.phone,
+          declaredWeightKg,
+          dateOfBirth: guestForm.dateOfBirth,
+          address: { street: guestForm.street, zipCode: guestForm.zipCode, city: guestForm.city },
+          consent: guestForm.consent,
+          guardianConsent: guestForm.guardianConsent,
+          newsletter: guestForm.newsletter,
+        }),
+      });
+      if (!response.ok) throw new Error(`update failed: ${response.status}`);
+      const updated = (await response.json()) as Guest;
+      setGuests((prev) => prev?.map((g) => (g.id === updated.id ? updated : g)) ?? prev);
+      setGuestForm(null);
+    } catch {
+      setGuestDetailsError(true);
+    } finally {
+      setSavingGuestDetails(false);
+    }
+  }
+
   const flightByGuestId = new Map<string, Flight>();
   for (const f of flights) {
     for (const guestId of f.guestIds) flightByGuestId.set(guestId, f);
@@ -223,6 +319,10 @@ export function GuestsPage() {
   // Playwright's default viewport is desktop-sized, so the table is what
   // e2e actually exercises — the mobile layout doesn't need its own testids
   // to stay covered, since it's the exact same state/handlers either way.
+  // The detail dialog below reuses these with testIds=true too — that's a
+  // third copy for the SAME guest, but only ever in the DOM while the
+  // dialog is actually open, so specs just scope through
+  // page.getByRole("dialog") first, same idea as guest-row scoping above.
   function renderWeightEditor(guest: Guest, testIds: boolean) {
     const isPending = pending.has(guest.id);
     const isAssigned = guest.assignedFlightId != null;
@@ -384,6 +484,16 @@ export function GuestsPage() {
     const canDelete = !guest.flown;
     return (
       <div className="flex min-w-16 flex-wrap items-center gap-1">
+        <Button
+          size="icon"
+          variant="ghost"
+          data-testid={testIds ? "view-guest-button" : undefined}
+          onClick={() => openGuestDialog(guest)}
+          aria-label={t("dispatch.guests.detail.view")}
+          title={t("dispatch.guests.detail.view")}
+        >
+          <Eye className="size-4" />
+        </Button>
         {canDelete && (
           <Button
             size="icon"
@@ -403,6 +513,14 @@ export function GuestsPage() {
       </div>
     );
   }
+
+  // The live guest behind the dialog's own editing copy — kept separate
+  // (not read off guestForm) so the "at a glance" section (payment, weight,
+  // status, flight) always reflects the real current record, including
+  // updates from actions taken elsewhere (another tab, the list underneath)
+  // while the dialog is open, not a snapshot frozen at open time.
+  const dialogGuest = guestForm ? (guests ?? []).find((g) => g.id === guestForm.id) : undefined;
+  const dialogFlight = dialogGuest ? flightByGuestId.get(dialogGuest.id) : undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -558,6 +676,202 @@ export function GuestsPage() {
           </div>
         </>
       )}
+
+      {/* Detail dialog — "all information at a glance" (top section, reusing
+          the same renderPayment/renderWeightEditor/renderFlightLink as the
+          list itself, so an action taken here is the exact same code path,
+          not a duplicate one) plus the editable personal-info form below it
+          ("editable in case the passenger made a mistake"). */}
+      <Dialog open={!!guestForm} onOpenChange={(open) => !open && setGuestForm(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{dialogGuest?.name}</DialogTitle>
+          </DialogHeader>
+          {guestForm && dialogGuest && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md border p-3 text-sm">
+                <div className="text-muted-foreground">{t("dispatch.guests.table.code")}</div>
+                <div>{dialogGuest.code}</div>
+                <div className="text-muted-foreground">{t("dispatch.guests.table.status")}</div>
+                <div>
+                  <Badge
+                    variant={STATUS_VARIANT[deriveGuestStatus(dialogGuest)]}
+                    className="w-fit"
+                  >
+                    {t(`dispatch.guests.status.${deriveGuestStatus(dialogGuest)}`)}
+                  </Badge>
+                </div>
+                {dialogGuest.groupName && (
+                  <>
+                    <div className="text-muted-foreground">{t("dispatch.guests.group")}</div>
+                    <div>{dialogGuest.groupName}</div>
+                  </>
+                )}
+                <div className="text-muted-foreground">{t("dispatch.guests.table.payment")}</div>
+                <div>{renderPayment(dialogGuest, true)}</div>
+                <div className="text-muted-foreground">
+                  {t("dispatch.guests.detail.weighedWeightKg")}
+                </div>
+                <div>{renderWeightEditor(dialogGuest, true)}</div>
+                {dialogFlight && (
+                  <>
+                    <div className="text-muted-foreground">{t("dispatch.guests.detail.flight")}</div>
+                    <div>{renderFlightLink(dialogFlight, true)}</div>
+                  </>
+                )}
+                <div className="text-muted-foreground">{t("dispatch.guests.detail.registeredAt")}</div>
+                <div>{new Date(dialogGuest.createdAt).toLocaleString("de-DE")}</div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="guest-detail-name">{t("dispatch.guests.detail.name")}</Label>
+                <Input
+                  id="guest-detail-name"
+                  data-testid="guest-detail-name"
+                  value={guestForm.name}
+                  onChange={(e) => setGuestForm({ ...guestForm, name: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="guest-detail-email">{t("dispatch.guests.detail.email")}</Label>
+                  <Input
+                    id="guest-detail-email"
+                    data-testid="guest-detail-email"
+                    value={guestForm.email}
+                    onChange={(e) => setGuestForm({ ...guestForm, email: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="guest-detail-phone">{t("dispatch.guests.detail.phone")}</Label>
+                  <Input
+                    id="guest-detail-phone"
+                    data-testid="guest-detail-phone"
+                    value={guestForm.phone}
+                    onChange={(e) => setGuestForm({ ...guestForm, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="guest-detail-dob">{t("dispatch.guests.detail.dateOfBirth")}</Label>
+                  <Input
+                    id="guest-detail-dob"
+                    data-testid="guest-detail-dob"
+                    type="date"
+                    value={guestForm.dateOfBirth}
+                    onChange={(e) => setGuestForm({ ...guestForm, dateOfBirth: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="guest-detail-declared-weight">
+                    {t("dispatch.guests.detail.declaredWeightKg")}
+                  </Label>
+                  <Input
+                    id="guest-detail-declared-weight"
+                    data-testid="guest-detail-declared-weight"
+                    type="number"
+                    value={guestForm.declaredWeightKg}
+                    onChange={(e) =>
+                      setGuestForm({ ...guestForm, declaredWeightKg: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="guest-detail-street">{t("dispatch.guests.detail.street")}</Label>
+                <Input
+                  id="guest-detail-street"
+                  data-testid="guest-detail-street"
+                  value={guestForm.street}
+                  onChange={(e) => setGuestForm({ ...guestForm, street: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="guest-detail-zip">{t("dispatch.guests.detail.zipCode")}</Label>
+                  <Input
+                    id="guest-detail-zip"
+                    data-testid="guest-detail-zip"
+                    value={guestForm.zipCode}
+                    onChange={(e) => setGuestForm({ ...guestForm, zipCode: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="guest-detail-city">{t("dispatch.guests.detail.city")}</Label>
+                  <Input
+                    id="guest-detail-city"
+                    data-testid="guest-detail-city"
+                    value={guestForm.city}
+                    onChange={(e) => setGuestForm({ ...guestForm, city: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="guest-detail-consent"
+                  data-testid="guest-detail-consent"
+                  checked={guestForm.consent}
+                  onCheckedChange={(checked) =>
+                    setGuestForm({ ...guestForm, consent: checked === true })
+                  }
+                />
+                <Label htmlFor="guest-detail-consent" className="font-normal">
+                  {t("dispatch.guests.detail.consent")}
+                </Label>
+              </div>
+              {/* Only shown/required once the form's own (possibly just-edited)
+                  DOB makes the guest a minor — same live check as
+                  RegisterPage's own isRegistrantMinor, not a snapshot from
+                  when the dialog opened. */}
+              {isMinor(guestForm.dateOfBirth) && (
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="guest-detail-guardian-consent"
+                    data-testid="guest-detail-guardian-consent"
+                    checked={guestForm.guardianConsent}
+                    onCheckedChange={(checked) =>
+                      setGuestForm({ ...guestForm, guardianConsent: checked === true })
+                    }
+                  />
+                  <Label htmlFor="guest-detail-guardian-consent" className="font-normal">
+                    {t("dispatch.guests.detail.guardianConsent")}
+                  </Label>
+                </div>
+              )}
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="guest-detail-newsletter"
+                  data-testid="guest-detail-newsletter"
+                  checked={guestForm.newsletter}
+                  onCheckedChange={(checked) =>
+                    setGuestForm({ ...guestForm, newsletter: checked === true })
+                  }
+                />
+                <Label htmlFor="guest-detail-newsletter" className="font-normal">
+                  {t("dispatch.guests.detail.newsletter")}
+                </Label>
+              </div>
+
+              {guestDetailsError && (
+                <p className="text-destructive text-sm" data-testid="guest-detail-error">
+                  {t("dispatch.guests.detail.saveError")}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              data-testid="save-guest-details"
+              disabled={savingGuestDetails}
+              onClick={() => void saveGuestDetails()}
+            >
+              {t("dispatch.guests.detail.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -9,6 +9,8 @@ export { deriveGuestStatus, deriveFlightStage } from "./status";
 
 export type { GuestCreateRequest } from "./schemas/guestCreateRequest";
 export { guestCreateRequestSchema } from "./schemas/guestCreateRequest";
+export type { GuestUpdateRequest } from "./schemas/guestUpdateRequest";
+export { guestUpdateRequestSchema } from "./schemas/guestUpdateRequest";
 export type { StartGroupRequest } from "./schemas/startGroupRequest";
 export { startGroupRequestSchema } from "./schemas/startGroupRequest";
 export type { WeighRequest } from "./schemas/weighRequest";

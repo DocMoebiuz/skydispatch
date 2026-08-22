@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import {
   DEFAULT_FLIGHT_DAY_ID,
   guestCreateRequestSchema,
+  guestUpdateRequestSchema,
   startGroupRequestSchema,
   weighRequestSchema,
   type Guest,
@@ -475,6 +476,56 @@ export async function deleteGuest(
   return { status: 204 };
 }
 
+// Guests' detail-dialog "fix a passenger's own mistake" edit — the same
+// personal-info fields registration collects (guestUpdateRequestSchema),
+// nothing operational/staff-only (paid, checkedIn, weightKg, ... — those
+// have their own dedicated actions). Deliberately not restricted by
+// assignedFlightId the way weighGuest is: a typo'd name or address doesn't
+// feed any weight/capacity computation, so there's no flight-safety reason
+// to freeze it once assigned (nfr.md § Reliability & safety only requires
+// hard blocks where a value actually gates something).
+export async function updateGuestDetails(
+  request: HttpRequest,
+  _context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const auth = await requireRole(request, ["full_access"]);
+  if (!auth.ok) return auth.response;
+  const guestId = request.params.id;
+  if (!guestId) return { status: 400, jsonBody: { error: "missing-id" } };
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { status: 400, jsonBody: { error: "invalid-json" } };
+  }
+  const parsed = guestUpdateRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return { status: 400, jsonBody: { error: "validation", issues: parsed.error.issues } };
+  }
+
+  const flightDayId = DEFAULT_FLIGHT_DAY_ID;
+  const container = await getOperationsContainer();
+  const { resource: guest } = await container.item(guestId, flightDayId).read<Guest>();
+  if (!guest) return { status: 404, jsonBody: { error: "not-found" } };
+
+  const updated: Guest = {
+    ...guest,
+    name: parsed.data.name,
+    email: parsed.data.email || null,
+    phone: parsed.data.phone || null,
+    declaredWeightKg: parsed.data.declaredWeightKg,
+    dateOfBirth: parsed.data.dateOfBirth,
+    address: parsed.data.address,
+    consent: parsed.data.consent,
+    guardianConsent: parsed.data.guardianConsent ?? null,
+    newsletter: parsed.data.newsletter,
+    updatedAt: new Date().toISOString(),
+  };
+  await container.item(guestId, flightDayId).replace(updated);
+  return { status: 200, jsonBody: updated };
+}
+
 export async function listGuests(
   _request: HttpRequest,
   _context: InvocationContext,
@@ -559,4 +610,11 @@ app.http("deleteGuest", {
   route: "guests/{id}",
   authLevel: "anonymous",
   handler: deleteGuest,
+});
+
+app.http("updateGuestDetails", {
+  methods: ["PUT"],
+  route: "guests/{id}",
+  authLevel: "anonymous",
+  handler: updateGuestDetails,
 });

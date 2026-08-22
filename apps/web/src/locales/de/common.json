@@ -304,7 +304,26 @@
       "noShow": "No-Show",
       "delete": "Gast entfernen",
       "deleteConfirm": "Diesen Gast wirklich entfernen?",
-      "actionError": "Aktion fehlgeschlagen."
+      "actionError": "Aktion fehlgeschlagen.",
+      "detail": {
+        "view": "Details anzeigen",
+        "weighedWeightKg": "Gewogenes Gewicht",
+        "flight": "Flug",
+        "registeredAt": "Angemeldet am",
+        "name": "Name",
+        "email": "E-Mail",
+        "phone": "Telefon",
+        "dateOfBirth": "Geburtsdatum",
+        "declaredWeightKg": "Angegebenes Gewicht (kg)",
+        "street": "Straße und Hausnummer",
+        "zipCode": "PLZ",
+        "city": "Ort",
+        "consent": "Einverständnis- und Haftungserklärung liegt vor.",
+        "guardianConsent": "Einverständnis der Erziehungsberechtigten liegt vor.",
+        "newsletter": "Newsletter-Anmeldung.",
+        "save": "Speichern",
+        "saveError": "Änderungen konnten nicht gespeichert werden."
+      }
     }
   },
   "register": {
